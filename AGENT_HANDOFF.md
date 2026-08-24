@@ -23,13 +23,17 @@ Organizer MVP product spec).
 
 ## Current Status
 
-The real MVP objective is staged and ready. Nothing has been built yet —
-this repo still contains only the handoff protocol, the orchestrator, and
-the product spec. Tonight's automated run is scoped to exactly **one Codex
-phase, then one Claude phase, then stop** (see CLAUDE.md's pipeline
-section) — Codex goes first because the human's interactive Claude session
-usage is nearly exhausted, and a fresh `claude -p` process shares the same
-account-level usage pool, not a reset one.
+P0 Phase 1 is in progress with a verified Next.js application checkpoint.
+The interrupted Claude run left a partially transferred `create-next-app`
+scaffold and a complete local dependency installation despite its final log
+claiming the scaffold had been removed. Codex audited and preserved that work,
+restored the missing App Router layout and pages, added the required canonical
+test runner and setup notes, and committed the tested code at `1a34260`.
+
+The application currently provides a responsive editorial shell, navigation,
+clearly separated personal/demo entry states, the ten-family overview, and
+honestly labeled placeholders for unfinished sections. Persistence, schema and
+migrations, seeded data, and real organization workflows remain unfinished.
 
 ## Completed
 
@@ -75,33 +79,54 @@ account-level usage pool, not a reset one.
   `--permission-mode` choices including `"auto"`, `codex login status`'s
   exact output string. No real Claude/Codex smoke call was made during any
   part of this implementation or its testing, per explicit instruction.
+- Audited the interrupted run completely: all required documents, tracked and
+  untracked changes, dependency tree, and every file in
+  `logs/overnight/20260824T035205Z`. The run ended with orchestrator exit `5`
+  because Claude reached its usage limit; the filesystem nevertheless retained
+  a usable Next.js 16.3.2/React 19.2.8 install and partial scaffold.
+- Recovered and verified the Next.js App Router foundation: strict TypeScript,
+  Tailwind CSS, ESLint, pinned lockfile, production scripts, responsive base
+  design system, navigation, home page, and static section routes.
+- Added executable root `run_tests.sh` as the canonical verification command
+  and `SCAFFOLD_README.md` with local install/start/test instructions. The app
+  requires no API keys or external resources.
+- Verified application code commit:
+  `1a34260822a2ab58cd23703187fbc58403ba6131` — "Checkpoint verified Next.js
+  application scaffold".
 
 ## In Progress
 
-None. Waiting on a human to run `./scripts/overnight_handoff.sh` for the
-first real Codex → Claude round against the actual MVP objective.
+P0 Phase 1 (Foundation). Application setup, the base design system,
+navigation, canonical test runner, and scaffold setup documentation are
+complete. The local persistence layer is the next highest-priority item.
 
 ## Next Steps
 
-1. Human confirms the manual prerequisite: Claude Settings → Usage has
-   **Usage credits** and **auto-reload** disabled (CLAUDE.md's "Zero
-   incremental spend" section — the script cannot check this itself).
-2. Human picks a `CLAUDE_BUDGET_USD` value and runs
-   `CLAUDE_BUDGET_USD=<value> ./scripts/overnight_handoff.sh` from the repo
-   root.
-3. Codex begins MVP_SPEC.md's P0 Phase 1 (Foundation): application setup,
-   database schema/migrations, seeded prompt-family taxonomy, demo-data
-   system, base design system, navigation, `run_tests.sh` and setup docs.
-4. Whatever Codex completes and verifies, Claude picks up from next and
-   continues into subsequent P0 phases per MVP_SPEC.md's priority order,
-   then stops.
-5. After that run: read the exit code (CLAUDE.md's table) and this file's
-   updated state to decide whether to re-run the pipeline again, continue
-   manually, or address a blocker.
+1. Complete P0 Phase 1's local persistence foundation: choose the lightweight
+   typed SQLite ORM within the spec, add the schema for all required core
+   entities and many-to-many relationships, and create migrations.
+2. Seed the editable ten-family taxonomy and secondary tags, then add a
+   synthetic demo-data system that cannot silently mix with personal data.
+3. Add focused unit/integration tests for schema constraints, taxonomy seeding,
+   and personal/demo isolation; include them in `run_tests.sh`.
+4. Continue with P0 Phase 2 only after the full Phase 1 foundation is verified.
 
 ## Failed Approaches
 
-None yet — no implementation work has started.
+- During the automated Codex phase, offline npm version lookup returned
+  `ENOTCACHED`, and the first registry-backed install made no progress for 90
+  seconds. Codex removed its unverified draft as required. These attempts did
+  not consume the retry allowance because they were environment limitations.
+- The following Claude phase successfully installed a temporary
+  `create-next-app` scaffold, but its transfer/cleanup was interrupted by Git
+  permission denials and the Claude session usage limit. Its final report said
+  the scaffold was removed, while the subsequent filesystem audit found the
+  dependency tree, configuration, assets, and partial `src/` transfer intact.
+- `next build` with Turbopack passed on the empty partial scaffold but failed
+  after real routes were restored because the sandbox denied PostCSS's local
+  port binding (`EPERM`). The supported `next build --webpack` path avoided the
+  restricted mechanism and passed repeatedly; the canonical build script now
+  uses webpack.
 
 ## Blockers
 
@@ -116,14 +141,26 @@ None.
 - The real `claude`/`codex` CLIs were inspected read-only (`--help`,
   `auth status --json`, `login status`) to confirm exact flag/field names
   before relying on them — no model calls, no auth-state changes.
-- The MVP objective itself has **not** been run for real yet — that is the
-  explicit next step, deliberately not performed automatically per
-  instruction not to launch a real run during this staging work.
+- Recovered dependency verification: `npm ls --depth=0` completed with the
+  expected Next.js 16.3.2, React 19.2.8, Tailwind 4.3.3, ESLint 9.39.5, and
+  TypeScript 5.9.3 dependency tree and no missing/extraneous packages.
+- Pre-repair baseline: `npm run lint` passed; `npm run build` passed but emitted
+  only framework route `/_not-found`, confirming the partial scaffold had no
+  usable application page; `bash scripts/test_overnight_handoff.sh` passed
+  80/80 assertions.
+- Final canonical verification: `./run_tests.sh` passed. It ran ESLint, Next
+  route type generation plus strict `tsc --noEmit`, a webpack production build
+  that prerendered `/`, `/schools`, `/essays`, `/families`, and `/reuse`, and
+  the existing overnight suite (80/80 assertions).
+- Runtime smoke verification: the built production server reached ready state;
+  HTTP checks confirmed `/` rendered the separate "Personal · empty" and
+  "Fictional · demo preview" entry states, and `/reuse` rendered the labeled
+  foundation placeholder. The server was then stopped.
+- No browser automation or database tests exist yet; both remain later P0 work.
 
 ## Last Verified Commit
 
-`006158b` — "Stage the real MVP objective; make Layer 3 zero-spend,
-auth-gated, Codex-first". Working tree is clean at this commit; the
-deterministic test suite (80/80) passed immediately before it, and no
-application code exists yet beyond the handoff protocol, the orchestrator,
-and the product spec.
+`1a34260822a2ab58cd23703187fbc58403ba6131` — "Checkpoint verified Next.js
+application scaffold". `./run_tests.sh` passed immediately before this code
+commit, and a production runtime smoke check passed. The next commit changes
+only this handoff document to record the checkpoint accurately.
