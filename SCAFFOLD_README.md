@@ -25,5 +25,22 @@ Run the repository's canonical verification command:
 ```
 
 It runs ESLint, strict TypeScript checking, a production build, and the existing
-overnight handoff regression suite. Database, unit, and browser tests will be
-added as their corresponding P0 foundation layers are implemented.
+overnight handoff regression suite. It also runs the local SQLite persistence
+tests, which apply the real migration to an isolated in-memory database.
+
+## Local data foundation
+
+The typed Drizzle schema is in `src/lib/db/schema.ts`; generated SQLite
+migrations are committed under `drizzle/`. The normal local database path is
+`data/college-essay-organizer.sqlite`, which is ignored by Git.
+
+```bash
+npm run db:migrate   # create or update the local database
+npm run db:generate  # generate a migration after an intentional schema change
+```
+
+The seed layer creates the empty personal workspace independently from the
+clearly labeled synthetic demo workspace. `resetDemoWorkspace` replaces only
+demo-owned records; it never deletes personal data.
+
+Browser workflow tests remain later P0 work.
