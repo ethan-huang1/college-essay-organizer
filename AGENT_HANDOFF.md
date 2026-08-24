@@ -40,4 +40,5 @@ No work started yet.
 
 ## Last Verified Commit
 
-(None yet — will be set after the initial commit.)
+`ae586f2` — "Establish overnight Claude/Codex handoff protocol" (repo init,
+handoff files only, no code/tests to verify yet).
