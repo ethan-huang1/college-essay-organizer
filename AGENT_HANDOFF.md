@@ -18,277 +18,190 @@ attempt something and it fails, record it under Failed Approaches (rule 9)
 rather than silently retrying.
 
 See [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) for the rules and
-[MVP_SPEC.md](MVP_SPEC.md) for the real objective (the College Essay
-Organizer MVP product spec).
+[MVP_SPEC.md](MVP_SPEC.md) for the product spec.
 
 ## Current Status
 
-P0 Phase 1 (Foundation) is complete with verified application, persistence, and
-workspace-integration checkpoints.
-The interrupted Claude run left a partially transferred `create-next-app`
-scaffold and a complete local dependency installation despite its final log
-claiming the scaffold had been removed. Codex audited and preserved that work,
-restored the missing App Router layout and pages, added the required canonical
-test runner and setup notes, and committed the tested code at `1a34260`.
+The core product loop works end-to-end and is verified: **add a college
+(from a top-100 picker or manual entry) → its real, sourced 2026–27 prompts
+are retrieved and imported → each prompt is auto-classified into the
+taxonomy → matching essays are suggested → a response is assigned → the
+Families page shows the cross-school picture.** This session picked up
+directly from Codex's verified prompt-CRUD checkpoint (`52add43`) as an
+interactive Claude session (the automated pipeline's Claude phase was
+blocked on a stale CLI login at the time; that auth has since been
+reconfirmed working — see Blockers).
 
-The application provides a responsive editorial shell and navigation, explicit
-personal/demo workspace actions, cookie-scoped active workspace state, useful
-personal empty states, and real views of seeded schools, prompts,
-essays, families, and reuse examples. The SQLite schema, migration, taxonomy,
-isolated seed services, and database tests are complete. Phase 2 now has
-verified workspace-scoped school and prompt CRUD, including editable primary
-and secondary prompt families and manual classification overrides. Essay CRUD,
-filtering, and search remain unfinished.
+P0 Phase 2 (Core Organization) and Phase 3 (Matching and Reuse) are now
+substantially complete. Phase 4 (Editing and Versions) has immutable
+versions, save/restore, and filtering, but not yet the deterministic
+accept/reject editing-suggestion workflow. Phase 5 (Portability and
+Verification) has none of its JSON export/import or Playwright work yet.
 
 ## Completed
 
-- Layer 1: repo-based handoff protocol (`OVERNIGHT_TASK.md`,
-  `AGENT_HANDOFF.md`, `CLAUDE.md`).
-- Layer 2: manual end-to-end Claude → Codex handoff test, independently
-  verified; cleaned up by human authorization (history preserved in git
-  log, commits `ae586f2`..`280835d`).
-- Layer 3: `scripts/overnight_handoff.sh` — Codex-then-Claude, strictly
-  sequential, never concurrent. Fail-closed subscription-only auth
-  preflight (`run_auth_preflight`) runs before each real agent call:
-  rejects `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` presence, requires Claude
-  `claude auth status --json` to show `loggedIn:true`,
-  `authMethod:"claude.ai"`, `apiProvider:"firstParty"`, and an allowlisted
-  `subscriptionType` (`pro|max|team|enterprise`), requires Codex
-  `codex login status` to say exactly "Logged in using ChatGPT". Lock is
-  acquired *before* the auth preflight so a held lock blocks even the
-  auth-status calls. Codex ending nonzero does not auto-abort the run — the
-  orchestrator judges safety from repo/handoff state
-  (`validate_state()`: clean tree, no conflicts, valid non-stale Last
-  Verified Commit, no `HUMAN-REQUIRED:` marker) and continues to Claude if
-  Codex's checkpoint is safe, reporting exit code 12 ("degraded but
-  recovered") rather than silently claiming success. Claude runs with
-  `--permission-mode auto` (not `acceptEdits`, not `bypassPermissions`).
-  Full exit-code table in CLAUDE.md.
-- `scripts/test_overnight_handoff.sh`: 80 deterministic assertions against
-  disposable scratch repos with fake `claude`/`codex` executables (no real
-  API, auth, or model calls) — the full auth allowlist and every rejection
-  case, lock-before-auth ordering, the safe-continuation logic and all its
-  exit codes, and every regression case from Layers 1-3. All passing.
-- `MVP_SPEC.md` (new): the full College Essay Organizer product spec
-  (mission, taxonomy, data model, UX, matching architecture, demo
-  workspace, tech/visual direction, phases, verification, P0 DoD).
-- `OVERNIGHT_TASK.md`: Objective now points to MVP_SPEC.md; gained a
-  bounded-effort/retry-limit rule, an expanded no-external-spend rule, a
-  usage-limit/degraded-run-not-a-failure rule, and a spec-change-
-  invalidates-stale-verification rule.
-- `CLAUDE.md`: documents the zero-spend design, the manual Claude Settings
-  usage-credits/auto-reload prerequisite (not verifiable from the repo),
-  corrected `CLAUDE_BUDGET_USD` framing, and the exit-code table.
-- Real CLI facts confirmed read-only (zero-cost, no model calls) during
-  planning: `claude auth status --json` field shapes, `claude --help`'s
-  `--permission-mode` choices including `"auto"`, `codex login status`'s
-  exact output string. No real Claude/Codex smoke call was made during any
-  part of this implementation or its testing, per explicit instruction.
-- Audited the interrupted run completely: all required documents, tracked and
-  untracked changes, dependency tree, and every file in
-  `logs/overnight/20260824T035205Z`. The run ended with orchestrator exit `5`
-  because Claude reached its usage limit; the filesystem nevertheless retained
-  a usable Next.js 16.3.2/React 19.2.8 install and partial scaffold.
-- Recovered and verified the Next.js App Router foundation: strict TypeScript,
-  Tailwind CSS, ESLint, pinned lockfile, production scripts, responsive base
-  design system, navigation, home page, and static section routes.
-- Added executable root `run_tests.sh` as the canonical verification command
-  and `SCAFFOLD_README.md` with local install/start/test instructions. The app
-  requires no API keys or external resources.
-- Verified application code commit:
-  `1a34260822a2ab58cd23703187fbc58403ba6131` — "Checkpoint verified Next.js
-  application scaffold".
-- Added the P0 local persistence foundation with pinned Drizzle ORM and
-  better-sqlite3 dependencies, 14 core tables, generated migration metadata,
-  database constraints, and repo-local migration commands.
-- Seeded all ten editable prompt families and 21 optional tags per workspace.
-  The explicit demo reset creates three fictional schools, prompts covering all
-  ten families, six synthetic essays, multiple versions of two essays, safe and
-  dangerous reuse examples, and cross-school essay assignments without
-  changing personal records.
-- Added five Vitest integration tests that apply the real migration in memory
-  and verify core tables/foreign keys, taxonomy idempotency, primary and
-  secondary families plus manual override, personal/demo isolation, and
-  multi-school essay relationships.
-- Verified persistence code commit:
-  `dd4753f97636ed6fe7e8480e0ff178f008583a38` — "Add local SQLite persistence
-  foundation".
-- Added a server-only database lifecycle boundary that applies migrations and
-  initializes the personal workspace on first use; better-sqlite3 remains
-  external to the browser bundle.
-- Made personal/demo choice explicit through server actions and an HTTP-only,
-  same-site active-workspace cookie. Loading the demo resets demo-owned records
-  only; switching back leaves personal data untouched.
-- Replaced all four static placeholders with workspace-scoped views: school and
-  prompt lists, essay/version/link summaries, family coverage, and transparent
-  reuse examples with missing requirements and school-specific risk.
-- Added a sixth database integration test for strictly scoped workspace read
-  models and verified code commit
-  `2467657a621fb4a35716517c20fb000d38f91bc4` — "Connect workspace selection to
-  local data".
-- Added workspace-scoped school services and server actions for create, rename,
-  and delete. Names are normalized and validated; attempts to mutate a school
-  through another workspace fail; the UI explicitly warns that delete cascades
-  the school-owned prompts.
-- Added compact create/edit/delete forms to the Schools page and a seventh
-  integration test covering validation, workspace isolation, update, delete,
-  and prompt cascade behavior. Verified code commit:
-  `122f13818d563e29840698d754476a48722ba3fe` — "Add workspace-scoped school
-  CRUD".
-- Added workspace-scoped prompt create, edit, and delete services plus server
-  actions. The service validates that both the selected school and every
-  selected family belong to the active workspace, normalizes duplicate family
-  choices, and applies prompt and family-link changes atomically.
-- Extended the Schools page with compact prompt create/edit/delete workflows
-  using the existing visual language. Each prompt supports one optional primary
-  family, multiple secondary families, word-count bounds, requirement,
-  application status, deadline, notes, and visible deterministic/manual
-  provenance. Saving a family edit records a manual override without changing
-  the existing taxonomy or migration.
-- Preserved existing prompt text during classification-only edits, including
-  paragraph breaks. Manual overrides replace stale family links, mark every
-  current link as manual, and reset deterministic confidence to zero. Prompt
-  deletion uses existing foreign-key cascades for family links, matches, and
-  response assignments.
-- Expanded persistence coverage from seven to ten tests for prompt CRUD,
-  primary/secondary assignments and enriched reads, deterministic-to-manual
-  overrides, cross-workspace school/family rejection without partial writes,
-  scoped deletion, and relationship cascades. Verified code commit:
-  `52add4368f9cf60b5a46dbec62e599c1f6cdc534` — "Add workspace-scoped prompt
-  CRUD".
+**Layers 1–3 (handoff protocol, unchanged this session):** repo-based
+handoff protocol; `scripts/overnight_handoff.sh` (Codex → Claude,
+fail-closed subscription auth preflight, safe-continuation on a degraded
+Codex phase, `--permission-mode auto`); `scripts/test_overnight_handoff.sh`
+(80 deterministic assertions, zero real CLI calls). See git history
+`ae586f2`..`df42c8a` for full detail — not repeated here.
+
+**P0 Phase 1 (Foundation) — Codex, commits `1a34260`..`4ec6c6d`:** recovered
+Next.js 16 / React 19 / TypeScript strict / Tailwind 4 scaffold; local
+SQLite via Drizzle with 14 core tables and repo-local migrations; seeded
+ten-family taxonomy and 21 tags; demo-data system (3 schools, prompts across
+all 10 families, 6 essays, versions, reuse examples incl. a dangerous
+school-specific one); server-only DB lifecycle boundary; personal/demo
+workspace selection via an HTTP-only cookie; base design system, nav, and
+the four section pages wired to real workspace-scoped data; `run_tests.sh`
+as the canonical verification command.
+
+**P0 Phase 2 (Core Organization) — Codex, commits `122f138`, `52add43`:**
+workspace-scoped school CRUD and prompt CRUD (one primary + multiple
+secondary families, manual-override provenance, cross-workspace rejection,
+cascading deletes).
+
+**This session (Claude, interactive, commits `a06e9d0`, `199f8ba`,
+`76855f3`):**
+- `a06e9d0` — Essay CRUD (`src/lib/essays.ts`): create/update/delete,
+  content changes always land as a new immutable `essayVersions` row
+  (never edited in place), non-destructive restore. Deterministic
+  keyword-based classifier (`src/lib/classification.ts`) against the
+  ten-family taxonomy — no model calls. Deterministic essay↔prompt match
+  scorer (`src/lib/matching.ts`) — family overlap, word-count fit, and
+  school-specificity risk scored/penalized independently, never category
+  equality alone; a why-school prompt is capped below ready-to-reuse unless
+  the essay's own school-specific phrases name that exact school.
+  `src/lib/reuse.ts` recomputes every essay×prompt match for a workspace
+  from scratch, wired into the essay/prompt actions — personal-workspace
+  matches are now real (previously only demo's hand-seeded ones existed).
+  Essay CRUD UI with status/family/text filtering, version history with
+  word-count deltas and restore.
+- `199f8ba` — **Add College**: `src/lib/top-universities.ts` (a curated,
+  static 100-school list; `canonicalizeUniversityName()` resolves any
+  differently-cased typed variant to the list's exact canonical spelling so
+  duplicates aren't created and the retrieval lookup still hits).
+  `src/lib/prompt-retrieval.ts`: a `PromptRetrievalProvider` interface (same
+  deterministic-provider pattern as classification/matching) over a
+  **hand-researched, real, cited dataset** — not live scraping (the running
+  app has no paid search API and none was added, per
+  OVERNIGHT_TASK.md rule 10). Currently covers Stanford and MIT (both
+  confirmed "verified-2026-27" against their own official admissions pages,
+  fetched today) and Harvard (explicitly "previous-cycle" — its official
+  page only confirmed 2025-26 content, so the actual prompt text was
+  deliberately **not** imported rather than presenting a stale cycle as
+  current). `src/lib/college-import.ts` ties it together: creates/reuses
+  the school and a 2026–27 cycle, imports+classifies any found prompts with
+  full provenance (new `prompts.verificationStatus`/`sourceUrl`/
+  `retrievedAt` columns, migration `0001_pretty_frightful_four`), is
+  idempotent, and always returns a clear status including "not yet
+  verified" for schools outside the curated set — never guessed. UI: a
+  native `<datalist>` search/autocomplete picker (no client JS) with free
+  manual entry, and a linked verification badge per prompt.
+- `76855f3` — `src/lib/assignments.ts` (`assignEssayToPrompt`/
+  `unassignPrompt`, one response per prompt, schema-enforced). Each prompt
+  card now shows its assigned response or its top 3 ranked suggested
+  essays with one-click "Use this essay". Families page now lists actual
+  prompts (school + word limit) under each family — the cross-school "Why
+  Major: Stanford, Cornell, ..." view MVP_SPEC.md §4 asks for, not just
+  counts.
+
+All three commits verified via the full canonical checkpoint (see
+Tests/Verification Performed) plus manual runtime smoke tests against the
+built production server through real HTTP requests (not just unit tests).
 
 ## In Progress
 
-P0 Phase 2 (Core Organization). School and prompt CRUD are complete. Essay CRUD
-with immutable content versions is the highest-priority unfinished slice,
-followed by filtering, search, and browser workflow coverage. The repository is
-clean and ready for Claude Code to continue from the verified prompt CRUD
-checkpoint without repeating completed work, but the local Claude CLI must be
-logged back into an eligible subscription before that transfer can start.
+None. All work below is genuinely unstarted, not partially done.
 
 ## Next Steps
 
-1. Implement essay CRUD, search, status/family filters, and canonical versus
-   school-adaptation labels using immutable versions for content changes.
-2. Add Playwright coverage for workspace selection and one complete
-   organization workflow before moving into Phase 3 matching work.
-3. Continue Phase 3 with editable many-to-many essay/prompt relationships and
-   deterministic reuse scoring after Phase 2 organization is verified.
+Priority order, per MVP_SPEC.md's phases:
+
+1. **Finish Phase 4**: the deterministic editing-suggestion workflow in the
+   essay editor (prompt fit / clarity / concision / word-limit reduction),
+   individually accept (→ new version) or reject (→ unchanged), never
+   silently overwrite. Nothing exists for this yet.
+2. **Expand the curated retrieval dataset** (`src/lib/prompt-retrieval.ts`)
+   beyond Stanford/MIT/Harvard toward the rest of the top-100 list, each
+   entry researched the same way (official source, cited, dated) — this is
+   explicitly incremental, safe to do a few schools at a time.
+3. **Phase 5**: JSON export/import preserving relationships; at least one
+   Playwright workflow (none of the testing stack for this exists yet —
+   Playwright isn't installed); README/architecture docs.
+4. Smaller polish noticed but not required for P0: the Reuse Map page
+   (`/reuse`) still shows a flat global list rather than being organized
+   per-school/per-prompt; short (~50-word) imported prompts sometimes get
+   no classification at all (expected for a keyword classifier on very
+   short text, but worth a UX note e.g. "needs a manual category").
 
 ## Failed Approaches
 
-- During the automated Codex phase, offline npm version lookup returned
-  `ENOTCACHED`, and the first registry-backed install made no progress for 90
-  seconds. Codex removed its unverified draft as required. These attempts did
-  not consume the retry allowance because they were environment limitations.
-- The following Claude phase successfully installed a temporary
-  `create-next-app` scaffold, but its transfer/cleanup was interrupted by Git
-  permission denials and the Claude session usage limit. Its final report said
-  the scaffold was removed, while the subsequent filesystem audit found the
-  dependency tree, configuration, assets, and partial `src/` transfer intact.
-- `next build` with Turbopack passed on the empty partial scaffold but failed
-  after real routes were restored because the sandbox denied PostCSS's local
-  port binding (`EPERM`). The supported `next build --webpack` path avoided the
-  restricted mechanism and passed repeatedly; the canonical build script now
-  uses webpack.
-- The first file-backed `drizzle-kit migrate` attempt failed because Drizzle
-  does not create the configured parent `data/` directory. The project-local
-  script now creates that ignored directory before migrating; the same command
-  then applied the migration successfully.
-- The first database test run passed four of five tests and correctly exposed a
-  synthetic fixture error: both intended cross-school assignments pointed to
-  prompts at the same school. The fixture was corrected to use two schools; the
-  unchanged assertion and all other tests then passed.
-- The first runtime port choice (`127.0.0.1:3100`) was already occupied by an
-  unidentified listener, likely from the earlier interrupted smoke run. No
-  process was killed; the verification used port 3101 and stopped only its own
-  server session.
-- The first school-CRUD staging command used the literal App Router path
-  `src/app/[section]/page.tsx` without shell quoting, so zsh rejected the glob
-  before Git ran. Quoting the same repository path resolved it; no files or Git
-  state were changed by the failed command.
-- No new command or verification failures occurred during the prompt CRUD
-  checkpoint. Diff review found and corrected a draft implementation issue
-  that would have collapsed multiline prompt text during an edit; focused and
-  canonical verification passed after the correction.
-- The requested Claude Code transfer stopped at the mandatory subscription
-  preflight because `claude auth status --json` reported `loggedIn: false` and
-  `authMethod: "none"`. Running Claude through an unverified API-key path was
-  intentionally not attempted.
+Carried over from Codex's phases (see git history for full detail, not
+reproduced here): an offline npm registry lookup (`ENOTCACHED`) and a
+stalled registry-backed install were both environment limitations, not
+retry-allowance-consuming failures; a Turbopack production build failed on
+a sandboxed PostCSS port bind (`EPERM`) — resolved by pinning the canonical
+build script to `next build --webpack`; an unquoted `src/app/[section]`
+glob was rejected by zsh before Git ran — fixed by quoting, no state
+changed; a synthetic demo fixture had two cross-school assignments
+pointing at the same school — corrected. This session (Claude) hit no
+failed approaches — every change landed on the first attempt and passed
+verification.
 
 ## Blockers
 
-HUMAN-REQUIRED: Claude Code handoff cannot start because the fail-closed
-subscription preflight returned `loggedIn: false`, `authMethod: "none"`, and
-`apiProvider: "firstParty"`. A human must authenticate the installed Claude CLI
-with an eligible subscription. No API-key fallback was attempted, and no
-credentials were inspected or changed.
+None currently active. **Resolved this session**: the previous
+`HUMAN-REQUIRED` blocker (automated pipeline's `claude auth status --json`
+returning `loggedIn: false`) no longer reproduces — `env -u
+ANTHROPIC_API_KEY -u OPENAI_API_KEY claude auth status --json` now reports
+`loggedIn: true, authMethod: "claude.ai", subscriptionType: "pro"`. This
+session proceeded as an interactive Claude session rather than re-running
+the non-interactive pipeline, so the pipeline's own preflight was not
+re-exercised live; if a future automated run hits the same failure, treat
+it as the account's CLI session having been logged out again, not a repeat
+of a previously-diagnosed issue.
 
 ## Tests/Verification Performed
 
-- Layer 2 manual handoff: verified independently (see git history).
-- Layer 3 orchestrator: `bash scripts/test_overnight_handoff.sh` — 80/80
-  assertions passing, run immediately before this commit. Zero real
-  Claude/Codex invocations (verified by construction — stub binaries only).
-- The real `claude`/`codex` CLIs were inspected read-only (`--help`,
-  `auth status --json`, `login status`) to confirm exact flag/field names
-  before relying on them — no model calls, no auth-state changes.
-- Recovered dependency verification: `npm ls --depth=0` completed with the
-  expected Next.js 16.3.2, React 19.2.8, Tailwind 4.3.3, ESLint 9.39.5, and
-  TypeScript 5.9.3 dependency tree and no missing/extraneous packages.
-- Pre-repair baseline: `npm run lint` passed; `npm run build` passed but emitted
-  only framework route `/_not-found`, confirming the partial scaffold had no
-  usable application page; `bash scripts/test_overnight_handoff.sh` passed
-  80/80 assertions.
-- Final canonical verification: `./run_tests.sh` passed. It ran ESLint, Next
-  route type generation plus strict `tsc --noEmit`, a webpack production build
-  that prerendered `/`, `/schools`, `/essays`, `/families`, and `/reuse`, and
-  the existing overnight suite (80/80 assertions).
-- Runtime smoke verification: the built production server reached ready state;
-  HTTP checks confirmed `/` rendered the separate "Personal · empty" and
-  "Fictional · demo preview" entry states, and `/reuse` rendered the labeled
-  foundation placeholder. The server was then stopped.
-- Persistence verification: `npm run db:generate` created a 14-table migration;
-  `npx drizzle-kit check` reported the migration history consistent;
-  `npm run db:migrate` created a repo-local database and applied the migration;
-  a read-only SQLite query confirmed all 14 application tables.
-- `npm test` — 5/5 persistence integration tests passed. `./run_tests.sh` then
-  passed end to end with ESLint, strict route/type generation, those five tests,
-  the production build, and the existing 80/80 overnight assertions.
-- `npm audit --omit=dev` — zero production dependency vulnerabilities. The
-  install reported four moderate advisories in development-only transitive
-  packages; no risky forced upgrade was attempted.
-- Workspace integration verification: `npm test` — 6/6 tests passed;
-  `./run_tests.sh` passed ESLint, strict route/type generation, all six database
-  tests, a dynamic-route production build, and the existing 80/80 assertions.
-- Production runtime smoke: personal `/schools` showed the isolated empty state;
-  the demo action then rendered three fictional schools and reuse scores
-  91/58/35 including the Northstar danger warning; switching back restored the
-  unchanged personal empty state. Curl posts lacked a browser `Origin` header,
-  causing two expected server warnings; page responses and actions succeeded.
-- School CRUD verification: `npm test` — 7/7 integration tests passed. The full
-  `./run_tests.sh` checkpoint passed ESLint, strict type generation, all seven
-  tests, the dynamic production build, and 80/80 overnight assertions.
-- Prompt CRUD focused verification: `npm run lint`, `npm run typecheck`, and
-  `npm test` passed after integration, then passed again after the multiline
-  preservation/manual-confidence correction; the final Vitest result was 10/10.
-- Prompt CRUD canonical verification: `./run_tests.sh` passed immediately
-  before commit `52add4368f9cf60b5a46dbec62e599c1f6cdc534` with ESLint, Next
-  route type generation plus strict `tsc --noEmit`, all 10 integration tests,
-  a successful optimized Next.js webpack production build, and 80/80 overnight
-  orchestration assertions.
-- Pre-Claude transfer verification: `./run_tests.sh` passed again from the clean
-  prompt CRUD checkpoint with the same ESLint/typecheck/build results, 10/10
-  integration tests, and 80/80 overnight assertions. No regressions or code
-  changes were required.
-- Claude transfer preflight: `env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY claude
-  auth status --json` exited nonzero and reported that the CLI is not logged in.
-  Claude was not invoked because subscription-only authentication could not be
-  established safely.
-- Browser automation does not exist yet and remains P0 verification work.
+Each of this session's three commits was verified independently before
+committing (not just once at the end):
+
+- `a06e9d0` (essay CRUD/classification/matching/reuse): `./run_tests.sh`
+  green (lint, strict typecheck, 24/24 vitest, webpack production build,
+  80/80 overnight assertions); manual runtime smoke test against the built
+  production server via real HTTP POSTs (correct multipart Server Action
+  encoding, confirmed empirically) — essay creation, family assignment,
+  prompt creation, and a real deterministic match (score 70) appearing on
+  `/reuse`, zero server errors.
+- `199f8ba` (Add College): `./run_tests.sh` green (27/27 vitest incl. 3 new
+  tests: verified-import + idempotency, unlisted-school fallback,
+  previous-cycle refusal-to-guess); runtime smoke test added "stanford
+  university" (lowercase) via real HTTP, confirmed canonicalization to
+  "Stanford University", all 8 real prompts imported with verification
+  badges and partial auto-classification, re-adding produced zero
+  duplicates.
+- `76855f3` (assignment/suggestions): `./run_tests.sh` green (28/28 vitest
+  incl. assign/replace/unassign against the snapshot); runtime smoke test
+  confirmed the suggested-matches UI renders correctly with real
+  promptId/essayId/score/recommendation against actual imported Stanford
+  prompts and a real essay.
+- Every server smoke test was run against a freshly migrated, empty
+  `data/college-essay-organizer.sqlite` (gitignored, not committed), and
+  every spawned `next start` process was confirmed killed afterward
+  (verified via `lsof`/`ps` — an earlier round in this session found and
+  cleaned up several stray leftover server processes from prior testing).
+- Real CLI auth facts reconfirmed read-only this session: `claude auth
+  status --json` (see Blockers). No real Claude/Codex pipeline invocation
+  and no real model/API calls of any kind were made this session beyond
+  normal interactive tool use — the retrieval research used `WebSearch`/
+  `WebFetch` only (read-only, cited, see Completed).
 
 ## Last Verified Commit
 
-`52add4368f9cf60b5a46dbec62e599c1f6cdc534` — "Add workspace-scoped prompt
-CRUD". `./run_tests.sh` passed immediately before this code commit. The next
-commit changes only this handoff document to record the checkpoint.
+`76855f3` — "Surface suggested essays and essay-to-prompt assignment on
+prompt cards". Working tree is clean at this commit; `./run_tests.sh`
+(lint, strict typecheck, 28/28 vitest, production build, 80/80 overnight
+orchestration assertions) passed immediately before it, plus the manual
+runtime smoke tests described above.
