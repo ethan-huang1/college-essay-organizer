@@ -1043,6 +1043,13 @@ h1 {
   font: 700 10px var(--font-utility);
 }
 
+.conditional-note {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-style: italic;
+}
+
 .cross-school-prompt-list {
   margin: 10px 0 0;
   padding: 0;

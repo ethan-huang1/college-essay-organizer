@@ -8,6 +8,7 @@ import {
   essayPromptMatches,
   essays,
   essayVersions,
+  promptChangeLog,
   promptFamilies,
   promptFamilyLinks,
   prompts,
@@ -398,32 +399,37 @@ describe("local persistence foundation", () => {
     initializePersonalWorkspace(connection.db);
 
     const first = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Stanford University");
-    expect(first.verificationStatus).toBe("verified-2026-27");
-    expect(first.importedPromptCount).toBeGreaterThan(0);
+    expect(first.verificationStatus).toBe("officially-verified");
+    expect(first.counts.created).toBeGreaterThan(0);
+    expect(first.counts.updated).toBe(0);
     expect(first.sourceUrl).toMatch(/^https:\/\//);
 
     const imported = connection.db.select().from(prompts)
       .where(and(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID), eq(prompts.schoolId, first.schoolId)))
       .all();
-    expect(imported).toHaveLength(first.importedPromptCount);
+    expect(imported).toHaveLength(first.counts.created);
     expect(imported.every((prompt) => prompt.classificationSource === "deterministic")).toBe(true);
-    expect(imported.every((prompt) => prompt.verificationStatus === "verified-2026-27")).toBe(true);
+    expect(imported.every((prompt) => prompt.verificationStatus === "officially-verified")).toBe(true);
+    expect(imported.every((prompt) => prompt.externalRef)).toBe(true);
     const links = connection.db.select().from(promptFamilyLinks)
       .where(inArray(promptFamilyLinks.promptId, imported.map((prompt) => prompt.id)))
       .all();
     expect(links.length).toBeGreaterThan(0);
 
-    // Re-adding the same school does not duplicate its school row or prompts.
+    // Re-adding the same school does not duplicate its school row or prompts -
+    // every prompt is recognized as unchanged (deduplication + idempotency).
     const second = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "  stanford university  ".trim());
-    expect(second.importedPromptCount).toBe(0);
+    expect(second.counts.created).toBe(0);
+    expect(second.counts.updated).toBe(0);
+    expect(second.counts.unchanged).toBe(first.counts.created);
     expect(connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(1);
-    expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, first.schoolId)).all()).toHaveLength(first.importedPromptCount);
+    expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, first.schoolId)).all()).toHaveLength(first.counts.created);
   });
 
   it("adds a school with no verified prompts as 'not yet verified' rather than guessing", () => {
     initializePersonalWorkspace(connection.db);
     const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Some Unlisted College");
-    expect(result.importedPromptCount).toBe(0);
+    expect(result.counts.created).toBe(0);
     expect(result.verificationStatus).toBe("manual");
     expect(result.note).toMatch(/not yet verified/i);
     expect(connection.db.select().from(schools).where(eq(schools.id, result.schoolId)).get()?.name).toBe("Some Unlisted College");
@@ -433,8 +439,66 @@ describe("local persistence foundation", () => {
     initializePersonalWorkspace(connection.db);
     const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Harvard University");
     expect(result.verificationStatus).toBe("previous-cycle");
-    expect(result.importedPromptCount).toBe(0);
+    expect(result.counts.created).toBe(0);
     expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, result.schoolId)).all()).toHaveLength(0);
+  });
+
+  it("imports genuinely conditional, degree-dependent prompts with their note intact", () => {
+    initializePersonalWorkspace(connection.db);
+    const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Princeton University");
+    const conditionalPrompts = connection.db.select().from(prompts)
+      .where(and(eq(prompts.schoolId, result.schoolId), eq(prompts.requirement, "conditional")))
+      .all();
+    expect(conditionalPrompts.length).toBeGreaterThanOrEqual(2);
+    expect(conditionalPrompts.every((prompt) => Boolean(prompt.conditionalNote))).toBe(true);
+  });
+
+  it("imports character-limited prompts distinctly from word-limited ones", () => {
+    initializePersonalWorkspace(connection.db);
+    const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Yale University");
+    const charLimited = connection.db.select().from(prompts)
+      .where(and(eq(prompts.schoolId, result.schoolId), eq(prompts.externalRef, "short-take-teach-write-create")))
+      .get();
+    expect(charLimited?.maxCharCount).toBe(200);
+    expect(charLimited?.maxWordCount).toBeNull();
+  });
+
+  it("shares one canonical prompt set across UC campuses without cross-campus id collisions", () => {
+    initializePersonalWorkspace(connection.db);
+    const berkeley = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "University of California, Berkeley");
+    const ucla = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "University of California, Los Angeles");
+    expect(berkeley.counts.created).toBe(8);
+    expect(ucla.counts.created).toBe(8);
+    expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(16);
+  });
+
+  it("flags a changed prompt as needs-review and records the prior wording, without duplicating it", () => {
+    initializePersonalWorkspace(connection.db);
+    const first = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Massachusetts Institute of Technology");
+    const target = connection.db.select().from(prompts)
+      .where(and(eq(prompts.schoolId, first.schoolId), eq(prompts.externalRef, "short-answer-fun")))
+      .get();
+    if (!target) throw new Error("Expected the seeded MIT prompt to exist.");
+
+    // Simulate "the source re-fetched with different wording than what we
+    // previously imported" by rewinding the stored text, then re-import.
+    connection.db.update(prompts).set({ promptText: "What do you do just for fun on weekends?" })
+      .where(eq(prompts.id, target.id)).run();
+
+    const second = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Massachusetts Institute of Technology");
+    expect(second.counts.updated).toBe(1);
+    expect(second.counts.flagged).toBe(1);
+
+    const updated = connection.db.select().from(prompts).where(eq(prompts.id, target.id)).get();
+    expect(updated?.verificationStatus).toBe("needs-review");
+    expect(updated?.promptText).toBe("What do you do just for fun?");
+
+    const changeLog = connection.db.select().from(promptChangeLog).where(eq(promptChangeLog.promptId, target.id)).all();
+    expect(changeLog).toHaveLength(1);
+    expect(changeLog[0].previousPromptText).toBe("What do you do just for fun on weekends?");
+
+    // No duplicate prompt was created for the same externalRef.
+    expect(connection.db.select().from(prompts).where(and(eq(prompts.schoolId, first.schoolId), eq(prompts.externalRef, "short-answer-fun"))).all()).toHaveLength(1);
   });
 
   it("assigns exactly one essay response per prompt, replacing a prior assignment, and can unassign", () => {

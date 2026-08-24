@@ -2,9 +2,11 @@ import { and, eq } from "drizzle-orm";
 
 import { classifyText } from "./classification";
 import type { AppDatabase } from "./db/client";
-import { applicationCycles, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
+import { applicationCycles, promptChangeLog, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 import { PROMPT_FAMILIES } from "./db/taxonomy";
-import { promptRetrievalProvider, type PromptVerificationStatus, type RetrievedPrompt } from "./prompt-retrieval";
+import { promptContentChanged } from "./retrieval/normalize";
+import { lookupSchoolSource } from "./retrieval/registry";
+import type { ApplicationPlatform, RawPromptRecord, VerificationStatus } from "./retrieval/types";
 import { canonicalizeUniversityName } from "./top-universities";
 
 const CYCLE_LABEL = "2026–27";
@@ -43,120 +45,161 @@ function familyIdByName(db: Pick<AppDatabase, "select">, workspaceId: string, na
     .get()?.id ?? null;
 }
 
-function importPrompt(
+function assignFamilies(db: Pick<AppDatabase, "select" | "insert">, workspaceId: string, promptId: string, promptText: string) {
+  const classification = classifyText(promptText);
+  const primaryFamilyId = classification.primarySlug
+    ? familyIdByName(db, workspaceId, FAMILY_NAME_BY_SLUG.get(classification.primarySlug) ?? "")
+    : null;
+  const secondaryFamilyIds = classification.secondarySlugs
+    .map((slug) => familyIdByName(db, workspaceId, FAMILY_NAME_BY_SLUG.get(slug) ?? ""))
+    .filter((id): id is string => Boolean(id));
+  const assignments = [
+    ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
+    ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
+  ];
+  if (assignments.length > 0) {
+    db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
+      id: crypto.randomUUID(),
+      workspaceId,
+      promptId,
+      familyId,
+      isPrimary,
+      source: "deterministic" as const,
+    }))).run();
+  }
+  return classification.confidence;
+}
+
+type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number };
+
+// Inserts a brand-new prompt, or - if a prompt with the same (schoolId,
+// externalRef) already exists - detects whether anything tracked actually
+// changed. Identical re-imports are true no-ops (idempotent); a genuine
+// change updates the row, records the prior state in promptChangeLog, and
+// flips verificationStatus to needs-review so a human notices rather than
+// silently trusting a re-fetch. Never creates a duplicate prompt.
+function upsertPrompt(
   db: AppDatabase,
   workspaceId: string,
   schoolId: string,
   cycleId: string,
-  retrieved: RetrievedPrompt,
-  verification: { status: PromptVerificationStatus; sourceUrl: string | null; retrievedAt: Date },
+  raw: RawPromptRecord,
+  recordDefaults: { status: VerificationStatus; sourceUrl: string | null; platform: ApplicationPlatform; retrievedAt: Date },
+  counts: ImportCounts,
 ) {
-  const classification = classifyText(`${retrieved.title} ${retrieved.promptText}`);
-  db.transaction((tx) => {
-    const promptId = crypto.randomUUID();
-    tx.insert(prompts).values({
-      id: promptId,
-      workspaceId,
-      schoolId,
-      cycleId,
-      title: retrieved.title,
-      promptText: retrieved.promptText,
-      minWordCount: retrieved.minWordCount,
-      maxWordCount: retrieved.maxWordCount,
-      requirement: retrieved.requirement,
-      classificationConfidence: classification.confidence,
-      classificationSource: "deterministic",
-      verificationStatus: verification.status,
-      sourceUrl: verification.sourceUrl,
-      retrievedAt: verification.retrievedAt,
-    }).run();
+  const verificationStatus = raw.verificationStatus ?? recordDefaults.status;
+  const existing = db.select().from(prompts)
+    .where(and(eq(prompts.schoolId, schoolId), eq(prompts.externalRef, raw.externalRef)))
+    .get();
 
-    const primaryFamilyId = classification.primarySlug
-      ? familyIdByName(tx, workspaceId, FAMILY_NAME_BY_SLUG.get(classification.primarySlug) ?? "")
-      : null;
-    const secondaryFamilyIds = classification.secondarySlugs
-      .map((slug) => familyIdByName(tx, workspaceId, FAMILY_NAME_BY_SLUG.get(slug) ?? ""))
-      .filter((id): id is string => Boolean(id));
-
-    const assignments = [
-      ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
-      ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
-    ];
-    if (assignments.length > 0) {
-      tx.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
-        id: crypto.randomUUID(),
+  if (!existing) {
+    db.transaction((tx) => {
+      const promptId = crypto.randomUUID();
+      tx.insert(prompts).values({
+        id: promptId,
         workspaceId,
-        promptId,
-        familyId,
-        isPrimary,
-        source: "deterministic" as const,
-      }))).run();
-    }
+        schoolId,
+        cycleId,
+        externalRef: raw.externalRef,
+        title: raw.title,
+        promptText: raw.promptText,
+        minWordCount: raw.minWordCount ?? null,
+        maxWordCount: raw.maxWordCount ?? null,
+        minCharCount: raw.minCharCount ?? null,
+        maxCharCount: raw.maxCharCount ?? null,
+        requirement: raw.requirement,
+        conditionalNote: raw.conditionalNote ?? null,
+        classificationSource: "deterministic",
+        verificationStatus,
+        applicationPlatform: recordDefaults.platform,
+        sourceUrl: recordDefaults.sourceUrl,
+        retrievedAt: recordDefaults.retrievedAt,
+      }).run();
+      assignFamilies(tx, workspaceId, promptId, `${raw.title} ${raw.promptText}`);
+    });
+    counts.created += 1;
+    return;
+  }
+
+  if (!promptContentChanged(existing, raw)) {
+    counts.unchanged += 1;
+    return;
+  }
+
+  db.transaction((tx) => {
+    tx.insert(promptChangeLog).values({
+      id: crypto.randomUUID(),
+      workspaceId,
+      promptId: existing.id,
+      previousPromptText: existing.promptText,
+      previousMinWordCount: existing.minWordCount,
+      previousMaxWordCount: existing.maxWordCount,
+    }).run();
+    tx.update(prompts).set({
+      title: raw.title,
+      promptText: raw.promptText,
+      minWordCount: raw.minWordCount ?? null,
+      maxWordCount: raw.maxWordCount ?? null,
+      minCharCount: raw.minCharCount ?? null,
+      maxCharCount: raw.maxCharCount ?? null,
+      requirement: raw.requirement,
+      conditionalNote: raw.conditionalNote ?? null,
+      verificationStatus: "needs-review",
+      sourceUrl: recordDefaults.sourceUrl,
+      retrievedAt: recordDefaults.retrievedAt,
+      updatedAt: new Date(),
+    }).where(eq(prompts.id, existing.id)).run();
   });
+  counts.updated += 1;
+  counts.flagged += 1;
 }
 
 export type ImportCollegeResult = {
   schoolId: string;
   schoolName: string;
-  verificationStatus: PromptVerificationStatus;
+  verificationStatus: VerificationStatus;
   sourceUrl: string | null;
-  importedPromptCount: number;
   note: string;
+  counts: ImportCounts;
 };
 
 // The single entry point for "Add College": creates or reuses the school,
-// looks up the curated retrieval provider, imports and auto-classifies any
-// found prompts, and always returns a clear status - including the
-// "not yet verified" case MVP_SPEC.md §2 requires rather than guessing.
+// looks up the retrieval registry, and imports/updates/flags each prompt
+// through the shared upsert pipeline above - every school (however it was
+// researched) goes through identical logic, never special-cased here.
 export function importCollege(db: AppDatabase, workspaceId: string, schoolName: string): ImportCollegeResult {
   const cycleId = getOrCreateCycle(db, workspaceId);
   const school = getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), cycleId);
-  const retrieved = promptRetrievalProvider.retrievePrompts(school.name);
+  const source = lookupSchoolSource(school.name);
+  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
 
-  if (!retrieved || retrieved.prompts.length === 0) {
+  if (!source || source.prompts.length === 0) {
     return {
       schoolId: school.id,
       schoolName: school.name,
-      verificationStatus: retrieved?.verificationStatus ?? "manual",
-      sourceUrl: retrieved?.sourceUrl ?? null,
-      importedPromptCount: 0,
-      note: retrieved?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.",
+      verificationStatus: source?.verificationStatus ?? "manual",
+      sourceUrl: source?.sourceUrl ?? null,
+      note: source?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.",
+      counts,
     };
   }
 
-  // Idempotent: re-adding a school whose prompts were already imported from
-  // the same source does not create duplicates.
-  const alreadyImported = retrieved.sourceUrl
-    ? db.select({ id: prompts.id }).from(prompts)
-        .where(and(eq(prompts.schoolId, school.id), eq(prompts.sourceUrl, retrieved.sourceUrl)))
-        .all()
-    : [];
-  if (alreadyImported.length > 0) {
-    return {
-      schoolId: school.id,
-      schoolName: school.name,
-      verificationStatus: retrieved.verificationStatus,
-      sourceUrl: retrieved.sourceUrl,
-      importedPromptCount: 0,
-      note: "This school's prompts were already imported from this source.",
-    };
-  }
-
-  const retrievedAt = new Date(retrieved.retrievedAt);
-  for (const prompt of retrieved.prompts) {
-    importPrompt(db, workspaceId, school.id, cycleId, prompt, {
-      status: retrieved.verificationStatus,
-      sourceUrl: retrieved.sourceUrl,
+  const retrievedAt = new Date(source.retrievedAt);
+  for (const raw of source.prompts) {
+    upsertPrompt(db, workspaceId, school.id, cycleId, raw, {
+      status: source.verificationStatus,
+      sourceUrl: source.sourceUrl,
+      platform: source.applicationPlatform,
       retrievedAt,
-    });
+    }, counts);
   }
 
   return {
     schoolId: school.id,
     schoolName: school.name,
-    verificationStatus: retrieved.verificationStatus,
-    sourceUrl: retrieved.sourceUrl,
-    importedPromptCount: retrieved.prompts.length,
-    note: retrieved.note,
+    verificationStatus: source.verificationStatus,
+    sourceUrl: source.sourceUrl,
+    note: source.note,
+    counts,
   };
 }

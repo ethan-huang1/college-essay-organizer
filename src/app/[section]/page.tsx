@@ -70,7 +70,10 @@ function PromptFields({ snapshot, prompt }: { snapshot: WorkspaceSnapshot; promp
       <label className="field-wide">Full prompt<textarea name="promptText" required minLength={10} maxLength={5000} defaultValue={prompt?.promptText} placeholder="Paste the complete prompt text" /></label>
       <label>Minimum words<input name="minWordCount" type="number" min={0} step={1} defaultValue={prompt?.minWordCount ?? ""} /></label>
       <label>Maximum words<input name="maxWordCount" type="number" min={0} step={1} defaultValue={prompt?.maxWordCount ?? ""} /></label>
-      <label>Requirement<select name="requirement" defaultValue={prompt?.requirement ?? "required"}><option value="required">Required</option><option value="optional">Optional</option></select></label>
+      <label>Minimum characters<input name="minCharCount" type="number" min={0} step={1} defaultValue={prompt?.minCharCount ?? ""} /></label>
+      <label>Maximum characters<input name="maxCharCount" type="number" min={0} step={1} defaultValue={prompt?.maxCharCount ?? ""} /></label>
+      <label>Requirement<select name="requirement" defaultValue={prompt?.requirement ?? "required"}><option value="required">Required</option><option value="optional">Optional</option><option value="conditional">Conditional</option></select></label>
+      <label className="field-wide">Conditional note <span>required if Requirement is Conditional</span><input name="conditionalNote" maxLength={300} defaultValue={prompt?.conditionalNote ?? ""} placeholder="Applies only to applicants selecting..." /></label>
       <label>Status<select name="status" defaultValue={prompt?.status ?? "not-started"}><option value="not-started">Not started</option><option value="in-progress">In progress</option><option value="complete">Complete</option><option value="submitted">Submitted</option></select></label>
       <label>Deadline<input name="deadline" type="date" defaultValue={deadline} /></label>
       <label>Primary family<select name="primaryFamilyId" defaultValue={prompt?.primaryFamily?.id ?? ""}><option value="">No primary family</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
@@ -114,12 +117,13 @@ function AddCollegeForm() {
 
 function VerificationBadge({ status, sourceUrl }: { status: WorkspaceSnapshot["prompts"][number]["verificationStatus"]; sourceUrl: string | null }) {
   const label = {
-    "verified-2026-27": "Verified 2026–27",
-    "likely-current-unverified": "Likely current · unverified",
+    "officially-verified": "Officially verified",
+    "common-app-verified": "Common App verified",
     "previous-cycle": "Previous cycle",
+    "needs-review": "Needs review",
     manual: "Manually entered",
   }[status];
-  const tone = status === "verified-2026-27" ? "verified" : status === "manual" ? "manual" : "unverified";
+  const tone = status === "officially-verified" || status === "common-app-verified" ? "verified" : status === "manual" ? "manual" : "unverified";
   return sourceUrl ? (
     <a className={`verification-badge ${tone}`} href={sourceUrl} target="_blank" rel="noreferrer">{label}</a>
   ) : (
@@ -175,9 +179,10 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                     <article className="prompt-record" key={prompt.id}>
                       <div className="prompt-record-heading">
                         <div><span className="record-meta">{prompt.requirement} · {prompt.status.replace("-", " ")}</span><h3>{prompt.title}</h3></div>
-                        <span>{prompt.maxWordCount ?? "—"} words</span>
+                        <span>{prompt.maxCharCount ? `${prompt.maxCharCount} chars` : `${prompt.maxWordCount ?? "—"} words`}</span>
                       </div>
                       <p>{prompt.promptText}</p>
+                      {prompt.requirement === "conditional" && prompt.conditionalNote ? <p className="conditional-note">Conditional: {prompt.conditionalNote}</p> : null}
                       <div className="family-chips">
                         {prompt.primaryFamily ? <span className="primary-chip">Primary · {prompt.primaryFamily.name}</span> : <span>Unclassified</span>}
                         {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}

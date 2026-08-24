@@ -96,14 +96,19 @@ export const prompts = sqliteTable(
     promptText: text("prompt_text").notNull(),
     minWordCount: integer("min_word_count"),
     maxWordCount: integer("max_word_count"),
-    requirement: text("requirement", { enum: ["required", "optional"] }).notNull().default("required"),
+    minCharCount: integer("min_char_count"),
+    maxCharCount: integer("max_char_count"),
+    requirement: text("requirement", { enum: ["required", "optional", "conditional"] }).notNull().default("required"),
+    conditionalNote: text("conditional_note"),
     deadline: integer("deadline", { mode: "timestamp_ms" }),
     status: text("status", { enum: ["not-started", "in-progress", "complete", "submitted"] }).notNull().default("not-started"),
     classificationConfidence: integer("classification_confidence").notNull().default(0),
     classificationSource: text("classification_source", { enum: ["deterministic", "manual"] }).notNull().default("deterministic"),
-    verificationStatus: text("verification_status", { enum: ["verified-2026-27", "likely-current-unverified", "previous-cycle", "manual"] }).notNull().default("manual"),
+    verificationStatus: text("verification_status", { enum: ["officially-verified", "common-app-verified", "previous-cycle", "needs-review", "manual"] }).notNull().default("manual"),
+    applicationPlatform: text("application_platform", { enum: ["common-app", "coalition-app", "school-specific", "questbridge", "unknown"] }).notNull().default("unknown"),
     sourceUrl: text("source_url"),
     retrievedAt: integer("retrieved_at", { mode: "timestamp_ms" }),
+    externalRef: text("external_ref"),
     notes: text("notes"),
     createdAt: timestamp("created_at"),
     updatedAt: timestamp("updated_at"),
@@ -111,10 +116,31 @@ export const prompts = sqliteTable(
   (table) => [
     index("prompts_workspace_idx").on(table.workspaceId),
     index("prompts_school_idx").on(table.schoolId),
+    uniqueIndex("prompts_school_external_ref_unique").on(table.schoolId, table.externalRef).where(sql`${table.externalRef} is not null`),
     check("prompts_word_count_nonnegative_check", sql`coalesce(${table.minWordCount}, 0) >= 0 and coalesce(${table.maxWordCount}, 0) >= 0`),
     check("prompts_word_count_order_check", sql`${table.minWordCount} is null or ${table.maxWordCount} is null or ${table.maxWordCount} >= ${table.minWordCount}`),
+    check("prompts_char_count_nonnegative_check", sql`coalesce(${table.minCharCount}, 0) >= 0 and coalesce(${table.maxCharCount}, 0) >= 0`),
+    check("prompts_char_count_order_check", sql`${table.minCharCount} is null or ${table.maxCharCount} is null or ${table.maxCharCount} >= ${table.minCharCount}`),
     check("prompts_confidence_range_check", sql`${table.classificationConfidence} between 0 and 100`),
   ],
+);
+
+// A record of what a prompt's tracked fields looked like immediately before
+// a re-import changed them - written by the import pipeline's change
+// detection, never edited in place. Lets "changed prompts are flagged"
+// (verificationStatus flips to needs-review) come with an actual diff.
+export const promptChangeLog = sqliteTable(
+  "prompt_change_log",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    promptId: text("prompt_id").notNull().references(() => prompts.id, { onDelete: "cascade" }),
+    previousPromptText: text("previous_prompt_text").notNull(),
+    previousMinWordCount: integer("previous_min_word_count"),
+    previousMaxWordCount: integer("previous_max_word_count"),
+    detectedAt: timestamp("detected_at"),
+  },
+  (table) => [index("prompt_change_log_prompt_idx").on(table.promptId)],
 );
 
 export const promptFamilyLinks = sqliteTable(
@@ -258,6 +284,7 @@ export const schema = {
   promptFamilies,
   promptTags,
   prompts,
+  promptChangeLog,
   promptFamilyLinks,
   promptTagLinks,
   essays,

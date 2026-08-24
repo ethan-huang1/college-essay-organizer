@@ -9,7 +9,10 @@ export type PromptInput = {
   promptText: string;
   minWordCount?: number | null;
   maxWordCount?: number | null;
-  requirement: "required" | "optional";
+  minCharCount?: number | null;
+  maxCharCount?: number | null;
+  requirement: "required" | "optional" | "conditional";
+  conditionalNote?: string;
   status: "not-started" | "in-progress" | "complete" | "submitted";
   deadline?: Date | null;
   notes?: string;
@@ -43,6 +46,14 @@ function validateInput(db: AppDatabase, workspaceId: string, input: PromptInput)
   if (minWordCount !== null && (!Number.isInteger(minWordCount) || minWordCount < 0)) throw new Error("Minimum word count must be a nonnegative integer.");
   if (maxWordCount !== null && (!Number.isInteger(maxWordCount) || maxWordCount < 0)) throw new Error("Maximum word count must be a nonnegative integer.");
   if (minWordCount !== null && maxWordCount !== null && minWordCount > maxWordCount) throw new Error("Minimum word count cannot exceed maximum word count.");
+
+  const minCharCount = input.minCharCount ?? null;
+  const maxCharCount = input.maxCharCount ?? null;
+  if (minCharCount !== null && (!Number.isInteger(minCharCount) || minCharCount < 0)) throw new Error("Minimum character count must be a nonnegative integer.");
+  if (maxCharCount !== null && (!Number.isInteger(maxCharCount) || maxCharCount < 0)) throw new Error("Maximum character count must be a nonnegative integer.");
+  if (minCharCount !== null && maxCharCount !== null && minCharCount > maxCharCount) throw new Error("Minimum character count cannot exceed maximum character count.");
+
+  if (input.requirement === "conditional" && !input.conditionalNote?.trim()) throw new Error("Conditional prompts need a note explaining when they apply.");
   if (input.deadline && Number.isNaN(input.deadline.getTime())) throw new Error("Deadline must be a valid date.");
   if (input.notes && input.notes.trim().length > 2000) throw new Error("Notes must be 2,000 characters or fewer.");
 
@@ -62,6 +73,9 @@ function validateInput(db: AppDatabase, workspaceId: string, input: PromptInput)
     promptText: cleanText(input.promptText, "Prompt text", 10, 5000),
     minWordCount,
     maxWordCount,
+    minCharCount,
+    maxCharCount,
+    conditionalNote: input.requirement === "conditional" ? (input.conditionalNote?.trim() || null) : null,
     notes: input.notes?.trim() || null,
   };
 }
@@ -102,7 +116,10 @@ export function createPrompt(db: AppDatabase, workspaceId: string, input: Prompt
       promptText: validated.promptText,
       minWordCount: validated.minWordCount,
       maxWordCount: validated.maxWordCount,
+      minCharCount: validated.minCharCount,
+      maxCharCount: validated.maxCharCount,
       requirement: input.requirement,
+      conditionalNote: validated.conditionalNote,
       status: input.status,
       deadline: input.deadline ?? null,
       notes: validated.notes,
@@ -128,7 +145,10 @@ export function updatePrompt(db: AppDatabase, workspaceId: string, promptId: str
       promptText: validated.promptText,
       minWordCount: validated.minWordCount,
       maxWordCount: validated.maxWordCount,
+      minCharCount: validated.minCharCount,
+      maxCharCount: validated.maxCharCount,
       requirement: input.requirement,
+      conditionalNote: validated.conditionalNote,
       status: input.status,
       deadline: input.deadline ?? null,
       notes: validated.notes,

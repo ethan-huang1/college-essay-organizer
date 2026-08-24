@@ -27,7 +27,10 @@ function promptInput(formData: FormData): PromptInput {
     promptText: field(formData, "promptText"),
     minWordCount: optionalNumber(formData, "minWordCount"),
     maxWordCount: optionalNumber(formData, "maxWordCount"),
-    requirement: requirement === "optional" ? "optional" : "required",
+    minCharCount: optionalNumber(formData, "minCharCount"),
+    maxCharCount: optionalNumber(formData, "maxCharCount"),
+    requirement: requirement === "optional" ? "optional" : requirement === "conditional" ? "conditional" : "required",
+    conditionalNote: field(formData, "conditionalNote"),
     status: ["in-progress", "complete", "submitted"].includes(status)
       ? status as PromptInput["status"]
       : "not-started",
