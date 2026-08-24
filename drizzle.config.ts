@@ -1,11 +1,12 @@
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
   schema: "./src/lib/db/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    url: "./data/college-essay-organizer.sqlite",
+    // Neon connection string. Kept out of the repo: see .env.example.
+    url: process.env.DATABASE_URL ?? "",
   },
   strict: true,
   verbose: true,

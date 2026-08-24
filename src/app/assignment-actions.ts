@@ -23,13 +23,13 @@ function revalidateAssignmentPaths() {
 
 export async function assignEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  assignEssayToPrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"), field(formData, "essayId"));
+  await assignEssayToPrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"), field(formData, "essayId"));
   revalidateAssignmentPaths();
 }
 
 export async function unassignEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  unassignPrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"));
+  await unassignPrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"));
   revalidateAssignmentPaths();
 }
 
@@ -45,7 +45,7 @@ export async function draftEssayForPromptAction(formData: FormData) {
   const school = snapshot.schools.find((candidate) => candidate.id === prompt.schoolId);
 
   const db = getAppDatabase().db;
-  const essayId = createEssay(db, snapshot.workspace.id, {
+  const essayId = await createEssay(db, snapshot.workspace.id, {
     title: `${school?.name ?? "Draft"} — ${prompt.title}`.slice(0, 160),
     targetWordCount: prompt.maxWordCount,
     status: "idea",
@@ -54,7 +54,7 @@ export async function draftEssayForPromptAction(formData: FormData) {
     secondaryFamilyIds: prompt.secondaryFamilies.map((family) => family.id),
     content: "",
   });
-  assignEssayToPrompt(db, snapshot.workspace.id, promptId, essayId);
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await assignEssayToPrompt(db, snapshot.workspace.id, promptId, essayId);
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateAssignmentPaths();
 }

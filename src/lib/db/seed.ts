@@ -15,8 +15,8 @@ function familyId(workspaceId: string, slug: string) {
   return `${workspaceId}:family:${slug}`;
 }
 
-export function seedTaxonomy(db: InsertDatabase, workspaceId: string) {
-  db.insert(promptFamilies)
+export async function seedTaxonomy(db: InsertDatabase, workspaceId: string) {
+  await db.insert(promptFamilies)
     .values(
       PROMPT_FAMILIES.map(([slug, name, description, color], index) => ({
         id: familyId(workspaceId, slug),
@@ -28,9 +28,9 @@ export function seedTaxonomy(db: InsertDatabase, workspaceId: string) {
       })),
     )
     .onConflictDoNothing()
-    .run();
+    ;
 
-  db.insert(promptTags)
+  await db.insert(promptTags)
     .values(
       SECONDARY_TAGS.map((name) => ({
         id: `${workspaceId}:tag:${name.replaceAll(" ", "-")}`,
@@ -39,15 +39,15 @@ export function seedTaxonomy(db: InsertDatabase, workspaceId: string) {
       })),
     )
     .onConflictDoNothing()
-    .run();
+    ;
 }
 
-export function initializePersonalWorkspace(db: AppDatabase) {
-  db.transaction((tx) => {
-    tx.insert(workspaces)
+export async function initializePersonalWorkspace(db: AppDatabase) {
+  await db.transaction(async (tx) => {
+    await tx.insert(workspaces)
       .values({ id: PERSONAL_WORKSPACE_ID, kind: "personal", name: "My workspace" })
       .onConflictDoNothing()
-      .run();
-    seedTaxonomy(tx, PERSONAL_WORKSPACE_ID);
+      ;
+    await seedTaxonomy(tx, PERSONAL_WORKSPACE_ID);
   });
 }

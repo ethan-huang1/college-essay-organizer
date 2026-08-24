@@ -34,11 +34,11 @@ function normalizeFamilies(input: PromptInput) {
   return { primaryFamilyId, secondaryFamilyIds };
 }
 
-function validateInput(db: AppDatabase, workspaceId: string, input: PromptInput) {
-  const school = db.select({ id: schools.id })
+async function validateInput(db: AppDatabase, workspaceId: string, input: PromptInput) {
+  const school = await db.select({ id: schools.id })
     .from(schools)
     .where(and(eq(schools.id, input.schoolId), eq(schools.workspaceId, workspaceId)))
-    .get();
+    .then((rows) => rows[0]);
   if (!school) throw new Error("School not found in the active workspace.");
 
   const minWordCount = input.minWordCount ?? null;
@@ -60,10 +60,9 @@ function validateInput(db: AppDatabase, workspaceId: string, input: PromptInput)
   const families = normalizeFamilies(input);
   const familyIds = [families.primaryFamilyId, ...families.secondaryFamilyIds].filter((id): id is string => Boolean(id));
   if (familyIds.length > 0) {
-    const validFamilies = db.select({ id: promptFamilies.id })
+    const validFamilies = await db.select({ id: promptFamilies.id })
       .from(promptFamilies)
-      .where(and(eq(promptFamilies.workspaceId, workspaceId), inArray(promptFamilies.id, familyIds)))
-      .all();
+      .where(and(eq(promptFamilies.workspaceId, workspaceId), inArray(promptFamilies.id, familyIds)));
     if (validFamilies.length !== familyIds.length) throw new Error("Every selected family must belong to the active workspace.");
   }
 
@@ -80,35 +79,35 @@ function validateInput(db: AppDatabase, workspaceId: string, input: PromptInput)
   };
 }
 
-function replaceFamilyAssignments(
+async function replaceFamilyAssignments(
   db: Pick<AppDatabase, "delete" | "insert">,
   workspaceId: string,
   promptId: string,
   primaryFamilyId: string | null,
   secondaryFamilyIds: string[],
 ) {
-  db.delete(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).run();
+  await db.delete(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
   const assignments = [
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
     ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
   ];
   if (assignments.length > 0) {
-    db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
+    await db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
       id: crypto.randomUUID(),
       workspaceId,
       promptId,
       familyId,
       isPrimary,
       source: "manual" as const,
-    }))).run();
+    })));
   }
 }
 
-export function createPrompt(db: AppDatabase, workspaceId: string, input: PromptInput) {
-  const validated = validateInput(db, workspaceId, input);
+export async function createPrompt(db: AppDatabase, workspaceId: string, input: PromptInput) {
+  const validated = await validateInput(db, workspaceId, input);
   const promptId = crypto.randomUUID();
-  db.transaction((tx) => {
-    tx.insert(prompts).values({
+  await db.transaction(async (tx) => {
+    await tx.insert(prompts).values({
       id: promptId,
       workspaceId,
       schoolId: input.schoolId,
@@ -125,21 +124,21 @@ export function createPrompt(db: AppDatabase, workspaceId: string, input: Prompt
       notes: validated.notes,
       classificationSource: "manual",
       classificationConfidence: 0,
-    }).run();
-    replaceFamilyAssignments(tx, workspaceId, promptId, validated.primaryFamilyId, validated.secondaryFamilyIds);
+    });
+    await replaceFamilyAssignments(tx, workspaceId, promptId, validated.primaryFamilyId, validated.secondaryFamilyIds);
   });
   return promptId;
 }
 
-export function updatePrompt(db: AppDatabase, workspaceId: string, promptId: string, input: PromptInput) {
-  const existing = db.select({ id: prompts.id }).from(prompts)
+export async function updatePrompt(db: AppDatabase, workspaceId: string, promptId: string, input: PromptInput) {
+  const existing = await db.select({ id: prompts.id }).from(prompts)
     .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))
-    .get();
+    .then((rows) => rows[0]);
   if (!existing) throw new Error("Prompt not found in the active workspace.");
-  const validated = validateInput(db, workspaceId, input);
+  const validated = await validateInput(db, workspaceId, input);
 
-  db.transaction((tx) => {
-    tx.update(prompts).set({
+  await db.transaction(async (tx) => {
+    await tx.update(prompts).set({
       schoolId: input.schoolId,
       title: validated.title,
       promptText: validated.promptText,
@@ -155,25 +154,25 @@ export function updatePrompt(db: AppDatabase, workspaceId: string, promptId: str
       classificationSource: "manual",
       classificationConfidence: 0,
       updatedAt: new Date(),
-    }).where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId))).run();
-    replaceFamilyAssignments(tx, workspaceId, promptId, validated.primaryFamilyId, validated.secondaryFamilyIds);
+    }).where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)));
+    await replaceFamilyAssignments(tx, workspaceId, promptId, validated.primaryFamilyId, validated.secondaryFamilyIds);
   });
 }
 
 // Status is the one prompt field a student flips constantly while working, so
 // it gets its own narrow update: unlike updatePrompt it deliberately leaves
 // classification (and its manual-override flag) untouched.
-export function setPromptStatus(db: AppDatabase, workspaceId: string, promptId: string, status: PromptInput["status"]) {
-  const result = db.update(prompts)
+export async function setPromptStatus(db: AppDatabase, workspaceId: string, promptId: string, status: PromptInput["status"]) {
+  const updated = await db.update(prompts)
     .set({ status, updatedAt: new Date() })
     .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))
-    .run();
-  if (result.changes !== 1) throw new Error("Prompt not found in the active workspace.");
+    .returning({ id: prompts.id });
+  if (updated.length !== 1) throw new Error("Prompt not found in the active workspace.");
 }
 
-export function deletePrompt(db: AppDatabase, workspaceId: string, promptId: string) {
-  const result = db.delete(prompts)
+export async function deletePrompt(db: AppDatabase, workspaceId: string, promptId: string) {
+  const removed = await db.delete(prompts)
     .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))
-    .run();
-  if (result.changes !== 1) throw new Error("Prompt not found in the active workspace.");
+    .returning({ id: prompts.id });
+  if (removed.length !== 1) throw new Error("Prompt not found in the active workspace.");
 }

@@ -14,7 +14,7 @@ function field(formData: FormData, name: string) {
 
 export async function updateSchoolAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  updateSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"), {
+  await updateSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"), {
     name: field(formData, "name"),
     notes: field(formData, "notes"),
   });
@@ -28,7 +28,7 @@ export async function updateSchoolAction(formData: FormData) {
 // been filtered to the school that no longer exists.
 export async function deleteSchoolAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  deleteSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"));
+  await deleteSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"));
   revalidatePath("/");
   revalidatePath("/schools");
   revalidatePath("/families");

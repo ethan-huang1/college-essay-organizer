@@ -39,41 +39,40 @@ function normalizeFamilies(input: { primaryFamilyId?: string | null; secondaryFa
   return { primaryFamilyId, secondaryFamilyIds };
 }
 
-function validateFamilies(db: AppDatabase, workspaceId: string, primaryFamilyId: string | null, secondaryFamilyIds: string[]) {
+async function validateFamilies(db: AppDatabase, workspaceId: string, primaryFamilyId: string | null, secondaryFamilyIds: string[]) {
   const familyIds = [primaryFamilyId, ...secondaryFamilyIds].filter((id): id is string => Boolean(id));
   if (familyIds.length === 0) return;
-  const valid = db.select({ id: promptFamilies.id })
+  const valid = await db.select({ id: promptFamilies.id })
     .from(promptFamilies)
-    .where(and(eq(promptFamilies.workspaceId, workspaceId), inArray(promptFamilies.id, familyIds)))
-    .all();
+    .where(and(eq(promptFamilies.workspaceId, workspaceId), inArray(promptFamilies.id, familyIds)));
   if (valid.length !== familyIds.length) throw new Error("Every selected family must belong to the active workspace.");
 }
 
-function replaceFamilyAssignments(
+async function replaceFamilyAssignments(
   db: Pick<AppDatabase, "delete" | "insert">,
   workspaceId: string,
   essayId: string,
   primaryFamilyId: string | null,
   secondaryFamilyIds: string[],
 ) {
-  db.delete(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId)).run();
+  await db.delete(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
   const assignments = [
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
     ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
   ];
   if (assignments.length > 0) {
-    db.insert(essayFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
+    await db.insert(essayFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
       id: crypto.randomUUID(),
       workspaceId,
       essayId,
       familyId,
       isPrimary,
       source: "manual" as const,
-    }))).run();
+    })));
   }
 }
 
-function validateMetadata(db: AppDatabase, workspaceId: string, input: EssayMetadataInput) {
+async function validateMetadata(db: AppDatabase, workspaceId: string, input: EssayMetadataInput) {
   const targetWordCount = input.targetWordCount ?? null;
   if (targetWordCount !== null && (!Number.isInteger(targetWordCount) || targetWordCount < 0)) {
     throw new Error("Target word count must be a nonnegative integer.");
@@ -82,7 +81,7 @@ function validateMetadata(db: AppDatabase, workspaceId: string, input: EssayMeta
 
   const schoolSpecificPhrases = [...new Set((input.schoolSpecificPhrases ?? []).map((phrase) => phrase.trim()).filter(Boolean))].slice(0, 20);
   const families = normalizeFamilies(input);
-  validateFamilies(db, workspaceId, families.primaryFamilyId, families.secondaryFamilyIds);
+  await validateFamilies(db, workspaceId, families.primaryFamilyId, families.secondaryFamilyIds);
 
   return {
     ...families,
@@ -93,13 +92,13 @@ function validateMetadata(db: AppDatabase, workspaceId: string, input: EssayMeta
   };
 }
 
-export function createEssay(db: AppDatabase, workspaceId: string, input: EssayMetadataInput & { content?: string }) {
-  const validated = validateMetadata(db, workspaceId, input);
+export async function createEssay(db: AppDatabase, workspaceId: string, input: EssayMetadataInput & { content?: string }) {
+  const validated = await validateMetadata(db, workspaceId, input);
   const content = cleanContent(input.content ?? "");
   const essayId = crypto.randomUUID();
 
-  db.transaction((tx) => {
-    tx.insert(essays).values({
+  await db.transaction(async (tx) => {
+    await tx.insert(essays).values({
       id: essayId,
       workspaceId,
       title: validated.title,
@@ -110,8 +109,8 @@ export function createEssay(db: AppDatabase, workspaceId: string, input: EssayMe
       notes: validated.notes,
       schoolSpecificPhrases: validated.schoolSpecificPhrases,
       lastEditedAt: new Date(),
-    }).run();
-    tx.insert(essayVersions).values({
+    });
+    await tx.insert(essayVersions).values({
       id: crypto.randomUUID(),
       workspaceId,
       essayId,
@@ -119,51 +118,51 @@ export function createEssay(db: AppDatabase, workspaceId: string, input: EssayMe
       content,
       wordCount: wordCount(content),
       reason: "Initial version",
-    }).run();
-    replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
+    });
+    await replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
   });
 
   return essayId;
 }
 
-export function updateEssayMetadata(db: AppDatabase, workspaceId: string, essayId: string, input: EssayMetadataInput) {
-  const existing = db.select({ id: essays.id }).from(essays)
+export async function updateEssayMetadata(db: AppDatabase, workspaceId: string, essayId: string, input: EssayMetadataInput) {
+  const existing = await db.select({ id: essays.id }).from(essays)
     .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
-    .get();
+    .then((rows) => rows[0]);
   if (!existing) throw new Error("Essay not found in the active workspace.");
-  const validated = validateMetadata(db, workspaceId, input);
+  const validated = await validateMetadata(db, workspaceId, input);
 
-  db.transaction((tx) => {
-    tx.update(essays).set({
+  await db.transaction(async (tx) => {
+    await tx.update(essays).set({
       title: validated.title,
       targetWordCount: validated.targetWordCount,
       status: input.status,
       designation: input.designation,
       notes: validated.notes,
       schoolSpecificPhrases: validated.schoolSpecificPhrases,
-    }).where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId))).run();
-    replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
+    }).where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)));
+    await replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
   });
 }
 
 // Content changes are never made in place - every save creates a new
 // immutable version and only then repoints the essay's currentContent.
-export function saveEssayVersion(db: AppDatabase, workspaceId: string, essayId: string, input: { content: string; reason?: string }) {
-  const existing = db.select({ id: essays.id }).from(essays)
+export async function saveEssayVersion(db: AppDatabase, workspaceId: string, essayId: string, input: { content: string; reason?: string }) {
+  const existing = await db.select({ id: essays.id }).from(essays)
     .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
-    .get();
+    .then((rows) => rows[0]);
   if (!existing) throw new Error("Essay not found in the active workspace.");
   const content = cleanContent(input.content);
   const reason = input.reason?.trim() || null;
 
-  db.transaction((tx) => {
-    const last = tx.select({ versionNumber: essayVersions.versionNumber }).from(essayVersions)
+  await db.transaction(async (tx) => {
+    const last = await tx.select({ versionNumber: essayVersions.versionNumber }).from(essayVersions)
       .where(eq(essayVersions.essayId, essayId))
       .orderBy(desc(essayVersions.versionNumber))
       .limit(1)
-      .get();
+      .then((rows) => rows[0]);
     const nextVersion = (last?.versionNumber ?? 0) + 1;
-    tx.insert(essayVersions).values({
+    await tx.insert(essayVersions).values({
       id: crypto.randomUUID(),
       workspaceId,
       essayId,
@@ -171,28 +170,28 @@ export function saveEssayVersion(db: AppDatabase, workspaceId: string, essayId: 
       content,
       wordCount: wordCount(content),
       reason,
-    }).run();
-    tx.update(essays).set({ currentContent: content, lastEditedAt: new Date() })
-      .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId))).run();
+    });
+    await tx.update(essays).set({ currentContent: content, lastEditedAt: new Date() })
+      .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)));
   });
 }
 
 // Restoring never deletes or rewrites history - it saves the old version's
 // content as a brand new version at the top of the stack.
-export function restoreEssayVersion(db: AppDatabase, workspaceId: string, essayId: string, versionId: string) {
-  const version = db.select().from(essayVersions)
+export async function restoreEssayVersion(db: AppDatabase, workspaceId: string, essayId: string, versionId: string) {
+  const version = await db.select().from(essayVersions)
     .where(and(eq(essayVersions.id, versionId), eq(essayVersions.essayId, essayId), eq(essayVersions.workspaceId, workspaceId)))
-    .get();
+    .then((rows) => rows[0]);
   if (!version) throw new Error("Version not found for this essay.");
-  saveEssayVersion(db, workspaceId, essayId, {
+  await saveEssayVersion(db, workspaceId, essayId, {
     content: version.content,
     reason: `Restored from version ${version.versionNumber}`,
   });
 }
 
-export function deleteEssay(db: AppDatabase, workspaceId: string, essayId: string) {
-  const result = db.delete(essays)
+export async function deleteEssay(db: AppDatabase, workspaceId: string, essayId: string) {
+  const removed = await db.delete(essays)
     .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
-    .run();
-  if (result.changes !== 1) throw new Error("Essay not found in the active workspace.");
+    .returning({ id: essays.id });
+  if (removed.length !== 1) throw new Error("Essay not found in the active workspace.");
 }

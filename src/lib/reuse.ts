@@ -24,17 +24,17 @@ function resolveFamilySlugs(links: FamilyLink[], nameById: Map<string, string>) 
 // is O(essays x prompts), which is trivial at MVP scale, and avoids any
 // risk of a stale/incremental match surviving after an essay or prompt
 // changes - simpler and safer than trying to patch individual rows.
-export function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: string) {
-  const workspaceEssays = db.select().from(essays).where(eq(essays.workspaceId, workspaceId)).all();
-  const workspacePrompts = db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId)).all();
-  const workspaceSchools = db.select().from(schools).where(eq(schools.workspaceId, workspaceId)).all();
-  const workspaceFamilies = db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId)).all();
-  const essayLinks = db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).all();
-  const promptLinks = db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).all();
+export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: string) {
+  const workspaceEssays = await db.select().from(essays).where(eq(essays.workspaceId, workspaceId));
+  const workspacePrompts = await db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId));
+  const workspaceSchools = await db.select().from(schools).where(eq(schools.workspaceId, workspaceId));
+  const workspaceFamilies = await db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
+  const essayLinks = await db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId));
+  const promptLinks = await db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId));
   const nameById = new Map(workspaceFamilies.map((family) => [family.id, family.name]));
 
-  db.transaction((tx) => {
-    tx.delete(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId)).run();
+  await db.transaction(async (tx) => {
+    await tx.delete(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId));
 
     const rows = workspaceEssays.flatMap((essay) => {
       const essayFamilySlugs = resolveFamilySlugs(essayLinks.filter((link) => link.essayId === essay.id), nameById);
@@ -70,6 +70,6 @@ export function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: string) 
       });
     });
 
-    if (rows.length > 0) tx.insert(essayPromptMatches).values(rows).run();
+    if (rows.length > 0) await tx.insert(essayPromptMatches).values(rows);
   });
 }

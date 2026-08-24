@@ -20,23 +20,40 @@ function wordCount(content: string) {
   return content.trim() ? content.trim().split(/\s+/).length : 0;
 }
 
-export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
-  const workspace = db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).get();
+export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
+  const workspace = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).then((rows) => rows[0]);
   if (!workspace) return null;
 
-  const workspaceSchools = db.select().from(schools).where(eq(schools.workspaceId, workspaceId)).all();
-  const workspacePrompts = db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId)).all();
-  const workspaceCycles = db.select().from(applicationCycles).where(eq(applicationCycles.workspaceId, workspaceId)).all();
+  // One batch rather than eleven sequential round-trips. These reads are
+  // independent of each other, and against a network database the difference
+  // is most of the page-load budget.
+  const [
+    workspaceSchools,
+    workspacePrompts,
+    workspaceCycles,
+    workspaceEssays,
+    workspaceFamilies,
+    versions,
+    familyPromptLinks,
+    familyEssayLinks,
+    assignments,
+    matches,
+  ] = await Promise.all([
+    db.select().from(schools).where(eq(schools.workspaceId, workspaceId)).execute(),
+    db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId)).execute(),
+    db.select().from(applicationCycles).where(eq(applicationCycles.workspaceId, workspaceId)).execute(),
+    db.select().from(essays).where(eq(essays.workspaceId, workspaceId)).execute(),
+    db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId)).execute(),
+    db.select().from(essayVersions).where(eq(essayVersions.workspaceId, workspaceId)).execute(),
+    db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).execute(),
+    db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).execute(),
+    db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.workspaceId, workspaceId)).execute(),
+    db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId)).execute(),
+  ]);
+
   const cycleLabelById = new Map(workspaceCycles.map((cycle) => [cycle.id, cycle.label]));
   const isCurrentCyclePrompt = (prompt: (typeof workspacePrompts)[number]) =>
     (prompt.cycleId ? cycleLabelById.get(prompt.cycleId) : CURRENT_CYCLE_LABEL) === CURRENT_CYCLE_LABEL;
-  const workspaceEssays = db.select().from(essays).where(eq(essays.workspaceId, workspaceId)).all();
-  const workspaceFamilies = db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId)).all();
-  const versions = db.select().from(essayVersions).where(eq(essayVersions.workspaceId, workspaceId)).all();
-  const familyPromptLinks = db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).all();
-  const familyEssayLinks = db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).all();
-  const assignments = db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.workspaceId, workspaceId)).all();
-  const matches = db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId)).all();
 
   return {
     workspace,
@@ -142,4 +159,4 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
   };
 }
 
-export type WorkspaceSnapshot = NonNullable<ReturnType<typeof getWorkspaceSnapshot>>;
+export type WorkspaceSnapshot = NonNullable<Awaited<ReturnType<typeof getWorkspaceSnapshot>>>;

@@ -25,61 +25,69 @@ function parseCycleLabel(label: string) {
 // "2025–26" cycle is a different row than the active "2026–27" one, which
 // is what lets the UI (and, later, dashboard stats) tell them apart
 // unambiguously rather than inferring it from verificationStatus alone.
-function getOrCreateCycle(db: AppDatabase, workspaceId: string, label: string) {
-  const existing = db.select({ id: applicationCycles.id }).from(applicationCycles)
+async function getOrCreateCycle(db: AppDatabase, workspaceId: string, label: string) {
+  const existing = await db.select({ id: applicationCycles.id }).from(applicationCycles)
     .where(and(eq(applicationCycles.workspaceId, workspaceId), eq(applicationCycles.label, label)))
-    .get();
+    .then((rows) => rows[0]);
   if (existing) return existing.id;
   const { startYear, endYear } = parseCycleLabel(label);
   const id = crypto.randomUUID();
-  db.insert(applicationCycles).values({ id, workspaceId, label, startYear, endYear, isActive: label === CURRENT_CYCLE_LABEL }).run();
+  await db.insert(applicationCycles).values({ id, workspaceId, label, startYear, endYear, isActive: label === CURRENT_CYCLE_LABEL });
   return id;
 }
 
 // Storing the canonical name from the top-100 picker (or a cleaned manual
 // name) and reusing an existing row with the same name is what prevents
 // spelling variations from creating duplicates - see MVP_SPEC.md §1.
-function getOrCreateSchool(db: AppDatabase, workspaceId: string, name: string, cycleId: string) {
+async function getOrCreateSchool(db: AppDatabase, workspaceId: string, name: string, cycleId: string) {
   const cleaned = name.trim().replace(/\s+/g, " ");
   if (cleaned.length < 2 || cleaned.length > 120) throw new Error("School name must be between 2 and 120 characters.");
-  const existing = db.select().from(schools)
+  const existing = await db.select().from(schools)
     .where(and(eq(schools.workspaceId, workspaceId), eq(schools.name, cleaned)))
-    .get();
+    .then((rows) => rows[0]);
   if (existing) return existing;
   const id = crypto.randomUUID();
-  db.insert(schools).values({ id, workspaceId, cycleId, name: cleaned }).run();
-  const created = db.select().from(schools).where(eq(schools.id, id)).get();
+  const [created] = await db.insert(schools).values({ id, workspaceId, cycleId, name: cleaned }).returning();
   if (!created) throw new Error("Failed to create school.");
   return created;
 }
 
-function familyIdByName(db: Pick<AppDatabase, "select">, workspaceId: string, name: string) {
-  return db.select({ id: promptFamilies.id }).from(promptFamilies)
-    .where(and(eq(promptFamilies.workspaceId, workspaceId), eq(promptFamilies.name, name)))
-    .get()?.id ?? null;
+// The ten categories are read once per import and passed down, rather than
+// re-queried for every category of every prompt. On a network database that is
+// the difference between one round-trip and several hundred.
+async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: string) {
+  const rows = await db.select({ id: promptFamilies.id, name: promptFamilies.name })
+    .from(promptFamilies)
+    .where(eq(promptFamilies.workspaceId, workspaceId));
+  return new Map(rows.map((row) => [row.name, row.id]));
 }
 
-function assignFamilies(db: Pick<AppDatabase, "select" | "insert">, workspaceId: string, promptId: string, promptText: string) {
+async function assignFamilies(
+  db: Pick<AppDatabase, "select" | "insert">,
+  workspaceId: string,
+  promptId: string,
+  promptText: string,
+  familyIds: Map<string, string>,
+) {
   const classification = classifyText(promptText);
-  const primaryFamilyId = classification.primarySlug
-    ? familyIdByName(db, workspaceId, FAMILY_NAME_BY_SLUG.get(classification.primarySlug) ?? "")
-    : null;
+  const familyIdFor = (slug: string) => familyIds.get(FAMILY_NAME_BY_SLUG.get(slug) ?? "") ?? null;
+  const primaryFamilyId = classification.primarySlug ? familyIdFor(classification.primarySlug) : null;
   const secondaryFamilyIds = classification.secondarySlugs
-    .map((slug) => familyIdByName(db, workspaceId, FAMILY_NAME_BY_SLUG.get(slug) ?? ""))
+    .map(familyIdFor)
     .filter((id): id is string => Boolean(id));
   const assignments = [
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
     ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
   ];
   if (assignments.length > 0) {
-    db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
+    await db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
       id: crypto.randomUUID(),
       workspaceId,
       promptId,
       familyId,
       isPrimary,
       source: "deterministic" as const,
-    }))).run();
+    })));
   }
   return classification.confidence;
 }
@@ -92,7 +100,7 @@ type ImportCounts = { created: number; updated: number; unchanged: number; flagg
 // change updates the row, records the prior state in promptChangeLog, and
 // flips verificationStatus to needs-review so a human notices rather than
 // silently trusting a re-fetch. Never creates a duplicate prompt.
-function upsertPrompt(
+async function upsertPrompt(
   db: AppDatabase,
   workspaceId: string,
   schoolId: string,
@@ -100,16 +108,17 @@ function upsertPrompt(
   raw: RawPromptRecord,
   recordDefaults: { status: VerificationStatus; sourceUrl: string | null; platform: ApplicationPlatform; retrievedAt: Date },
   counts: ImportCounts,
+  familyIds: Map<string, string>,
 ) {
   const verificationStatus = raw.verificationStatus ?? recordDefaults.status;
-  const existing = db.select().from(prompts)
+  const existing = await db.select().from(prompts)
     .where(and(eq(prompts.schoolId, schoolId), eq(prompts.externalRef, raw.externalRef)))
-    .get();
+    .then((rows) => rows[0]);
 
   if (!existing) {
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       const promptId = crypto.randomUUID();
-      tx.insert(prompts).values({
+      await tx.insert(prompts).values({
         id: promptId,
         workspaceId,
         schoolId,
@@ -128,8 +137,8 @@ function upsertPrompt(
         applicationPlatform: recordDefaults.platform,
         sourceUrl: recordDefaults.sourceUrl,
         retrievedAt: recordDefaults.retrievedAt,
-      }).run();
-      assignFamilies(tx, workspaceId, promptId, `${raw.title} ${raw.promptText}`);
+      });
+      await assignFamilies(tx, workspaceId, promptId, `${raw.title} ${raw.promptText}`, familyIds);
     });
     counts.created += 1;
     return;
@@ -140,16 +149,16 @@ function upsertPrompt(
     return;
   }
 
-  db.transaction((tx) => {
-    tx.insert(promptChangeLog).values({
+  await db.transaction(async (tx) => {
+    await tx.insert(promptChangeLog).values({
       id: crypto.randomUUID(),
       workspaceId,
       promptId: existing.id,
       previousPromptText: existing.promptText,
       previousMinWordCount: existing.minWordCount,
       previousMaxWordCount: existing.maxWordCount,
-    }).run();
-    tx.update(prompts).set({
+    });
+    await tx.update(prompts).set({
       title: raw.title,
       promptText: raw.promptText,
       minWordCount: raw.minWordCount ?? null,
@@ -162,7 +171,7 @@ function upsertPrompt(
       sourceUrl: recordDefaults.sourceUrl,
       retrievedAt: recordDefaults.retrievedAt,
       updatedAt: new Date(),
-    }).where(eq(prompts.id, existing.id)).run();
+    }).where(eq(prompts.id, existing.id));
   });
   counts.updated += 1;
   counts.flagged += 1;
@@ -181,9 +190,9 @@ export type ImportCollegeResult = {
 // looks up the retrieval registry, and imports/updates/flags each prompt
 // through the shared upsert pipeline above - every school (however it was
 // researched) goes through identical logic, never special-cased here.
-export function importCollege(db: AppDatabase, workspaceId: string, schoolName: string): ImportCollegeResult {
-  const currentCycleId = getOrCreateCycle(db, workspaceId, CURRENT_CYCLE_LABEL);
-  const school = getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), currentCycleId);
+export async function importCollege(db: AppDatabase, workspaceId: string, schoolName: string): Promise<ImportCollegeResult> {
+  const currentCycleId = await getOrCreateCycle(db, workspaceId, CURRENT_CYCLE_LABEL);
+  const school = await getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), currentCycleId);
   const source = lookupSchoolSource(school.name);
   const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
 
@@ -195,7 +204,7 @@ export function importCollege(db: AppDatabase, workspaceId: string, schoolName: 
     // school with zero prompts looks identical whether it's genuinely
     // unresearched or confirmed to have no supplement.
     if (source && !school.notes) {
-      db.update(schools).set({ notes: note }).where(eq(schools.id, school.id)).run();
+      await db.update(schools).set({ notes: note }).where(eq(schools.id, school.id));
     }
     return {
       schoolId: school.id,
@@ -210,15 +219,16 @@ export function importCollege(db: AppDatabase, workspaceId: string, schoolName: 
   // The prompts themselves are filed under whichever cycle the source
   // record actually represents (may differ from the school's own "current"
   // cycle for a previous-cycle record).
-  const promptCycleId = getOrCreateCycle(db, workspaceId, source.cycleLabel);
+  const promptCycleId = await getOrCreateCycle(db, workspaceId, source.cycleLabel);
   const retrievedAt = new Date(source.retrievedAt);
+  const familyIds = await loadFamilyIds(db, workspaceId);
   for (const raw of source.prompts) {
-    upsertPrompt(db, workspaceId, school.id, promptCycleId, raw, {
+    await upsertPrompt(db, workspaceId, school.id, promptCycleId, raw, {
       status: source.verificationStatus,
       sourceUrl: source.sourceUrl,
       platform: source.applicationPlatform,
       retrievedAt,
-    }, counts);
+    }, counts, familyIds);
   }
 
   return {

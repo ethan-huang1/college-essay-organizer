@@ -1,28 +1,34 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   foreignKey,
   index,
   integer,
-  sqliteTable,
+  jsonb,
+  pgTable,
   text,
+  timestamp,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
-const timestamp = (name: string) =>
-  integer(name, { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`);
+// Postgres: timestamptz rather than SQLite's integer-milliseconds, and a
+// server-side now() default rather than unixepoch().
+const stamp = (name: string) =>
+  timestamp(name, { withTimezone: true, mode: "date" }).notNull().defaultNow();
 
-export const workspaces = sqliteTable("workspaces", {
+// Nullable point-in-time columns the application sets explicitly.
+const optionalStamp = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+
+export const workspaces = pgTable("workspaces", {
   id: text("id").primaryKey(),
   kind: text("kind", { enum: ["personal", "demo"] }).notNull(),
   name: text("name").notNull(),
-  createdAt: timestamp("created_at"),
-  updatedAt: timestamp("updated_at"),
+  createdAt: stamp("created_at"),
+  updatedAt: stamp("updated_at"),
 });
 
-export const applicationCycles = sqliteTable(
+export const applicationCycles = pgTable(
   "application_cycles",
   {
     id: text("id").primaryKey(),
@@ -30,8 +36,8 @@ export const applicationCycles = sqliteTable(
     label: text("label").notNull(),
     startYear: integer("start_year").notNull(),
     endYear: integer("end_year").notNull(),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
-    createdAt: timestamp("created_at"),
+    isActive: boolean("is_active").notNull().default(false),
+    createdAt: stamp("created_at"),
   },
   (table) => [
     uniqueIndex("cycles_workspace_label_unique").on(table.workspaceId, table.label),
@@ -39,7 +45,7 @@ export const applicationCycles = sqliteTable(
   ],
 );
 
-export const schools = sqliteTable(
+export const schools = pgTable(
   "schools",
   {
     id: text("id").primaryKey(),
@@ -47,8 +53,8 @@ export const schools = sqliteTable(
     cycleId: text("cycle_id").references(() => applicationCycles.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     notes: text("notes"),
-    createdAt: timestamp("created_at"),
-    updatedAt: timestamp("updated_at"),
+    createdAt: stamp("created_at"),
+    updatedAt: stamp("updated_at"),
   },
   (table) => [
     uniqueIndex("schools_workspace_name_unique").on(table.workspaceId, table.name),
@@ -56,7 +62,7 @@ export const schools = sqliteTable(
   ],
 );
 
-export const promptFamilies = sqliteTable(
+export const promptFamilies = pgTable(
   "prompt_families",
   {
     id: text("id").primaryKey(),
@@ -65,8 +71,8 @@ export const promptFamilies = sqliteTable(
     description: text("description").notNull(),
     color: text("color").notNull(),
     sortOrder: integer("sort_order").notNull(),
-    isEditable: integer("is_editable", { mode: "boolean" }).notNull().default(true),
-    createdAt: timestamp("created_at"),
+    isEditable: boolean("is_editable").notNull().default(true),
+    createdAt: stamp("created_at"),
   },
   (table) => [
     uniqueIndex("families_workspace_name_unique").on(table.workspaceId, table.name),
@@ -74,18 +80,18 @@ export const promptFamilies = sqliteTable(
   ],
 );
 
-export const promptTags = sqliteTable(
+export const promptTags = pgTable(
   "prompt_tags",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    createdAt: timestamp("created_at"),
+    createdAt: stamp("created_at"),
   },
   (table) => [uniqueIndex("tags_workspace_name_unique").on(table.workspaceId, table.name)],
 );
 
-export const prompts = sqliteTable(
+export const prompts = pgTable(
   "prompts",
   {
     id: text("id").primaryKey(),
@@ -100,18 +106,18 @@ export const prompts = sqliteTable(
     maxCharCount: integer("max_char_count"),
     requirement: text("requirement", { enum: ["required", "optional", "conditional"] }).notNull().default("required"),
     conditionalNote: text("conditional_note"),
-    deadline: integer("deadline", { mode: "timestamp_ms" }),
+    deadline: optionalStamp("deadline"),
     status: text("status", { enum: ["not-started", "in-progress", "complete", "submitted"] }).notNull().default("not-started"),
     classificationConfidence: integer("classification_confidence").notNull().default(0),
     classificationSource: text("classification_source", { enum: ["deterministic", "manual"] }).notNull().default("deterministic"),
     verificationStatus: text("verification_status", { enum: ["officially-verified", "common-app-verified", "previous-cycle", "no-supplement-confirmed", "needs-review", "manual"] }).notNull().default("manual"),
     applicationPlatform: text("application_platform", { enum: ["common-app", "coalition-app", "school-specific", "questbridge", "unknown"] }).notNull().default("unknown"),
     sourceUrl: text("source_url"),
-    retrievedAt: integer("retrieved_at", { mode: "timestamp_ms" }),
+    retrievedAt: optionalStamp("retrieved_at"),
     externalRef: text("external_ref"),
     notes: text("notes"),
-    createdAt: timestamp("created_at"),
-    updatedAt: timestamp("updated_at"),
+    createdAt: stamp("created_at"),
+    updatedAt: stamp("updated_at"),
   },
   (table) => [
     index("prompts_workspace_idx").on(table.workspaceId),
@@ -129,7 +135,7 @@ export const prompts = sqliteTable(
 // a re-import changed them - written by the import pipeline's change
 // detection, never edited in place. Lets "changed prompts are flagged"
 // (verificationStatus flips to needs-review) come with an actual diff.
-export const promptChangeLog = sqliteTable(
+export const promptChangeLog = pgTable(
   "prompt_change_log",
   {
     id: text("id").primaryKey(),
@@ -138,28 +144,28 @@ export const promptChangeLog = sqliteTable(
     previousPromptText: text("previous_prompt_text").notNull(),
     previousMinWordCount: integer("previous_min_word_count"),
     previousMaxWordCount: integer("previous_max_word_count"),
-    detectedAt: timestamp("detected_at"),
+    detectedAt: stamp("detected_at"),
   },
   (table) => [index("prompt_change_log_prompt_idx").on(table.promptId)],
 );
 
-export const promptFamilyLinks = sqliteTable(
+export const promptFamilyLinks = pgTable(
   "prompt_family_links",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     promptId: text("prompt_id").notNull().references(() => prompts.id, { onDelete: "cascade" }),
     familyId: text("family_id").notNull().references(() => promptFamilies.id, { onDelete: "cascade" }),
-    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+    isPrimary: boolean("is_primary").notNull().default(false),
     source: text("source", { enum: ["deterministic", "manual"] }).notNull().default("deterministic"),
   },
   (table) => [
     uniqueIndex("prompt_family_pair_unique").on(table.promptId, table.familyId),
-    uniqueIndex("prompt_primary_family_unique").on(table.promptId).where(sql`${table.isPrimary} = 1`),
+    uniqueIndex("prompt_primary_family_unique").on(table.promptId).where(sql`${table.isPrimary}`),
   ],
 );
 
-export const promptTagLinks = sqliteTable(
+export const promptTagLinks = pgTable(
   "prompt_tag_links",
   {
     id: text("id").primaryKey(),
@@ -170,7 +176,7 @@ export const promptTagLinks = sqliteTable(
   (table) => [uniqueIndex("prompt_tag_pair_unique").on(table.promptId, table.tagId)],
 );
 
-export const essays = sqliteTable(
+export const essays = pgTable(
   "essays",
   {
     id: text("id").primaryKey(),
@@ -182,9 +188,9 @@ export const essays = sqliteTable(
     designation: text("designation", { enum: ["canonical", "school-adaptation"] }).notNull().default("canonical"),
     adaptedFromEssayId: text("adapted_from_essay_id"),
     notes: text("notes"),
-    schoolSpecificPhrases: text("school_specific_phrases", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
-    lastEditedAt: timestamp("last_edited_at"),
-    createdAt: timestamp("created_at"),
+    schoolSpecificPhrases: jsonb("school_specific_phrases").$type<string[]>().notNull().default([]),
+    lastEditedAt: stamp("last_edited_at"),
+    createdAt: stamp("created_at"),
   },
   (table) => [
     index("essays_workspace_idx").on(table.workspaceId),
@@ -193,7 +199,7 @@ export const essays = sqliteTable(
   ],
 );
 
-export const essayVersions = sqliteTable(
+export const essayVersions = pgTable(
   "essay_versions",
   {
     id: text("id").primaryKey(),
@@ -203,7 +209,7 @@ export const essayVersions = sqliteTable(
     content: text("content").notNull(),
     wordCount: integer("word_count").notNull(),
     reason: text("reason"),
-    createdAt: timestamp("created_at"),
+    createdAt: stamp("created_at"),
   },
   (table) => [
     uniqueIndex("essay_version_number_unique").on(table.essayId, table.versionNumber),
@@ -212,23 +218,23 @@ export const essayVersions = sqliteTable(
   ],
 );
 
-export const essayFamilyLinks = sqliteTable(
+export const essayFamilyLinks = pgTable(
   "essay_family_links",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     essayId: text("essay_id").notNull().references(() => essays.id, { onDelete: "cascade" }),
     familyId: text("family_id").notNull().references(() => promptFamilies.id, { onDelete: "cascade" }),
-    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+    isPrimary: boolean("is_primary").notNull().default(false),
     source: text("source", { enum: ["deterministic", "manual"] }).notNull().default("deterministic"),
   },
   (table) => [
     uniqueIndex("essay_family_pair_unique").on(table.essayId, table.familyId),
-    uniqueIndex("essay_primary_family_unique").on(table.essayId).where(sql`${table.isPrimary} = 1`),
+    uniqueIndex("essay_primary_family_unique").on(table.essayId).where(sql`${table.isPrimary}`),
   ],
 );
 
-export const essayTagLinks = sqliteTable(
+export const essayTagLinks = pgTable(
   "essay_tag_links",
   {
     id: text("id").primaryKey(),
@@ -239,7 +245,7 @@ export const essayTagLinks = sqliteTable(
   (table) => [uniqueIndex("essay_tag_pair_unique").on(table.essayId, table.tagId)],
 );
 
-export const essayPromptMatches = sqliteTable(
+export const essayPromptMatches = pgTable(
   "essay_prompt_matches",
   {
     id: text("id").primaryKey(),
@@ -247,13 +253,13 @@ export const essayPromptMatches = sqliteTable(
     essayId: text("essay_id").notNull().references(() => essays.id, { onDelete: "cascade" }),
     promptId: text("prompt_id").notNull().references(() => prompts.id, { onDelete: "cascade" }),
     score: integer("score").notNull(),
-    matchedThemes: text("matched_themes", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
-    missingRequirements: text("missing_requirements", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    matchedThemes: jsonb("matched_themes").$type<string[]>().notNull().default([]),
+    missingRequirements: jsonb("missing_requirements").$type<string[]>().notNull().default([]),
     wordCountDifference: integer("word_count_difference").notNull().default(0),
     schoolSpecificityRisk: text("school_specificity_risk", { enum: ["low", "medium", "high"] }).notNull().default("low"),
     recommendedAction: text("recommended_action", { enum: ["ready-to-reuse", "minor-adaptation", "major-adaptation", "new-response"] }).notNull(),
     explanation: text("explanation").notNull(),
-    calculatedAt: timestamp("calculated_at"),
+    calculatedAt: stamp("calculated_at"),
   },
   (table) => [
     uniqueIndex("essay_prompt_match_unique").on(table.essayId, table.promptId),
@@ -261,7 +267,7 @@ export const essayPromptMatches = sqliteTable(
   ],
 );
 
-export const assignedEssayResponses = sqliteTable(
+export const assignedEssayResponses = pgTable(
   "assigned_essay_responses",
   {
     id: text("id").primaryKey(),
@@ -269,7 +275,7 @@ export const assignedEssayResponses = sqliteTable(
     promptId: text("prompt_id").notNull().references(() => prompts.id, { onDelete: "cascade" }),
     essayId: text("essay_id").notNull().references(() => essays.id, { onDelete: "cascade" }),
     essayVersionId: text("essay_version_id").references(() => essayVersions.id, { onDelete: "set null" }),
-    assignedAt: timestamp("assigned_at"),
+    assignedAt: stamp("assigned_at"),
   },
   (table) => [
     uniqueIndex("assigned_response_prompt_unique").on(table.promptId),

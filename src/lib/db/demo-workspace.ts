@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { AppDatabase } from "./client";
 import { DEMO_WORKSPACE_ID, seedTaxonomy } from "./seed";
@@ -6,7 +6,7 @@ import { assignedEssayResponses, promptFamilies, promptFamilyLinks, prompts, sch
 import { assignEssayToPrompt } from "../assignments";
 import { importCollege } from "../college-import";
 import { createEssay, saveEssayVersion, type EssayStatus } from "../essays";
-import { setPromptStatus, updatePrompt } from "../prompts";
+import { updatePrompt } from "../prompts";
 import { recomputeWorkspaceMatches } from "../reuse";
 
 // The example workspace is built by running the *real* Add College pipeline
@@ -168,10 +168,10 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
 
 // Re-runs the real update path so the prompt records classificationSource
 // "manual", exactly as it would if a student had changed it in the UI.
-function reclassify(db: AppDatabase, familyIdByName: Map<string, string>) {
+async function reclassify(db: AppDatabase, familyIdByName: Map<string, string>) {
   for (const entry of DEMO_RECLASSIFIED) {
     const familyId = familyIdByName.get(entry.family);
-    const row = db
+    const row = await db
       .select({ prompt: prompts })
       .from(prompts)
       .innerJoin(schools, eq(schools.id, prompts.schoolId))
@@ -180,17 +180,16 @@ function reclassify(db: AppDatabase, familyIdByName: Map<string, string>) {
         eq(prompts.title, entry.promptTitle),
         eq(schools.name, entry.school),
       ))
-      .get();
+      .then((rows) => rows[0]);
     if (!row || !familyId) continue;
     const { prompt } = row;
-    const secondaryFamilyIds = db
+    const secondaryFamilyIds = (await db
       .select({ familyId: promptFamilyLinks.familyId })
       .from(promptFamilyLinks)
-      .where(and(eq(promptFamilyLinks.promptId, prompt.id), eq(promptFamilyLinks.isPrimary, false)))
-      .all()
+      .where(and(eq(promptFamilyLinks.promptId, prompt.id), eq(promptFamilyLinks.isPrimary, false))))
       .map((link) => link.familyId);
 
-    updatePrompt(db, DEMO_WORKSPACE_ID, prompt.id, {
+    await updatePrompt(db, DEMO_WORKSPACE_ID, prompt.id, {
       schoolId: prompt.schoolId,
       title: prompt.title,
       promptText: prompt.promptText,
@@ -209,7 +208,7 @@ function reclassify(db: AppDatabase, familyIdByName: Map<string, string>) {
   }
 }
 
-function familyPrompts(db: AppDatabase, familyName: string) {
+async function familyPrompts(db: AppDatabase, familyName: string) {
   return db
     .select({ id: prompts.id, schoolId: prompts.schoolId, title: prompts.title })
     .from(prompts)
@@ -219,8 +218,7 @@ function familyPrompts(db: AppDatabase, familyName: string) {
     )
     .innerJoin(promptFamilies, eq(promptFamilies.id, promptFamilyLinks.familyId))
     .where(and(eq(prompts.workspaceId, DEMO_WORKSPACE_ID), eq(promptFamilies.name, familyName)))
-    .orderBy(prompts.title)
-    .all();
+    .orderBy(prompts.title);
 }
 
 // Assignments must land on prompts at *different* schools: one essay serving
@@ -251,30 +249,27 @@ export type DemoWorkspaceSummary = {
  * freshly recomputed matches. Deleting the workspace row cascades every demo
  * record, so this is idempotent and never touches personal data.
  */
-export function resetDemoWorkspace(db: AppDatabase): DemoWorkspaceSummary {
-  db.transaction((tx) => {
-    tx.delete(workspaces).where(eq(workspaces.id, DEMO_WORKSPACE_ID)).run();
-    tx.insert(workspaces).values({ id: DEMO_WORKSPACE_ID, kind: "demo", name: DEMO_WORKSPACE_NAME }).run();
-    seedTaxonomy(tx, DEMO_WORKSPACE_ID);
+export async function resetDemoWorkspace(db: AppDatabase): Promise<DemoWorkspaceSummary> {
+  await db.transaction(async (tx) => {
+    await tx.delete(workspaces).where(eq(workspaces.id, DEMO_WORKSPACE_ID));
+    await tx.insert(workspaces).values({ id: DEMO_WORKSPACE_ID, kind: "demo", name: DEMO_WORKSPACE_NAME });
+    await seedTaxonomy(tx, DEMO_WORKSPACE_ID);
   });
 
-  // Not inside the transaction above: importCollege, createEssay and
-  // recomputeWorkspaceMatches each run their own, and better-sqlite3 will not
-  // nest them.
+  // Deliberately outside the transaction above: importCollege, createEssay and
+  // recomputeWorkspaceMatches each open their own.
   for (const schoolName of DEMO_SCHOOLS) {
-    importCollege(db, DEMO_WORKSPACE_ID, schoolName);
+    await importCollege(db, DEMO_WORKSPACE_ID, schoolName);
   }
 
-  const familyIdByName = new Map(
-    db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID)).all()
-      .map((family) => [family.name, family.id] as const),
-  );
+  const demoFamilies = await db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID));
+  const familyIdByName = new Map(demoFamilies.map((family) => [family.name, family.id] as const));
 
-  reclassify(db, familyIdByName);
+  await reclassify(db, familyIdByName);
 
   const essayIdByTitle = new Map<string, string>();
   for (const essay of DEMO_ESSAYS) {
-    const essayId = createEssay(db, DEMO_WORKSPACE_ID, {
+    const essayId = await createEssay(db, DEMO_WORKSPACE_ID, {
       title: essay.title,
       status: essay.status,
       designation: essay.designation,
@@ -286,7 +281,7 @@ export function resetDemoWorkspace(db: AppDatabase): DemoWorkspaceSummary {
     });
     // A second immutable version on the essays that declare one, so version
     // history and comparison have something real to show.
-    if (essay.revision) saveEssayVersion(db, DEMO_WORKSPACE_ID, essayId, essay.revision);
+    if (essay.revision) await saveEssayVersion(db, DEMO_WORKSPACE_ID, essayId, essay.revision);
     essayIdByTitle.set(essay.title, essayId);
   }
 
@@ -301,9 +296,9 @@ export function resetDemoWorkspace(db: AppDatabase): DemoWorkspaceSummary {
   for (const [essayTitle, familyName, limit] of assignmentPlan) {
     const essayId = essayIdByTitle.get(essayTitle);
     if (!essayId) continue;
-    const available = familyPrompts(db, familyName).filter((row) => !claimedPrompts.has(row.id));
+    const available = (await familyPrompts(db, familyName)).filter((row) => !claimedPrompts.has(row.id));
     for (const promptId of pickAcrossSchools(available, limit)) {
-      assignEssayToPrompt(db, DEMO_WORKSPACE_ID, promptId, essayId);
+      await assignEssayToPrompt(db, DEMO_WORKSPACE_ID, promptId, essayId);
       claimedPrompts.add(promptId);
     }
   }
@@ -312,7 +307,7 @@ export function resetDemoWorkspace(db: AppDatabase): DemoWorkspaceSummary {
   // every *other* school's "why us" prompt becomes the dangerous-reuse example
   // the demo needs to show.
   const specificEssayId = essayIdByTitle.get(DEMO_SCHOOL_SPECIFIC_ASSIGNMENT.essayTitle);
-  const specificPrompt = db
+  const specificPrompt = await db
     .select({ id: prompts.id })
     .from(prompts)
     .innerJoin(schools, eq(schools.id, prompts.schoolId))
@@ -321,38 +316,49 @@ export function resetDemoWorkspace(db: AppDatabase): DemoWorkspaceSummary {
       eq(prompts.title, DEMO_SCHOOL_SPECIFIC_ASSIGNMENT.promptTitle),
       eq(schools.name, DEMO_SCHOOL_SPECIFIC_ASSIGNMENT.school),
     ))
-    .get();
+    .then((rows) => rows[0]);
   if (specificEssayId && specificPrompt && !claimedPrompts.has(specificPrompt.id)) {
-    assignEssayToPrompt(db, DEMO_WORKSPACE_ID, specificPrompt.id, specificEssayId);
+    await assignEssayToPrompt(db, DEMO_WORKSPACE_ID, specificPrompt.id, specificEssayId);
     claimedPrompts.add(specificPrompt.id);
   }
 
   // A deterministic spread of finished and in-flight work across schools, so
-  // the progress views are not uniformly zero on a fresh demo.
-  const ordered = db
+  // the progress views are not uniformly zero on a fresh demo. Applied as two
+  // bulk updates rather than one per prompt: over a network connection, 112
+  // sequential round-trips here is most of a request budget.
+  const ordered = await db
     .select({ id: prompts.id })
     .from(prompts)
     .innerJoin(schools, eq(schools.id, prompts.schoolId))
     .where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID))
-    .orderBy(schools.name, prompts.title)
-    .all();
-  ordered.forEach((prompt, index) => {
-    if (index % 9 === 0) setPromptStatus(db, DEMO_WORKSPACE_ID, prompt.id, "complete");
-    else if (index % 9 === 1) setPromptStatus(db, DEMO_WORKSPACE_ID, prompt.id, "in-progress");
-  });
+    .orderBy(schools.name, prompts.title);
+  const completeIds = ordered.filter((_, index) => index % 9 === 0).map((row) => row.id);
+  const inProgressIds = ordered.filter((_, index) => index % 9 === 1).map((row) => row.id);
+  await Promise.all([
+    completeIds.length
+      ? db.update(prompts).set({ status: "complete" }).where(inArray(prompts.id, completeIds)).execute()
+      : Promise.resolve(),
+    inProgressIds.length
+      ? db.update(prompts).set({ status: "in-progress" }).where(inArray(prompts.id, inProgressIds)).execute()
+      : Promise.resolve(),
+  ]);
 
-  recomputeWorkspaceMatches(db, DEMO_WORKSPACE_ID);
+  await recomputeWorkspaceMatches(db, DEMO_WORKSPACE_ID);
 
   // Counted from the database rather than from what the seed intended, so the
   // summary can never disagree with what actually landed.
-  const countRows = (table: typeof schools | typeof prompts | typeof assignedEssayResponses) =>
-    db.select({ id: table.id }).from(table).where(eq(table.workspaceId, DEMO_WORKSPACE_ID)).all().length;
+  const [schoolRows, promptRows, assignmentRows] = await Promise.all([
+    db.select({ id: schools.id }).from(schools).where(eq(schools.workspaceId, DEMO_WORKSPACE_ID)).execute(),
+    db.select({ id: prompts.id }).from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).execute(),
+    db.select({ id: assignedEssayResponses.id }).from(assignedEssayResponses)
+      .where(eq(assignedEssayResponses.workspaceId, DEMO_WORKSPACE_ID)).execute(),
+  ]);
 
   return {
-    schools: countRows(schools),
-    prompts: countRows(prompts),
+    schools: schoolRows.length,
+    prompts: promptRows.length,
     essays: DEMO_ESSAYS.length,
-    assignments: countRows(assignedEssayResponses),
-    matches: DEMO_ESSAYS.length * countRows(prompts),
+    assignments: assignmentRows.length,
+    matches: DEMO_ESSAYS.length * promptRows.length,
   };
 }

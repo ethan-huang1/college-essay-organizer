@@ -41,16 +41,22 @@ Switch between them in the sidebar's Workspace panel. They never share records.
 
 ## Quick start
 
-Requires Node.js 20+ and npm. No API key, account, or external service.
+Requires Node.js 20+ and a Postgres database. [Neon](https://neon.tech) is what
+this is built and deployed against; its free tier is enough.
 
 ```bash
 npm install
-npm run db:migrate   # creates data/college-essay-organizer.sqlite
-npm run dev          # http://localhost:3000
+cp .env.example .env.local     # paste your Neon pooled connection string
+npm run db:migrate             # apply the committed migrations
+npm run dev                    # http://localhost:3000
 ```
 
-Your data lives in a local SQLite file under `data/`, which is gitignored. To
-start completely fresh, delete that directory.
+The personal workspace and its taxonomy are created automatically on first
+request, so a freshly migrated database opens to an empty workspace ready for
+its first college.
+
+Useful scripts: `npm run db:generate` (after an intentional schema change),
+`npm run db:studio` (browse the data), `npm run db:migrate` (apply migrations).
 
 ## How prompts get into the app
 
@@ -101,10 +107,15 @@ hidden.
 
 ## Architecture
 
-Next.js App Router with React Server Components. Every mutation is a server
-action driven by a plain `<form>`; the only client component in the app is the
-one that highlights the active sidebar link. Progressive disclosure is done with
-`<details>` and URL parameters, so the interface works without JavaScript.
+Next.js App Router with React Server Components on Postgres (Drizzle ORM),
+deployed on Vercel with Neon. Every mutation is a server action driven by a
+plain `<form>`; the only client component in the app is the one that highlights
+the active sidebar link. Progressive disclosure is done with `<details>` and URL
+parameters, so the interface works without JavaScript.
+
+Nothing is prerendered — every route reads the workspace cookie and the
+database — so the root layout declares `force-dynamic` and the build needs no
+database connection.
 
 ```
 src/app/
@@ -122,7 +133,18 @@ src/lib/
   progress.ts           derived UI numbers (nothing persisted)
   essays.ts             essay CRUD with immutable versions
   db/                   Drizzle schema, migrations, seeds, demo workspace
+    client.ts           Neon pool for the app, PGlite for tests
+    server.ts           cached pool + one-time workspace initialization
 ```
+
+**The data layer is entirely async.** No Postgres driver is synchronous, so
+every function that touches the database returns a promise, all the way up
+through the server actions. An un-awaited call here is silent data loss — the
+action returns, the page revalidates against stale rows, and on serverless the
+instance can be frozen mid-write — so `no-floating-promises` and
+`await-thenable` are enabled as errors. Worth knowing: those rules do **not**
+recognise a Drizzle query builder as thenable, so they cannot catch an
+un-awaited builder; the persistence tests are what covers that.
 
 **Workspace isolation** is enforced at the data layer, not the UI: every query
 is scoped by `workspaceId`, and every mutation verifies the record belongs to
@@ -156,9 +178,15 @@ knowing:
 ./run_tests.sh
 ```
 
-Runs ESLint, a strict TypeScript check, the Vitest suite (72 tests, including
-persistence tests that apply the real migrations to a throwaway in-memory
-database), a production build, and the 80-test overnight-orchestration suite.
+Runs ESLint (including type-aware promise rules), a strict TypeScript check,
+the Vitest suite (72 tests), a production build, and the 80-test
+overnight-orchestration suite.
+
+The persistence tests run against **PGlite** — real Postgres compiled to WASM,
+in-process — applying the same committed migrations as production. So `jsonb`,
+`timestamptz`, check constraints and partial unique indexes are all exercised
+on the dialect that actually ships, while each test still gets a throwaway
+database. It needs no network and no credentials.
 
 Individually: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
@@ -177,7 +205,11 @@ Recorded honestly rather than papered over:
   data-availability limit, not a bug, and each record says exactly what was
   unresolved.
 - Single user, no authentication, no multi-device sync. Workspaces are separated
-  by a cookie, not by identity.
+  by a cookie, not by identity — anyone with the deployment URL sees the same
+  personal workspace.
+- Migrations are applied manually (`npm run db:migrate`), deliberately not on
+  boot: concurrent serverless instances racing migrations is how a schema gets
+  corrupted.
 - The editing-suggestion workflow (prompt-fit / clarity / concision suggestions
   with individual accept and reject) is specified but not built.
 - JSON export/import of a whole workspace is specified but not built.

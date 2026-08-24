@@ -9,6 +9,12 @@ import { loadDemoWorkspace, openPersonalWorkspace } from "./workspace-actions";
 
 import "./globals.css";
 
+// Nothing in this app can be prerendered: every route reads the active
+// workspace cookie and the database. Declaring it on the root layout also
+// covers Next's built-in /_not-found route, which otherwise gets prerendered
+// at build time and would need a database connection to build.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: {
     default: "College Essay Organizer",

@@ -55,45 +55,45 @@ function revalidateEssayPaths() {
 export async function createEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  createEssay(db, snapshot.workspace.id, {
+  await createEssay(db, snapshot.workspace.id, {
     ...essayMetadataInput(formData),
     content: field(formData, "content"),
   });
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateEssayPaths();
 }
 
 export async function updateEssayMetadataAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  updateEssayMetadata(db, snapshot.workspace.id, field(formData, "essayId"), essayMetadataInput(formData));
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await updateEssayMetadata(db, snapshot.workspace.id, field(formData, "essayId"), essayMetadataInput(formData));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateEssayPaths();
 }
 
 export async function saveEssayVersionAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  saveEssayVersion(db, snapshot.workspace.id, field(formData, "essayId"), {
+  await saveEssayVersion(db, snapshot.workspace.id, field(formData, "essayId"), {
     content: field(formData, "content"),
     reason: field(formData, "reason"),
   });
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateEssayPaths();
 }
 
 export async function restoreEssayVersionAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  restoreEssayVersion(db, snapshot.workspace.id, field(formData, "essayId"), field(formData, "versionId"));
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await restoreEssayVersion(db, snapshot.workspace.id, field(formData, "essayId"), field(formData, "versionId"));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateEssayPaths();
 }
 
 export async function deleteEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  deleteEssay(db, snapshot.workspace.id, field(formData, "essayId"));
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await deleteEssay(db, snapshot.workspace.id, field(formData, "essayId"));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateEssayPaths();
 }

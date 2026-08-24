@@ -1,24 +1,72 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { mkdirSync } from "node:fs";
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
+import { migrate as migrateNode } from "drizzle-orm/node-postgres/migrator";
+import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { Pool } from "pg";
 import path from "node:path";
 
 import { schema } from "./schema";
 
-export function openDatabase(filename = path.join(process.cwd(), "data", "college-essay-organizer.sqlite")) {
-  if (filename !== ":memory:") mkdirSync(path.dirname(filename), { recursive: true });
+// Postgres everywhere: Neon in development and production, PGlite in tests.
+// Both are the same dialect running the same committed migrations, so a test
+// cannot pass against an engine the application never uses.
+//
+// Every data-layer call is async. Unlike better-sqlite3, no Postgres driver is
+// synchronous, which is why nothing below (or above it) returns a plain value.
+export type AppDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
 
-  const sqlite = new Database(filename);
-  sqlite.pragma("foreign_keys = ON");
-  if (filename !== ":memory:") sqlite.pragma("journal_mode = WAL");
-  const db = drizzle(sqlite, { schema });
+export const MIGRATIONS_FOLDER = path.join(process.cwd(), "drizzle");
 
-  return { db, sqlite, close: () => sqlite.close() };
+function connectionString() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. Copy .env.example to .env.local and paste your Neon connection string.",
+    );
+  }
+  return url;
 }
 
-export type AppDatabase = ReturnType<typeof openDatabase>["db"];
+/**
+ * A pooled connection to the configured Postgres database. `max` is deliberately
+ * small: on serverless each instance keeps its own pool, so the limit that
+ * matters is the provider's, not this process's.
+ *
+ * Each connection carries its own migrator so nothing has to sniff the driver
+ * at runtime.
+ */
+export function openDatabase(url = connectionString()) {
+  const pool = new Pool({
+    connectionString: url,
+    max: 5,
+    // Neon closes idle connections itself; releasing ours first stops a warm
+    // serverless instance from holding a dead socket.
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 15_000,
+  });
+  const db = drizzleNode(pool, { schema });
+  return {
+    db: db as AppDatabase,
+    pool,
+    migrate: (migrationsFolder = MIGRATIONS_FOLDER) => migrateNode(db, { migrationsFolder }),
+    close: () => pool.end(),
+  };
+}
 
-export function migrateDatabase(db: AppDatabase, migrationsFolder = path.join(process.cwd(), "drizzle")) {
-  migrate(db, { migrationsFolder });
+/**
+ * An isolated in-process Postgres for tests: real Postgres compiled to WASM, so
+ * jsonb, timestamptz, check constraints and partial unique indexes behave as
+ * they will in production, while each test still gets a throwaway database.
+ */
+export function openTestDatabase() {
+  const client = new PGlite();
+  const db = drizzlePglite(client, { schema });
+  return {
+    db: db as AppDatabase,
+    client,
+    migrate: (migrationsFolder = MIGRATIONS_FOLDER) => migratePglite(db, { migrationsFolder }),
+    close: () => client.close(),
+  };
 }

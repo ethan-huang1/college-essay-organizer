@@ -13,8 +13,8 @@ export async function addCollegeAction(formData: FormData) {
 
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  importCollege(db, snapshot.workspace.id, name);
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await importCollege(db, snapshot.workspace.id, name);
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
 
   revalidatePath("/");
   revalidatePath("/schools");

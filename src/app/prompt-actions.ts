@@ -51,31 +51,31 @@ function promptInput(formData: FormData): PromptInput {
 export async function createPromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  createPrompt(db, snapshot.workspace.id, promptInput(formData));
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await createPrompt(db, snapshot.workspace.id, promptInput(formData));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePromptPaths();
 }
 
 export async function updatePromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  updatePrompt(db, snapshot.workspace.id, field(formData, "promptId"), promptInput(formData));
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await updatePrompt(db, snapshot.workspace.id, field(formData, "promptId"), promptInput(formData));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePromptPaths();
 }
 
 export async function deletePromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  deletePrompt(db, snapshot.workspace.id, field(formData, "promptId"));
-  recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  await deletePrompt(db, snapshot.workspace.id, field(formData, "promptId"));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePromptPaths();
 }
 
 export async function setPromptStatusAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const status = field(formData, "status");
-  setPromptStatus(
+  await setPromptStatus(
     getAppDatabase().db,
     snapshot.workspace.id,
     field(formData, "promptId"),
