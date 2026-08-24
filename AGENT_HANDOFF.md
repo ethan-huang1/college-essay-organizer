@@ -323,8 +323,8 @@ none of this fixture data was committed):
 
 ## Last Verified Commit
 
-The workspace-restoration commit that follows this handoff update
-(the preceding redesign commit was `a4fc7a6`). Full canonical
+`2a865e4` — "Split personal and example workspaces, restore the Add College
+flow" (the preceding redesign commit was `a4fc7a6`). Full canonical
 verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
 production build, 80 orchestration tests) passed immediately before it,
 alongside the browser verification listed above.
