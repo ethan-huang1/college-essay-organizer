@@ -57,12 +57,34 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
           .filter((family): family is NonNullable<typeof family> => Boolean(family)),
       };
     }),
-    essays: workspaceEssays.map((essay) => ({
-      ...essay,
-      wordCount: wordCount(essay.currentContent),
-      versionCount: versions.filter((version) => version.essayId === essay.id).length,
-      linkedPromptCount: assignments.filter((assignment) => assignment.essayId === essay.id).length,
-    })),
+    essays: workspaceEssays.map((essay) => {
+      const links = familyEssayLinks.filter((link) => link.essayId === essay.id);
+      const primaryLink = links.find((link) => link.isPrimary);
+      const essayVersionsDesc = versions
+        .filter((version) => version.essayId === essay.id)
+        .sort((a, b) => b.versionNumber - a.versionNumber);
+      const linkedPrompts = assignments
+        .filter((assignment) => assignment.essayId === essay.id)
+        .map((assignment) => {
+          const prompt = workspacePrompts.find((candidate) => candidate.id === assignment.promptId);
+          const school = workspaceSchools.find((candidate) => candidate.id === prompt?.schoolId);
+          return prompt ? { id: prompt.id, title: prompt.title, schoolName: school?.name ?? "Unknown school" } : null;
+        })
+        .filter((link): link is NonNullable<typeof link> => Boolean(link));
+      return {
+        ...essay,
+        wordCount: wordCount(essay.currentContent),
+        versionCount: essayVersionsDesc.length,
+        versions: essayVersionsDesc,
+        linkedPromptCount: linkedPrompts.length,
+        linkedPrompts,
+        primaryFamily: workspaceFamilies.find((family) => family.id === primaryLink?.familyId) ?? null,
+        secondaryFamilies: links
+          .filter((link) => !link.isPrimary)
+          .map((link) => workspaceFamilies.find((family) => family.id === link.familyId))
+          .filter((family): family is NonNullable<typeof family> => Boolean(family)),
+      };
+    }),
     families: workspaceFamilies.map((family) => ({
       ...family,
       promptCount: familyPromptLinks.filter((link) => link.familyId === family.id).length,

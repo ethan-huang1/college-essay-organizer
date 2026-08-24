@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getAppDatabase } from "@/lib/db/server";
 import { createPrompt, deletePrompt, type PromptInput, updatePrompt } from "@/lib/prompts";
+import { recomputeWorkspaceMatches } from "@/lib/reuse";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 
 function field(formData: FormData, name: string) {
@@ -39,21 +40,29 @@ function promptInput(formData: FormData): PromptInput {
 
 export async function createPromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  createPrompt(getAppDatabase().db, snapshot.workspace.id, promptInput(formData));
+  const db = getAppDatabase().db;
+  createPrompt(db, snapshot.workspace.id, promptInput(formData));
+  recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePath("/schools");
   revalidatePath("/families");
+  revalidatePath("/reuse");
 }
 
 export async function updatePromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  updatePrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"), promptInput(formData));
+  const db = getAppDatabase().db;
+  updatePrompt(db, snapshot.workspace.id, field(formData, "promptId"), promptInput(formData));
+  recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePath("/schools");
   revalidatePath("/families");
+  revalidatePath("/reuse");
 }
 
 export async function deletePromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  deletePrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"));
+  const db = getAppDatabase().db;
+  deletePrompt(db, snapshot.workspace.id, field(formData, "promptId"));
+  recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePath("/schools");
   revalidatePath("/families");
   revalidatePath("/reuse");

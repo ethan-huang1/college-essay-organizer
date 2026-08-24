@@ -919,6 +919,80 @@ h1 {
   line-height: 1.5;
 }
 
+.essay-filter-form {
+  margin-bottom: 20px;
+}
+
+.empty-note {
+  margin: 12px 0 24px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.linked-prompts-note {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.version-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.version-row {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.version-row summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.version-content {
+  margin: 10px 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.verification-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.verification-badge.verified {
+  border: 1px solid #8f9b82;
+  background: #e7eadf;
+  color: var(--moss-dark);
+}
+
+.verification-badge.unverified,
+.verification-badge.previous-cycle {
+  border: 1px solid var(--oxblood);
+  background: #f3e3df;
+  color: var(--oxblood);
+}
+
+.verification-badge.manual {
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+}
+
 .prompt-list {
   display: grid;
   gap: 12px;

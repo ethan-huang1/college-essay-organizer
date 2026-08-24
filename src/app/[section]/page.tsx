@@ -4,6 +4,13 @@ import { notFound } from "next/navigation";
 
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
+import {
+  createEssayAction,
+  deleteEssayAction,
+  restoreEssayVersionAction,
+  saveEssayVersionAction,
+  updateEssayMetadataAction,
+} from "../essay-actions";
 import { createPromptAction, deletePromptAction, updatePromptAction } from "../prompt-actions";
 import { createSchoolAction, deleteSchoolAction, updateSchoolAction } from "../school-actions";
 
@@ -161,27 +168,162 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   );
 }
 
-function EssaysView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  if (snapshot.essays.length === 0) return <EmptyState section="essays" />;
+type WorkspaceEssay = WorkspaceSnapshot["essays"][number];
+
+const ESSAY_STATUSES = ["idea", "outline", "draft", "revising", "ready", "submitted"] as const;
+
+function EssayFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?: WorkspaceEssay }) {
+  const secondaryIds = new Set(essay?.secondaryFamilies.map((family) => family.id));
   return (
-    <div className="record-grid">
-      {snapshot.essays.map((essay) => (
-        <article className="essay-record" key={essay.id}>
-          <div className="record-meta-row">
-            <span className="record-meta">{essay.designation.replace("-", " ")}</span>
-            <span className={`status-pill ${essay.status}`}>{essay.status}</span>
-          </div>
-          <h2>{essay.title}</h2>
-          <p className="essay-excerpt">{essay.currentContent}</p>
-          <dl className="record-stats">
-            <div><dt>Words</dt><dd>{essay.wordCount}</dd></div>
-            <div><dt>Versions</dt><dd>{essay.versionCount}</dd></div>
-            <div><dt>Prompts</dt><dd>{essay.linkedPromptCount}</dd></div>
-          </dl>
-          {essay.schoolSpecificPhrases.length > 0 ? <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p> : null}
-        </article>
-      ))}
+    <div className="prompt-fields">
+      <label>Title<input name="title" required minLength={2} maxLength={160} defaultValue={essay?.title} placeholder="Why Computer Science" /></label>
+      <label>Target words<input name="targetWordCount" type="number" min={0} step={1} defaultValue={essay?.targetWordCount ?? ""} /></label>
+      <label>Status<select name="status" defaultValue={essay?.status ?? "idea"}>
+        {ESSAY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+      </select></label>
+      <label>Designation<select name="designation" defaultValue={essay?.designation ?? "canonical"}>
+        <option value="canonical">Canonical (reusable original)</option>
+        <option value="school-adaptation">School-specific adaptation</option>
+      </select></label>
+      <label>Primary family<select name="primaryFamilyId" defaultValue={essay?.primaryFamily?.id ?? ""}><option value="">No primary family</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
+      <fieldset className="family-picker field-wide">
+        <legend>Secondary families <span>choose any that also apply</span></legend>
+        <div>{snapshot.families.map((family) => (
+          <label key={family.id}><input type="checkbox" name="secondaryFamilyIds" value={family.id} defaultChecked={secondaryIds.has(family.id)} /><span>{family.name}</span></label>
+        ))}</div>
+      </fieldset>
+      <label className="field-wide">School-specific phrases <span>comma-separated, e.g. school names to flag</span>
+        <input name="schoolSpecificPhrases" defaultValue={essay?.schoolSpecificPhrases.join(", ") ?? ""} placeholder="Stanford, the Farm" />
+      </label>
+      <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={essay?.notes ?? ""} placeholder="Context, ideas, or reminders" /></label>
     </div>
+  );
+}
+
+function EssayFilterForm({ snapshot, status, familyId, query }: { snapshot: WorkspaceSnapshot; status: string; familyId: string; query: string }) {
+  return (
+    <form className="crud-form essay-filter-form" action="/essays">
+      <div><label htmlFor="essay-q">Search</label><input id="essay-q" name="q" defaultValue={query} placeholder="Title or content" /></div>
+      <div><label htmlFor="essay-status">Status</label>
+        <select id="essay-status" name="status" defaultValue={status}>
+          <option value="">Any status</option>
+          {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
+        </select>
+      </div>
+      <div><label htmlFor="essay-family">Family</label>
+        <select id="essay-family" name="family" defaultValue={familyId}>
+          <option value="">Any family</option>
+          {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+        </select>
+      </div>
+      <button type="submit">Filter</button>
+      {(status || familyId || query) ? <Link className="text-link" href="/essays">Clear</Link> : null}
+    </form>
+  );
+}
+
+function EssayVersionHistory({ essay }: { essay: WorkspaceEssay }) {
+  return (
+    <div className="version-list">
+      {essay.versions.map((version, index) => {
+        const previous = essay.versions[index + 1];
+        const delta = previous ? version.wordCount - previous.wordCount : version.wordCount;
+        return (
+          <details className="version-row" key={version.id}>
+            <summary>
+              <span>Version {version.versionNumber}</span>
+              <span>{version.wordCount} words {previous ? `(${delta >= 0 ? "+" : ""}${delta})` : ""}</span>
+              <span>{version.reason ?? "No reason given"}</span>
+            </summary>
+            <p className="version-content">{version.content || "(empty)"}</p>
+            {index !== 0 ? (
+              <form action={restoreEssayVersionAction} className="inline-edit-form">
+                <input name="essayId" type="hidden" value={essay.id} />
+                <input name="versionId" type="hidden" value={version.id} />
+                <button type="submit">Restore this version (adds a new version, keeps history)</button>
+              </form>
+            ) : <span className="record-meta">Current version</span>}
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
+function EssaysView({ snapshot, status, familyId, query }: { snapshot: WorkspaceSnapshot; status: string; familyId: string; query: string }) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEssays = snapshot.essays.filter((essay) => {
+    if (status && essay.status !== status) return false;
+    if (familyId && essay.primaryFamily?.id !== familyId && !essay.secondaryFamilies.some((family) => family.id === familyId)) return false;
+    if (normalizedQuery && !essay.title.toLowerCase().includes(normalizedQuery) && !essay.currentContent.toLowerCase().includes(normalizedQuery)) return false;
+    return true;
+  });
+
+  return (
+    <>
+      <details className="prompt-create-panel">
+        <summary>Add an essay</summary>
+        <form action={createEssayAction} className="prompt-form">
+          <EssayFields snapshot={snapshot} />
+          <label className="field-wide">Starting content<textarea name="content" maxLength={20000} placeholder="Draft the first version here, or leave blank and write later" /></label>
+          <button type="submit">Add essay</button>
+        </form>
+      </details>
+
+      <EssayFilterForm snapshot={snapshot} status={status} familyId={familyId} query={query} />
+
+      {snapshot.essays.length === 0 ? <EmptyState section="essays" /> : filteredEssays.length === 0 ? (
+        <p className="empty-note">No essays match this filter.</p>
+      ) : (
+        <div className="record-grid">
+          {filteredEssays.map((essay) => (
+            <article className="essay-record" key={essay.id}>
+              <div className="record-meta-row">
+                <span className="record-meta">{essay.designation.replace("-", " ")}</span>
+                <span className={`status-pill ${essay.status}`}>{essay.status}</span>
+              </div>
+              <h2>{essay.title}</h2>
+              <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
+              <div className="family-chips">
+                {essay.primaryFamily ? <span className="primary-chip">Primary · {essay.primaryFamily.name}</span> : <span>Unclassified</span>}
+                {essay.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+              </div>
+              {essay.linkedPrompts.length > 0 ? (
+                <p className="linked-prompts-note">Used for: {essay.linkedPrompts.map((link) => `${link.schoolName} · ${link.title}`).join("; ")}</p>
+              ) : null}
+              {essay.schoolSpecificPhrases.length > 0 ? <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p> : null}
+              <dl className="record-stats">
+                <div><dt>Words</dt><dd>{essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""}</dd></div>
+                <div><dt>Versions</dt><dd>{essay.versionCount}</dd></div>
+                <div><dt>Prompts</dt><dd>{essay.linkedPromptCount}</dd></div>
+              </dl>
+              <details className="record-actions">
+                <summary>Edit, write, or remove</summary>
+                <form action={updateEssayMetadataAction} className="prompt-form">
+                  <input name="essayId" type="hidden" value={essay.id} />
+                  <EssayFields snapshot={snapshot} essay={essay} />
+                  <button type="submit">Save essay details</button>
+                </form>
+                <form action={saveEssayVersionAction} className="prompt-form">
+                  <input name="essayId" type="hidden" value={essay.id} />
+                  <label className="field-wide">New content <span>saving creates a new version; the essay is never edited in place</span>
+                    <textarea name="content" maxLength={20000} defaultValue={essay.currentContent} />
+                  </label>
+                  <label className="field-wide">Reason for this version<input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
+                  <button type="submit">Save as new version</button>
+                </form>
+                <EssayVersionHistory essay={essay} />
+                <form action={deleteEssayAction} className="delete-form">
+                  <input name="essayId" type="hidden" value={essay.id} />
+                  <span>Deleting removes every version and match for this essay.</span>
+                  <button type="submit">Delete essay</button>
+                </form>
+              </details>
+            </article>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -223,16 +365,23 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   );
 }
 
-export default async function SectionPage({ params }: { params: Promise<{ section: string }> }) {
+export default async function SectionPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ section: string }>;
+  searchParams: Promise<{ status?: string; family?: string; q?: string }>;
+}) {
   const { section } = await params;
   if (!(section in sections)) notFound();
 
   const sectionName = section as SectionName;
   const content = sections[sectionName];
   const snapshot = await getActiveWorkspaceSnapshot();
+  const filters = await searchParams;
   const views = {
     schools: <SchoolsView snapshot={snapshot} />,
-    essays: <EssaysView snapshot={snapshot} />,
+    essays: <EssaysView snapshot={snapshot} status={filters.status ?? ""} familyId={filters.family ?? ""} query={filters.q ?? ""} />,
     families: <FamiliesView snapshot={snapshot} />,
     reuse: <ReuseView snapshot={snapshot} />,
   };

@@ -23,6 +23,8 @@ import {
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
 import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
+import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, updateEssayMetadata } from "../essays";
+import { recomputeWorkspaceMatches } from "../reuse";
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -278,5 +280,115 @@ describe("local persistence foundation", () => {
     expect(connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.promptId, promptId)).all()).toHaveLength(0);
     expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.promptId, promptId)).all()).toHaveLength(0);
     expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(9);
+  });
+
+  it("creates an essay with an immutable initial version and workspace-scoped family assignment", () => {
+    initializePersonalWorkspace(connection.db);
+    const families = connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID)).all();
+
+    const essayId = createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+      title: "Why Computer Science",
+      content: "I have loved building things since I first broke my family's computer trying to fix it.",
+      status: "draft",
+      designation: "canonical",
+      targetWordCount: 250,
+      primaryFamilyId: families[5].id,
+      secondaryFamilyIds: [families[4].id],
+    });
+
+    const essay = connection.db.select().from(essays).where(eq(essays.id, essayId)).get();
+    const versions = connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId)).all();
+    const links = connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId)).all();
+    expect(essay?.title).toBe("Why Computer Science");
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({ versionNumber: 1, reason: "Initial version" });
+    expect(links.find((link) => link.isPrimary)?.familyId).toBe(families[5].id);
+
+    expect(() => createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+      title: "Wrong family",
+      status: "idea",
+      designation: "canonical",
+      primaryFamilyId: `${DEMO_WORKSPACE_ID}:family:core-story`,
+    })).toThrow();
+  });
+
+  it("saves essay content changes as new immutable versions and restores without destroying history", () => {
+    initializePersonalWorkspace(connection.db);
+    const essayId = createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+      title: "Draft essay",
+      content: "First draft content.",
+      status: "draft",
+      designation: "canonical",
+    });
+
+    saveEssayVersion(connection.db, PERSONAL_WORKSPACE_ID, essayId, { content: "Second draft content, revised.", reason: "Tightened the opening" });
+    let versions = connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId)).all();
+    expect(versions).toHaveLength(2);
+    expect(connection.db.select().from(essays).where(eq(essays.id, essayId)).get()?.currentContent).toBe("Second draft content, revised.");
+
+    const firstVersion = versions.find((version) => version.versionNumber === 1);
+    if (!firstVersion) throw new Error("Expected the first version to exist.");
+    restoreEssayVersion(connection.db, PERSONAL_WORKSPACE_ID, essayId, firstVersion.id);
+
+    versions = connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId)).all();
+    expect(versions).toHaveLength(3);
+    expect(versions.find((version) => version.versionNumber === 1)?.content).toBe("First draft content.");
+    expect(connection.db.select().from(essays).where(eq(essays.id, essayId)).get()?.currentContent).toBe("First draft content.");
+
+    updateEssayMetadata(connection.db, PERSONAL_WORKSPACE_ID, essayId, {
+      title: "Draft essay", status: "ready", designation: "canonical",
+    });
+    expect(connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId)).all()).toHaveLength(3);
+  });
+
+  it("deletes only the scoped essay and cascades its versions, family links, and matches", () => {
+    initializePersonalWorkspace(connection.db);
+    const essayId = createEssay(connection.db, PERSONAL_WORKSPACE_ID, { title: "Disposable", content: "x", status: "idea", designation: "canonical" });
+    expect(() => deleteEssay(connection.db, DEMO_WORKSPACE_ID, essayId)).toThrow();
+    deleteEssay(connection.db, PERSONAL_WORKSPACE_ID, essayId);
+    expect(connection.db.select().from(essays).where(eq(essays.id, essayId)).all()).toHaveLength(0);
+    expect(connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId)).all()).toHaveLength(0);
+  });
+
+  it("recomputes deterministic reuse matches for every essay/prompt pair in a workspace", () => {
+    initializePersonalWorkspace(connection.db);
+    const families = connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID)).all();
+    const school = createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Lakeview University" });
+    if (!school) throw new Error("Expected the school to be created.");
+    const whyMajorFamily = families.find((family) => family.name === "Why Major / Academic Interests");
+    if (!whyMajorFamily) throw new Error("Expected a Why Major family.");
+
+    const promptId = createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+      schoolId: school.id,
+      title: "Why this field",
+      promptText: "Why do you want to study your intended field?",
+      minWordCount: 100,
+      maxWordCount: 300,
+      requirement: "required",
+      status: "not-started",
+      primaryFamilyId: whyMajorFamily.id,
+    });
+    const essayId = createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+      title: "Why Computer Science",
+      // 15 words x 12 = 180, inside the prompt's [100, 300] range.
+      content: Array(12).fill("I want to study computer science because building systems that help people has always driven me.").join(" "),
+      status: "draft",
+      designation: "canonical",
+      primaryFamilyId: whyMajorFamily.id,
+    });
+
+    recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
+    const matches = connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL_WORKSPACE_ID)).all();
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({ essayId, promptId, recommendedAction: "ready-to-reuse" });
+    expect(matches[0].score).toBeGreaterThanOrEqual(80);
+
+    // Recomputing again after nothing changed must not accumulate duplicate rows.
+    recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
+    expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(1);
+
+    // Demo's hand-curated matches are untouched by a personal-workspace recompute.
+    resetDemoWorkspace(connection.db);
+    expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(3);
   });
 });
