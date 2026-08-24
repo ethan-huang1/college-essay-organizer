@@ -36,8 +36,10 @@ panel:
   own colleges through the always-visible **Add a college** form on
   `/schools#add-college`, which runs the existing `importCollege` pipeline;
   the Overview / All prompts / Categories / My essays / Reuse views then
-  populate from that real data. Colleges can be added and removed at any time
-  ("Manage" on each school header).
+  populate from that real data. Each school header carries **Edit details**
+  (rename/notes) and **Remove**; removal is a two-step confirmation via
+  `?remove=<schoolId>` that names the college, states how many prompts go
+  with it, and says what survives, so no single click can destroy work.
 - **Example workspace** (demo) is a reproducible seed built by running the
   *same* import pipeline over 19 real schools, plus 7 clearly labelled sample
   essays: ~112 prompts, all ten categories, 7 assignments, 784 computed
@@ -112,6 +114,14 @@ Deliberate decisions worth knowing:
   `importCollege` / `createEssay` / `recomputeWorkspaceMatches` outside it,
   because better-sqlite3 will not nest their transactions.
 
+Both `?edit=<promptId>` and `?remove=<schoolId>` follow the same pattern:
+state the intent in the URL, keep the current filters via `withFilters`, and
+render the heavier UI only for the one record being acted on. No client
+JavaScript is involved, so the confirmation works with forms alone;
+`deleteSchoolAction` revalidates every view a cascade touches and redirects to
+`/schools`, since the page the student was on may have been filtered to the
+school that no longer exists.
+
 `src/lib/progress.ts` derives every number the UI shows (`workState`,
 `reuseCandidate`, `summarizePrompts`, `reuseOpportunities`) from a snapshot.
 `reuseOpportunities` returns three buckets per essay — `inUse` (actual
@@ -166,6 +176,13 @@ verification were fixed: the school-specific essay was overwriting another
 essay's assignment, and the returned summary counted intended rather than
 actual assignments. One redesign regression was found and fixed: high
 school-specificity risks had stopped being visible anywhere.
+
+**Confirmed college removal (this session).** Removing a college existed but
+fired on a single click inside "Manage", and `deleteSchoolAction` only
+revalidated `/` and `/schools` even though the cascade also empties
+`/families`, `/essays`, and `/reuse`. Removal is now a visible **Remove** link
+per school leading to a confirmation panel, the stale-revalidation bug is
+fixed, and the action redirects to `/schools`.
 
 **UI redesign (earlier this session).** Replaced the school-page layout whose large
 left column went empty on schools with many prompts. Added the sidebar
@@ -273,6 +290,14 @@ DevTools against `next dev`):
    showing 39 open opportunities plus the "Do not reuse here" warning for the
    Brown-specific essay. Personal data was untouched throughout (checked in
    SQLite after every switch), and "Reset example" is idempotent.
+3. **Removing a college.** Verified on a throwaway school added for the
+   purpose (the owner's own colleges were left untouched): the confirmation
+   panel names the college and its prompt count; "Keep this college" changed
+   nothing and preserved the active filters; confirming deleted the school and
+   its 4 prompts with no orphaned category links, then redirected to
+   `/schools` with the sidebar and nav counts updated. Also checked in the
+   school-focused view (`?school=&status=&remove=`) and at 768 px with no
+   overflow and a clean console.
 
 Earlier browser verification of the redesign itself, against a 18-school /
 112-prompt / 6-essay / 672-match local workspace (`data/` is gitignored, so
@@ -323,8 +348,9 @@ none of this fixture data was committed):
 
 ## Last Verified Commit
 
-`2a865e4` — "Split personal and example workspaces, restore the Add College
-flow" (the preceding redesign commit was `a4fc7a6`). Full canonical
+The confirmed-college-removal commit that follows this handoff update
+(preceded by `2a865e4`, the workspace split, and `a4fc7a6`, the redesign).
+Full canonical
 verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
 production build, 80 orchestration tests) passed immediately before it,
 alongside the browser verification listed above.

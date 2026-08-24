@@ -27,15 +27,22 @@ const sections = {
 
 type SectionName = keyof typeof sections;
 
-type Filters = { school: string; family: string; status: string; q: string; edit: string };
+type Filters = { school: string; family: string; status: string; q: string; edit: string; remove: string };
 
-// Keeps the current filters in the "edit this prompt" link so opening (and
-// closing) an edit form never throws away the view the student was in.
-function withFilters(base: string, filters: Filters, edit: string) {
+// Keeps the current filters in the "edit this prompt" and "remove this school"
+// links, so opening (or cancelling) either never throws away the view the
+// student was in.
+function withFilters(base: string, filters: Filters, extra: { edit?: string; remove?: string } = {}) {
   const params = new URLSearchParams();
-  for (const [key, value] of [["school", filters.school], ["family", filters.family], ["status", filters.status], ["q", filters.q], ["edit", edit]]) {
-    if (value) params.set(key, value);
-  }
+  const entries: [string, string][] = [
+    ["school", filters.school],
+    ["family", filters.family],
+    ["status", filters.status],
+    ["q", filters.q],
+    ["edit", extra.edit ?? ""],
+    ["remove", extra.remove ?? ""],
+  ];
+  for (const [key, value] of entries) if (value) params.set(key, value);
   const query = params.toString();
   return query ? `${base}?${query}` : base;
 }
@@ -132,7 +139,41 @@ function AddPanel({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   );
 }
 
-function SchoolHeader({ snapshot, school, focused }: { snapshot: WorkspaceSnapshot; school: WorkspaceSnapshot["schools"][number]; focused: boolean }) {
+// Removing a college is irreversible and takes its prompts with it, so it is a
+// two-step flow rather than a single button: the link states intent via
+// ?remove=<schoolId>, and the confirmation panel spells out exactly what goes
+// and what survives before anything is deleted.
+function RemoveConfirmation({ school, cancelHref }: { school: WorkspaceSnapshot["schools"][number]; cancelHref: string }) {
+  return (
+    <div className="remove-confirm" id={`remove-${school.id}`} role="alert">
+      <p className="remove-confirm-title">Remove {school.name} from your list?</p>
+      <p className="detail-note">
+        This deletes {school.promptCount === 0 ? "this college" : `its ${school.promptCount} ${school.promptCount === 1 ? "prompt" : "prompts"}`}
+        {school.promptCount === 0 ? "" : ", their category assignments, and any essay assigned to answer them"}. Your
+        essays themselves stay in your library, and you can add this college again at any time.
+      </p>
+      <div className="remove-confirm-actions">
+        <form action={deleteSchoolAction}>
+          <input name="schoolId" type="hidden" value={school.id} />
+          <button type="submit">Yes, remove {school.name}</button>
+        </form>
+        <Link className="text-link" href={cancelHref}>Keep this college</Link>
+      </div>
+    </div>
+  );
+}
+
+function SchoolHeader({
+  snapshot,
+  school,
+  focused,
+  removeHref,
+}: {
+  snapshot: WorkspaceSnapshot;
+  school: WorkspaceSnapshot["schools"][number];
+  focused: boolean;
+  removeHref: string;
+}) {
   const progress = summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id));
   return (
     <div className={`school-header${focused ? " focused" : ""}`}>
@@ -148,19 +189,15 @@ function SchoolHeader({ snapshot, school, focused }: { snapshot: WorkspaceSnapsh
       <div className="school-header-side">
         <ProgressBar progress={progress} />
         <details className="school-edit">
-          <summary>Manage</summary>
+          <summary>Edit details</summary>
           <form action={updateSchoolAction} className="inline-edit-form">
             <input name="schoolId" type="hidden" value={school.id} />
             <label>School name<input name="name" required minLength={2} maxLength={120} defaultValue={school.name} /></label>
             <label>Notes<input name="notes" maxLength={500} defaultValue={school.notes ?? ""} /></label>
             <button type="submit">Save changes</button>
           </form>
-          <form action={deleteSchoolAction} className="delete-form">
-            <input name="schoolId" type="hidden" value={school.id} />
-            <span>Deleting also removes this school&apos;s prompts.</span>
-            <button type="submit">Delete school</button>
-          </form>
         </details>
+        <Link className="school-remove" href={removeHref}>Remove</Link>
       </div>
     </div>
   );
@@ -199,7 +236,15 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
         <div className="school-sections">
           {schools.map(({ school, prompts }) => (
             <section key={school.id}>
-              <SchoolHeader snapshot={snapshot} school={school} focused={Boolean(filters.school)} />
+              <SchoolHeader
+                snapshot={snapshot}
+                school={school}
+                focused={Boolean(filters.school)}
+                removeHref={`${withFilters("/schools", filters, { remove: school.id })}#remove-${school.id}`}
+              />
+              {filters.remove === school.id ? (
+                <RemoveConfirmation school={school} cancelHref={withFilters("/schools", filters)} />
+              ) : null}
               {prompts.length === 0 ? (
                 <p className="empty-note">No prompts match this filter for {school.name}.</p>
               ) : (
@@ -213,8 +258,8 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
                       schoolName={school.name}
                       showSchool={false}
                       editing={filters.edit === prompt.id}
-                      editHref={`${withFilters("/schools", filters, prompt.id)}#prompt-${prompt.id}`}
-                      cancelHref={`${withFilters("/schools", filters, "")}#prompt-${prompt.id}`}
+                      editHref={`${withFilters("/schools", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                      cancelHref={`${withFilters("/schools", filters)}#prompt-${prompt.id}`}
                     />
                   ))}
                 </div>
@@ -280,8 +325,8 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
                       prompt={prompt}
                       schoolName={names.get(prompt.schoolId) ?? "Unknown school"}
                       editing={filters.edit === prompt.id}
-                      editHref={`${withFilters("/families", filters, prompt.id)}#prompt-${prompt.id}`}
-                      cancelHref={`${withFilters("/families", filters, "")}#prompt-${prompt.id}`}
+                      editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                      cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
                     />
                   ))}
                 </div>
@@ -311,8 +356,8 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
                     prompt={prompt}
                     schoolName={names.get(prompt.schoolId) ?? "Unknown school"}
                     editing={filters.edit === prompt.id}
-                    editHref={`${withFilters("/families", filters, prompt.id)}#prompt-${prompt.id}`}
-                    cancelHref={`${withFilters("/families", filters, "")}#prompt-${prompt.id}`}
+                    editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                    cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
                   />
                 ))}
               </div>
@@ -607,7 +652,7 @@ export default async function SectionPage({
   searchParams,
 }: {
   params: Promise<{ section: string }>;
-  searchParams: Promise<{ school?: string; status?: string; family?: string; q?: string; edit?: string }>;
+  searchParams: Promise<{ school?: string; status?: string; family?: string; q?: string; edit?: string; remove?: string }>;
 }) {
   const { section } = await params;
   if (!(section in sections)) notFound();
@@ -622,6 +667,7 @@ export default async function SectionPage({
     status: raw.status ?? "",
     q: raw.q ?? "",
     edit: raw.edit ?? "",
+    remove: raw.remove ?? "",
   };
   const focusedSchool = snapshot.schools.find((school) => school.id === filters.school);
   const focusedFamily = snapshot.families.find((family) => family.id === filters.family);
