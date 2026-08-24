@@ -348,9 +348,9 @@ none of this fixture data was committed):
 
 ## Last Verified Commit
 
-The confirmed-college-removal commit that follows this handoff update
-(preceded by `2a865e4`, the workspace split, and `a4fc7a6`, the redesign).
-Full canonical
+`5f5b8b1` — "Confirm before removing a college, and revalidate the whole
+cascade" (preceded by `2a865e4`, the workspace split, and `a4fc7a6`, the
+redesign). Full canonical
 verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
 production build, 80 orchestration tests) passed immediately before it,
 alongside the browser verification listed above.
