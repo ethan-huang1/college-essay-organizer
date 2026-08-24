@@ -23,17 +23,19 @@ Organizer MVP product spec).
 
 ## Current Status
 
-P0 Phase 1 is in progress with a verified Next.js application checkpoint.
+P0 Phase 1 is in progress with verified application and persistence checkpoints.
 The interrupted Claude run left a partially transferred `create-next-app`
 scaffold and a complete local dependency installation despite its final log
 claiming the scaffold had been removed. Codex audited and preserved that work,
 restored the missing App Router layout and pages, added the required canonical
 test runner and setup notes, and committed the tested code at `1a34260`.
 
-The application currently provides a responsive editorial shell, navigation,
-clearly separated personal/demo entry states, the ten-family overview, and
-honestly labeled placeholders for unfinished sections. Persistence, schema and
-migrations, seeded data, and real organization workflows remain unfinished.
+The application provides a responsive editorial shell, navigation, clearly
+separated personal/demo entry states, the ten-family overview, and honestly
+labeled placeholders for unfinished sections. The local SQLite schema,
+migration, editable taxonomy, isolated personal/demo seed services, and database
+tests are complete at `dd4753f`. The UI does not call those services yet, so the
+workspace choices and organization pages remain non-interactive.
 
 ## Completed
 
@@ -93,23 +95,40 @@ migrations, seeded data, and real organization workflows remain unfinished.
 - Verified application code commit:
   `1a34260822a2ab58cd23703187fbc58403ba6131` — "Checkpoint verified Next.js
   application scaffold".
+- Added the P0 local persistence foundation with pinned Drizzle ORM and
+  better-sqlite3 dependencies, 14 core tables, generated migration metadata,
+  database constraints, and repo-local migration commands.
+- Seeded all ten editable prompt families and 21 optional tags per workspace.
+  The explicit demo reset creates three fictional schools, prompts covering all
+  ten families, six synthetic essays, multiple versions of two essays, safe and
+  dangerous reuse examples, and cross-school essay assignments without
+  changing personal records.
+- Added five Vitest integration tests that apply the real migration in memory
+  and verify core tables/foreign keys, taxonomy idempotency, primary and
+  secondary families plus manual override, personal/demo isolation, and
+  multi-school essay relationships.
+- Verified persistence code commit:
+  `dd4753f97636ed6fe7e8480e0ff178f008583a38` — "Add local SQLite persistence
+  foundation".
 
 ## In Progress
 
-P0 Phase 1 (Foundation). Application setup, the base design system,
-navigation, canonical test runner, and scaffold setup documentation are
-complete. The local persistence layer is the next highest-priority item.
+P0 Phase 1 (Foundation). The remaining highest-priority work is wiring database
+initialization and the explicit personal/demo workspace choice into the App
+Router UI, then exposing the seeded data through real foundation views.
 
 ## Next Steps
 
-1. Complete P0 Phase 1's local persistence foundation: choose the lightweight
-   typed SQLite ORM within the spec, add the schema for all required core
-   entities and many-to-many relationships, and create migrations.
-2. Seed the editable ten-family taxonomy and secondary tags, then add a
-   synthetic demo-data system that cannot silently mix with personal data.
-3. Add focused unit/integration tests for schema constraints, taxonomy seeding,
-   and personal/demo isolation; include them in `run_tests.sh`.
-4. Continue with P0 Phase 2 only after the full Phase 1 foundation is verified.
+1. Add a server-only repository/service boundary that migrates the local
+   database, initializes the personal workspace, and returns scoped workspace
+   summaries without leaking records across workspaces.
+2. Make the home-page workspace choices explicit actions: open the empty
+   personal workspace or load/reset the clearly labeled synthetic demo, with a
+   visible active-workspace state and no silent mixing.
+3. Replace the static section placeholders with read-only views of the seeded
+   schools, prompts, essays, families, and reuse examples.
+4. Add browser coverage for workspace selection once the end-to-end flow is
+   interactive; continue to Phase 2 CRUD only after Phase 1 is fully verified.
 
 ## Failed Approaches
 
@@ -127,6 +146,14 @@ complete. The local persistence layer is the next highest-priority item.
   port binding (`EPERM`). The supported `next build --webpack` path avoided the
   restricted mechanism and passed repeatedly; the canonical build script now
   uses webpack.
+- The first file-backed `drizzle-kit migrate` attempt failed because Drizzle
+  does not create the configured parent `data/` directory. The project-local
+  script now creates that ignored directory before migrating; the same command
+  then applied the migration successfully.
+- The first database test run passed four of five tests and correctly exposed a
+  synthetic fixture error: both intended cross-school assignments pointed to
+  prompts at the same school. The fixture was corrected to use two schools; the
+  unchanged assertion and all other tests then passed.
 
 ## Blockers
 
@@ -156,11 +183,21 @@ None.
   HTTP checks confirmed `/` rendered the separate "Personal · empty" and
   "Fictional · demo preview" entry states, and `/reuse` rendered the labeled
   foundation placeholder. The server was then stopped.
-- No browser automation or database tests exist yet; both remain later P0 work.
+- Persistence verification: `npm run db:generate` created a 14-table migration;
+  `npx drizzle-kit check` reported the migration history consistent;
+  `npm run db:migrate` created a repo-local database and applied the migration;
+  a read-only SQLite query confirmed all 14 application tables.
+- `npm test` — 5/5 persistence integration tests passed. `./run_tests.sh` then
+  passed end to end with ESLint, strict route/type generation, those five tests,
+  the production build, and the existing 80/80 overnight assertions.
+- `npm audit --omit=dev` — zero production dependency vulnerabilities. The
+  install reported four moderate advisories in development-only transitive
+  packages; no risky forced upgrade was attempted.
+- Browser automation does not exist yet and remains later P0 work.
 
 ## Last Verified Commit
 
-`1a34260822a2ab58cd23703187fbc58403ba6131` — "Checkpoint verified Next.js
-application scaffold". `./run_tests.sh` passed immediately before this code
-commit, and a production runtime smoke check passed. The next commit changes
-only this handoff document to record the checkpoint accurately.
+`dd4753f97636ed6fe7e8480e0ff178f008583a38` — "Add local SQLite persistence
+foundation". `./run_tests.sh`, migration consistency/application checks, and
+the production dependency audit passed immediately before this code commit.
+The next commit changes only this handoff document to record the checkpoint.
