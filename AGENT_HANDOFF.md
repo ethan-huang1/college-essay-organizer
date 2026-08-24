@@ -16,9 +16,8 @@ See [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) for the objective and rules.
 
 ## Current Status
 
-Layer 2 handoff test in progress. Objective (temporary, see
-OVERNIGHT_TASK.md) is 1 of 2 steps done. Stopping deliberately here so the
-next agent must read this file and continue, rather than starting over.
+Layer 2 handoff test complete. Both steps of the temporary objective in
+OVERNIGHT_TASK.md are implemented, independently verified, and committed.
 
 ## Completed
 
@@ -26,40 +25,33 @@ next agent must read this file and continue, rather than starting over.
   (commit `65b0160`).
 - Created `scripts/handoff_check.py` with `add(a, b)` implemented and an
   assert-based self-check covering it (commit `e5cd82a`).
+- Implemented `subtract(a, b)` and extended the assert-based self-check with
+  two subtract cases (commit `280835d`).
 
 ## In Progress
 
-- `subtract(a, b)` in `scripts/handoff_check.py` is a stub that raises
-  `NotImplementedError`. Not started beyond the stub.
+None. The temporary Layer 2 handoff-test objective is complete.
 
 ## Next Steps
 
-1. Implement `subtract(a, b)` in `scripts/handoff_check.py` (replace the
-   `NotImplementedError` body — e.g. `return a - b`).
-2. Extend the `if __name__ == "__main__":` self-check block to also assert
-   `subtract(...)` on at least two cases (mirror the style already used for
-   `add`).
-3. Run `python3 scripts/handoff_check.py` from the repo root and confirm it
-   prints ok with no assertion errors.
-4. Commit that change (this is the second and final step of the objective's
-   Definition of Done in OVERNIGHT_TASK.md).
-5. Update this file: mark both steps Completed, update Current Status to
-   done, and record the new commit hash under Last Verified Commit.
-6. Report back to the human that the handoff test succeeded — do not delete
-   `scripts/handoff_check.py` or the Objective section yourself; that
-   cleanup is explicitly left for the human to confirm and trigger.
+The human may confirm the handoff test succeeded and then trigger the cleanup
+described in OVERNIGHT_TASK.md. Do not delete `scripts/handoff_check.py` or
+the temporary Objective section until that human confirmation.
 
 ## Blockers
 
-None. This step is unblocked and ready to resume immediately.
+None. The objective is complete.
 
 ## Tests/Verification Performed
 
 - Ran `python3 scripts/handoff_check.py` after implementing `add` — output
-  was `add: ok`, no errors. This is the only verification step so far;
-  `subtract` has no coverage yet (it isn't implemented).
+  was `add: ok`, no errors.
+- Ran `python3 scripts/handoff_check.py` after implementing `subtract` and
+  again from committed state — output was `add: ok` and `subtract: ok`, with
+  no assertion errors.
 
 ## Last Verified Commit
 
-`e5cd82a` — "Implement add() for handoff-test module (portion 1 of 2)".
-Working tree was clean at that point (verified with `git status`).
+`280835d` — "Implement subtract() for handoff-test module (portion 2 of 2)".
+The committed code state passed the full self-check, and the working tree was
+clean before this handoff-document update.
