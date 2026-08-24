@@ -7,10 +7,28 @@ this once at the start of a session and follow it for the whole run.
 
 ## Objective
 
-<!-- Fill in before starting an overnight run. -->
-(No objective set yet. The Layer 2 handoff-test objective that lived here —
-`scripts/handoff_check.py` with `add`/`subtract` — passed and was cleaned up
-by human authorization; its commits remain in git history for reference.)
+<!-- TEMPORARY — Layer 3 automated-pipeline test. Delete this section and the
+     file it creates once a human confirms the automated Claude -> Codex run
+     (scripts/overnight_handoff.sh) worked end-to-end for real. -->
+
+Build `scripts/layer3_smoke.py`, a tiny throwaway module with two pure
+functions, each implemented and verified **one at a time** as its own commit
+— same pattern as the (now cleaned up) Layer 2 test, new file/functions so
+there's no confusion with that history. This does not touch the real College
+Essay Organizer app.
+
+1. Implement `multiply(a, b)`. Verify it with an assert-based self-check in
+   the file's `if __name__ == "__main__":` block (no test framework — this
+   repo has no dependencies). Run it, confirm it passes, then commit.
+2. Implement `divide(a, b)` (integer inputs, return a float; no need to
+   handle division by zero specially — just let it raise). Extend the
+   self-check to cover it, run it, confirm it passes, then commit.
+
+Definition of Done for this objective: both functions implemented and
+covered by the self-check, the self-check passes end-to-end, and each step
+landed as its own verified commit. Once a human confirms the automated
+handoff worked, delete `scripts/layer3_smoke.py` and this Objective section
+— none of it is part of the real product.
 
 ## Rules
 
