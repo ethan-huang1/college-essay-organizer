@@ -51,12 +51,42 @@ npm run db:migrate             # apply the committed migrations
 npm run dev                    # http://localhost:3000
 ```
 
+`.env.local` is gitignored. See [Access control](#access-control) for the
+`BASIC_AUTH_*` variables, which are optional locally and required in
+production.
+
 The personal workspace and its taxonomy are created automatically on first
 request, so a freshly migrated database opens to an empty workspace ready for
 its first college.
 
 Useful scripts: `npm run db:generate` (after an intentional schema change),
 `npm run db:studio` (browse the data), `npm run db:migrate` (apply migrations).
+
+## Access control
+
+The whole app sits behind HTTP Basic auth, enforced in
+[`src/proxy.ts`](src/proxy.ts) (Next.js 16 renamed `middleware.ts` to
+`proxy.ts`) with the credential check in
+[`basic-auth.ts`](src/lib/basic-auth.ts).
+
+```bash
+BASIC_AUTH_USER="you"
+BASIC_AUTH_PASSWORD="a long random string"
+```
+
+Two deliberate behaviours:
+
+- **It fails closed in production.** If either variable is missing, the
+  deployment returns 503 for every request instead of serving your essays
+  unprotected. A missing environment variable is the most likely way this
+  protection would silently disappear, so it is loud.
+- **Local development is not gated** while the variables are unset, so `npm run
+  dev` needs no setup. Set them locally and the gate applies there too.
+
+This is a single shared credential, not a user system: there are no accounts,
+and anyone who authenticates can read and edit everything in both workspaces.
+That matches the product today — one student, one private deployment — but it
+is the thing to replace first if this is ever shared.
 
 ## How prompts get into the app
 
@@ -204,9 +234,9 @@ Recorded honestly rather than papered over:
 - **36 of 100 schools import no prompts** (`needs-review` above). This is a
   data-availability limit, not a bug, and each record says exactly what was
   unresolved.
-- Single user, no authentication, no multi-device sync. Workspaces are separated
-  by a cookie, not by identity — anyone with the deployment URL sees the same
-  personal workspace.
+- Single user and a single shared Basic-auth credential rather than accounts;
+  no multi-device sync. Workspaces are separated by a cookie, not by identity,
+  so everyone who logs in shares the same personal workspace.
 - Migrations are applied manually (`npm run db:migrate`), deliberately not on
   boot: concurrent serverless instances racing migrations is how a schema gets
   corrupted.
