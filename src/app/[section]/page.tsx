@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
+import { createPromptAction, deletePromptAction, updatePromptAction } from "../prompt-actions";
 import { createSchoolAction, deleteSchoolAction, updateSchoolAction } from "../school-actions";
 
 const sections = {
@@ -45,6 +46,35 @@ function EmptyState({ section }: { section: SectionName }) {
   );
 }
 
+type WorkspacePrompt = WorkspaceSnapshot["prompts"][number];
+
+function PromptFields({ snapshot, prompt }: { snapshot: WorkspaceSnapshot; prompt?: WorkspacePrompt }) {
+  const secondaryIds = new Set(prompt?.secondaryFamilies.map((family) => family.id));
+  const deadline = prompt?.deadline ? prompt.deadline.toISOString().slice(0, 10) : "";
+  return (
+    <div className="prompt-fields">
+      <label>School<select name="schoolId" required defaultValue={prompt?.schoolId ?? snapshot.schools[0]?.id}>
+        {snapshot.schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
+      </select></label>
+      <label>Title<input name="title" required minLength={2} maxLength={160} defaultValue={prompt?.title} placeholder="Community contribution" /></label>
+      <label className="field-wide">Full prompt<textarea name="promptText" required minLength={10} maxLength={5000} defaultValue={prompt?.promptText} placeholder="Paste the complete prompt text" /></label>
+      <label>Minimum words<input name="minWordCount" type="number" min={0} step={1} defaultValue={prompt?.minWordCount ?? ""} /></label>
+      <label>Maximum words<input name="maxWordCount" type="number" min={0} step={1} defaultValue={prompt?.maxWordCount ?? ""} /></label>
+      <label>Requirement<select name="requirement" defaultValue={prompt?.requirement ?? "required"}><option value="required">Required</option><option value="optional">Optional</option></select></label>
+      <label>Status<select name="status" defaultValue={prompt?.status ?? "not-started"}><option value="not-started">Not started</option><option value="in-progress">In progress</option><option value="complete">Complete</option><option value="submitted">Submitted</option></select></label>
+      <label>Deadline<input name="deadline" type="date" defaultValue={deadline} /></label>
+      <label>Primary family<select name="primaryFamilyId" defaultValue={prompt?.primaryFamily?.id ?? ""}><option value="">No primary family</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
+      <fieldset className="family-picker field-wide">
+        <legend>Secondary families <span>choose any that also apply</span></legend>
+        <div>{snapshot.families.map((family) => (
+          <label key={family.id}><input type="checkbox" name="secondaryFamilyIds" value={family.id} defaultChecked={secondaryIds.has(family.id)} /><span>{family.name}</span></label>
+        ))}</div>
+      </fieldset>
+      <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={prompt?.notes ?? ""} placeholder="Requirements, ideas, or context" /></label>
+    </div>
+  );
+}
+
 function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   return (
     <>
@@ -53,6 +83,17 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
         <div><label htmlFor="school-notes">Notes <span>optional</span></label><input id="school-notes" name="notes" maxLength={500} placeholder="Deadline, portal, or context" /></div>
         <button type="submit">Add school</button>
       </form>
+
+      {snapshot.schools.length > 0 ? (
+        <details className="prompt-create-panel">
+          <summary>Add a prompt</summary>
+          <form action={createPromptAction} className="prompt-form">
+            <PromptFields snapshot={snapshot} />
+            <p className="classification-help">Families selected here are saved as a transparent manual classification.</p>
+            <button type="submit">Add prompt</button>
+          </form>
+        </details>
+      ) : null}
 
       {snapshot.schools.length === 0 ? <EmptyState section="schools" /> : (
         <div className="record-list">
@@ -81,11 +122,36 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                     </form>
                   </details>
                 </div>
-                <ul className="compact-list">
+                <div className="prompt-list">
                   {schoolPrompts.map((prompt) => (
-                    <li key={prompt.id}><span>{prompt.title}</span><span>{prompt.maxWordCount ?? "—"} words</span></li>
+                    <article className="prompt-record" key={prompt.id}>
+                      <div className="prompt-record-heading">
+                        <div><span className="record-meta">{prompt.requirement} · {prompt.status.replace("-", " ")}</span><h3>{prompt.title}</h3></div>
+                        <span>{prompt.maxWordCount ?? "—"} words</span>
+                      </div>
+                      <p>{prompt.promptText}</p>
+                      <div className="family-chips">
+                        {prompt.primaryFamily ? <span className="primary-chip">Primary · {prompt.primaryFamily.name}</span> : <span>Unclassified</span>}
+                        {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+                      </div>
+                      <span className="classification-source">{prompt.classificationSource === "manual" ? "Manual override" : `Deterministic suggestion · ${prompt.classificationConfidence}% confidence`}</span>
+                      <details className="prompt-actions">
+                        <summary>Edit classification or prompt</summary>
+                        <form action={updatePromptAction} className="prompt-form">
+                          <input name="promptId" type="hidden" value={prompt.id} />
+                          <PromptFields snapshot={snapshot} prompt={prompt} />
+                          <p className="classification-help">Saving replaces the family assignment and marks it as a manual override.</p>
+                          <button type="submit">Save prompt</button>
+                        </form>
+                        <form action={deletePromptAction} className="delete-form">
+                          <input name="promptId" type="hidden" value={prompt.id} />
+                          <span>Deleting also removes this prompt&apos;s family links, matches, and response assignment.</span>
+                          <button type="submit">Delete prompt</button>
+                        </form>
+                      </details>
+                    </article>
                   ))}
-                </ul>
+                </div>
               </article>
             );
           })}

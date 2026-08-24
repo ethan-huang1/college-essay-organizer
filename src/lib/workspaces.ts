@@ -45,7 +45,18 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
       ...school,
       promptCount: workspacePrompts.filter((prompt) => prompt.schoolId === school.id).length,
     })),
-    prompts: workspacePrompts,
+    prompts: workspacePrompts.map((prompt) => {
+      const links = familyPromptLinks.filter((link) => link.promptId === prompt.id);
+      const primaryLink = links.find((link) => link.isPrimary);
+      return {
+        ...prompt,
+        primaryFamily: workspaceFamilies.find((family) => family.id === primaryLink?.familyId) ?? null,
+        secondaryFamilies: links
+          .filter((link) => !link.isPrimary)
+          .map((link) => workspaceFamilies.find((family) => family.id === link.familyId))
+          .filter((family): family is NonNullable<typeof family> => Boolean(family)),
+      };
+    }),
     essays: workspaceEssays.map((essay) => ({
       ...essay,
       wordCount: wordCount(essay.currentContent),

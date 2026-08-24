@@ -5,6 +5,7 @@ import { migrateDatabase, openDatabase } from "./client";
 import {
   assignedEssayResponses,
   essayFamilyLinks,
+  essayPromptMatches,
   essays,
   essayVersions,
   promptFamilies,
@@ -21,6 +22,7 @@ import {
 } from "./seed";
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
+import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -75,31 +77,38 @@ describe("local persistence foundation", () => {
   it("supports one primary and multiple secondary prompt families with manual override", () => {
     resetDemoWorkspace(connection.db);
     const promptId = `${DEMO_WORKSPACE_ID}:prompt:1`;
+    const prompt = connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get();
     const secondaryFamilies = connection.db
       .select({ id: promptFamilies.id })
       .from(promptFamilies)
       .where(inArray(promptFamilies.sortOrder, [2, 3]))
       .all();
+    if (!prompt) throw new Error("Expected a seeded prompt.");
 
-    connection.db.insert(promptFamilyLinks).values(
-      secondaryFamilies.map((family, index) => ({
-        id: `${DEMO_WORKSPACE_ID}:manual-secondary:${index + 1}`,
-        workspaceId: DEMO_WORKSPACE_ID,
-        promptId,
-        familyId: family.id,
-        isPrimary: false,
-        source: "manual" as const,
-      })),
-    ).run();
-    connection.db.update(promptFamilyLinks)
-      .set({ source: "manual" })
-      .where(eq(promptFamilyLinks.id, `${DEMO_WORKSPACE_ID}:prompt-family:1`))
-      .run();
+    updatePrompt(connection.db, DEMO_WORKSPACE_ID, promptId, {
+      schoolId: prompt.schoolId,
+      title: prompt.title,
+      promptText: `${prompt.promptText}\n\nKeep this paragraph break.`,
+      minWordCount: prompt.minWordCount,
+      maxWordCount: prompt.maxWordCount,
+      requirement: prompt.requirement,
+      status: prompt.status,
+      deadline: prompt.deadline,
+      notes: prompt.notes ?? undefined,
+      primaryFamilyId: `${DEMO_WORKSPACE_ID}:family:core-story`,
+      secondaryFamilyIds: secondaryFamilies.map((family) => family.id),
+    });
 
     const links = connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).all();
+    const overriddenPrompt = connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get();
     expect(links).toHaveLength(3);
     expect(links.filter((link) => link.isPrimary)).toHaveLength(1);
     expect(links.filter((link) => link.source === "manual")).toHaveLength(3);
+    expect(overriddenPrompt).toMatchObject({
+      classificationSource: "manual",
+      classificationConfidence: 0,
+      promptText: `${prompt.promptText}\n\nKeep this paragraph break.`,
+    });
 
     expect(() => connection.db.insert(promptFamilyLinks).values({
       id: `${DEMO_WORKSPACE_ID}:second-primary`,
@@ -184,5 +193,90 @@ describe("local persistence foundation", () => {
     deleteSchool(connection.db, PERSONAL_WORKSPACE_ID, created.id);
     expect(connection.db.select().from(schools).where(eq(schools.id, created.id)).all()).toHaveLength(0);
     expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, created.id)).all()).toHaveLength(0);
+  });
+
+  it("creates and updates prompts with one primary, multiple secondary families, and manual provenance", () => {
+    initializePersonalWorkspace(connection.db);
+    const school = createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Harbor College" });
+    if (!school) throw new Error("Expected the school to be created.");
+    const families = connection.db.select().from(promptFamilies)
+      .where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID)).all();
+    const promptId = createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+      schoolId: school.id,
+      title: "Community reflection",
+      promptText: "Describe a community that shaped you and how you contributed to it.",
+      minWordCount: 200,
+      maxWordCount: 350,
+      requirement: "required",
+      status: "not-started",
+      primaryFamilyId: families[2].id,
+      secondaryFamilyIds: [families[0].id, families[8].id, families[2].id],
+    });
+
+    let links = connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).all();
+    expect(links).toHaveLength(3);
+    expect(links.filter((link) => link.isPrimary).map((link) => link.familyId)).toEqual([families[2].id]);
+    expect(links.every((link) => link.source === "manual")).toBe(true);
+    expect(connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get()?.classificationSource).toBe("manual");
+
+    updatePrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId, {
+      schoolId: school.id,
+      title: "Community and identity reflection",
+      promptText: "Describe a community that shaped your identity and explain your contribution.",
+      requirement: "optional",
+      status: "in-progress",
+      primaryFamilyId: families[1].id,
+      secondaryFamilyIds: [families[2].id],
+    });
+    links = connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).all();
+    expect(links).toHaveLength(2);
+    expect(links.find((link) => link.isPrimary)?.familyId).toBe(families[1].id);
+    expect(connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get()).toMatchObject({
+      title: "Community and identity reflection",
+      requirement: "optional",
+      status: "in-progress",
+      classificationSource: "manual",
+    });
+    const snapshotPrompt = getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID)?.prompts
+      .find((prompt) => prompt.id === promptId);
+    expect(snapshotPrompt?.primaryFamily?.id).toBe(families[1].id);
+    expect(snapshotPrompt?.secondaryFamilies.map((family) => family.id)).toEqual([families[2].id]);
+  });
+
+  it("rejects cross-workspace prompt schools and families without partial writes", () => {
+    initializePersonalWorkspace(connection.db);
+    resetDemoWorkspace(connection.db);
+    const personalSchool = createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Harbor College" });
+    if (!personalSchool) throw new Error("Expected the school to be created.");
+    const personalFamily = connection.db.select().from(promptFamilies)
+      .where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID)).get();
+    const demoFamily = connection.db.select().from(promptFamilies)
+      .where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID)).get();
+    if (!personalFamily || !demoFamily) throw new Error("Expected seeded families.");
+
+    const baseline = connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID)).all().length;
+    expect(() => createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+      schoolId: `${DEMO_WORKSPACE_ID}:school:1`, title: "Wrong school", promptText: "This must not be inserted into personal data.",
+      requirement: "required", status: "not-started", primaryFamilyId: personalFamily.id,
+    })).toThrow("School not found");
+    expect(() => createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+      schoolId: personalSchool.id, title: "Wrong family", promptText: "This must not link a demo family.",
+      requirement: "required", status: "not-started", primaryFamilyId: demoFamily.id,
+    })).toThrow("family");
+    expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(baseline);
+  });
+
+  it("deletes only the scoped prompt and cascades its relationships", () => {
+    resetDemoWorkspace(connection.db);
+    const promptId = `${DEMO_WORKSPACE_ID}:prompt:1`;
+    expect(() => deletePrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId)).toThrow();
+    expect(connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get()).toBeDefined();
+
+    deletePrompt(connection.db, DEMO_WORKSPACE_ID, promptId);
+    expect(connection.db.select().from(prompts).where(eq(prompts.id, promptId)).all()).toHaveLength(0);
+    expect(connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).all()).toHaveLength(0);
+    expect(connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.promptId, promptId)).all()).toHaveLength(0);
+    expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.promptId, promptId)).all()).toHaveLength(0);
+    expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(9);
   });
 });
