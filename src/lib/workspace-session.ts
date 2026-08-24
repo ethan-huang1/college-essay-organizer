@@ -16,7 +16,14 @@ export async function getActiveWorkspaceSnapshot() {
     ? await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, requestedId)).then((rows) => rows[0])
     : null;
   const workspaceId = requestedWorkspace?.id ?? PERSONAL_WORKSPACE_ID;
-  const snapshot = await getWorkspaceSnapshot(db, workspaceId);
+  let snapshot = await getWorkspaceSnapshot(db, workspaceId);
+
+  // The personal workspace is created on demand, so a missing one is
+  // recoverable rather than fatal: recreate it and read again.
+  if (!snapshot && workspaceId === PERSONAL_WORKSPACE_ID) {
+    const { db: readyDb } = await getReadyDatabase({ force: true });
+    snapshot = await getWorkspaceSnapshot(readyDb, workspaceId);
+  }
 
   if (!snapshot) throw new Error(`Workspace ${workspaceId} was not initialized.`);
   return snapshot;

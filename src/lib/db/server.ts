@@ -21,8 +21,14 @@ export function getAppDatabase() {
 // exist. Both inserts are idempotent, so this runs once per warm instance
 // rather than once per request - and clears itself on failure so a transient
 // connection error is retried instead of cached forever.
-export async function getReadyDatabase() {
+//
+// `force` re-runs it after the cached promise has already resolved. That
+// matters when the row disappears underneath a live process - a restored
+// backup, a switched Neon branch, a manually dropped workspace - which would
+// otherwise hard-fail every request until the process recycled.
+export async function getReadyDatabase(options: { force?: boolean } = {}) {
   const connection = getAppDatabase();
+  if (options.force) databaseGlobal.collegeEssayReady = undefined;
   databaseGlobal.collegeEssayReady ??= initializePersonalWorkspace(connection.db).catch((error) => {
     databaseGlobal.collegeEssayReady = undefined;
     throw error;

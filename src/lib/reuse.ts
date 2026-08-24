@@ -25,12 +25,15 @@ function resolveFamilySlugs(links: FamilyLink[], nameById: Map<string, string>) 
 // risk of a stale/incremental match surviving after an essay or prompt
 // changes - simpler and safer than trying to patch individual rows.
 export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: string) {
-  const workspaceEssays = await db.select().from(essays).where(eq(essays.workspaceId, workspaceId));
-  const workspacePrompts = await db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId));
-  const workspaceSchools = await db.select().from(schools).where(eq(schools.workspaceId, workspaceId));
-  const workspaceFamilies = await db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
-  const essayLinks = await db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId));
-  const promptLinks = await db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId));
+  const [workspaceEssays, workspacePrompts, workspaceSchools, workspaceFamilies, essayLinks, promptLinks] =
+    await Promise.all([
+      db.select().from(essays).where(eq(essays.workspaceId, workspaceId)).execute(),
+      db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId)).execute(),
+      db.select().from(schools).where(eq(schools.workspaceId, workspaceId)).execute(),
+      db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId)).execute(),
+      db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).execute(),
+      db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).execute(),
+    ]);
   const nameById = new Map(workspaceFamilies.map((family) => [family.id, family.name]));
 
   await db.transaction(async (tx) => {

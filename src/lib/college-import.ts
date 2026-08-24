@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { classifyText } from "./classification";
 import { CURRENT_CYCLE_LABEL } from "./cycle";
@@ -62,13 +62,10 @@ async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: strin
   return new Map(rows.map((row) => [row.name, row.id]));
 }
 
-async function assignFamilies(
-  db: Pick<AppDatabase, "select" | "insert">,
-  workspaceId: string,
-  promptId: string,
-  promptText: string,
-  familyIds: Map<string, string>,
-) {
+// Pure: turns a prompt's text into the category-link rows it should get. No
+// database access, so a whole school's links can be built in memory and
+// inserted in one statement.
+function familyLinkRows(workspaceId: string, promptId: string, promptText: string, familyIds: Map<string, string>) {
   const classification = classifyText(promptText);
   const familyIdFor = (slug: string) => familyIds.get(FAMILY_NAME_BY_SLUG.get(slug) ?? "") ?? null;
   const primaryFamilyId = classification.primarySlug ? familyIdFor(classification.primarySlug) : null;
@@ -79,46 +76,56 @@ async function assignFamilies(
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
     ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
   ];
-  if (assignments.length > 0) {
-    await db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({
-      id: crypto.randomUUID(),
-      workspaceId,
-      promptId,
-      familyId,
-      isPrimary,
-      source: "deterministic" as const,
-    })));
-  }
-  return classification.confidence;
+  return assignments.map(({ familyId, isPrimary }) => ({
+    id: crypto.randomUUID(),
+    workspaceId,
+    promptId,
+    familyId,
+    isPrimary,
+    source: "deterministic" as const,
+  }));
 }
 
 type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number };
 
-// Inserts a brand-new prompt, or - if a prompt with the same (schoolId,
-// externalRef) already exists - detects whether anything tracked actually
-// changed. Identical re-imports are true no-ops (idempotent); a genuine
-// change updates the row, records the prior state in promptChangeLog, and
-// flips verificationStatus to needs-review so a human notices rather than
-// silently trusting a re-fetch. Never creates a duplicate prompt.
-async function upsertPrompt(
+// Imports a school's whole prompt set in a fixed number of round-trips rather
+// than five per prompt: one read of everything that already exists, the
+// create/update/unchanged decision made in memory, then one transaction that
+// bulk-inserts the new prompts and their category links. Against a network
+// database the per-prompt version cost ~5 round-trips each, which made a
+// 112-prompt demo rebuild take 15 seconds.
+//
+// The semantics are unchanged and still covered by the persistence tests: an
+// identical re-import is a true no-op, and a prompt whose official wording
+// changed is updated, recorded in promptChangeLog, and flipped to
+// needs-review so a human notices.
+async function upsertPrompts(
   db: AppDatabase,
   workspaceId: string,
   schoolId: string,
   cycleId: string,
-  raw: RawPromptRecord,
+  rawPrompts: readonly RawPromptRecord[],
   recordDefaults: { status: VerificationStatus; sourceUrl: string | null; platform: ApplicationPlatform; retrievedAt: Date },
-  counts: ImportCounts,
   familyIds: Map<string, string>,
 ) {
-  const verificationStatus = raw.verificationStatus ?? recordDefaults.status;
-  const existing = await db.select().from(prompts)
-    .where(and(eq(prompts.schoolId, schoolId), eq(prompts.externalRef, raw.externalRef)))
-    .then((rows) => rows[0]);
+  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
+  const externalRefs = rawPrompts.map((raw) => raw.externalRef);
+  const existingRows = externalRefs.length
+    ? await db.select().from(prompts)
+        .where(and(eq(prompts.schoolId, schoolId), inArray(prompts.externalRef, externalRefs)))
+    : [];
+  const existingByRef = new Map(existingRows.map((row) => [row.externalRef, row]));
 
-  if (!existing) {
-    await db.transaction(async (tx) => {
+  const newPrompts: (typeof prompts.$inferInsert)[] = [];
+  const newLinks: (typeof promptFamilyLinks.$inferInsert)[] = [];
+  const changed: { existing: (typeof existingRows)[number]; raw: RawPromptRecord }[] = [];
+
+  for (const raw of rawPrompts) {
+    const existing = existingByRef.get(raw.externalRef);
+
+    if (!existing) {
       const promptId = crypto.randomUUID();
-      await tx.insert(prompts).values({
+      newPrompts.push({
         id: promptId,
         workspaceId,
         schoolId,
@@ -133,48 +140,63 @@ async function upsertPrompt(
         requirement: raw.requirement,
         conditionalNote: raw.conditionalNote ?? null,
         classificationSource: "deterministic",
-        verificationStatus,
+        verificationStatus: raw.verificationStatus ?? recordDefaults.status,
         applicationPlatform: recordDefaults.platform,
         sourceUrl: recordDefaults.sourceUrl,
         retrievedAt: recordDefaults.retrievedAt,
       });
-      await assignFamilies(tx, workspaceId, promptId, `${raw.title} ${raw.promptText}`, familyIds);
-    });
-    counts.created += 1;
-    return;
+      newLinks.push(...familyLinkRows(workspaceId, promptId, `${raw.title} ${raw.promptText}`, familyIds));
+      counts.created += 1;
+      continue;
+    }
+
+    if (!promptContentChanged(existing, raw)) {
+      counts.unchanged += 1;
+      continue;
+    }
+
+    changed.push({ existing, raw });
+    counts.updated += 1;
+    counts.flagged += 1;
   }
 
-  if (!promptContentChanged(existing, raw)) {
-    counts.unchanged += 1;
-    return;
-  }
+  if (newPrompts.length === 0 && changed.length === 0) return counts;
 
   await db.transaction(async (tx) => {
-    await tx.insert(promptChangeLog).values({
-      id: crypto.randomUUID(),
-      workspaceId,
-      promptId: existing.id,
-      previousPromptText: existing.promptText,
-      previousMinWordCount: existing.minWordCount,
-      previousMaxWordCount: existing.maxWordCount,
-    });
-    await tx.update(prompts).set({
-      title: raw.title,
-      promptText: raw.promptText,
-      minWordCount: raw.minWordCount ?? null,
-      maxWordCount: raw.maxWordCount ?? null,
-      minCharCount: raw.minCharCount ?? null,
-      maxCharCount: raw.maxCharCount ?? null,
-      requirement: raw.requirement,
-      conditionalNote: raw.conditionalNote ?? null,
-      verificationStatus: "needs-review",
-      sourceUrl: recordDefaults.sourceUrl,
-      retrievedAt: recordDefaults.retrievedAt,
-      updatedAt: new Date(),
-    }).where(eq(prompts.id, existing.id));
+    if (newPrompts.length > 0) await tx.insert(prompts).values(newPrompts);
+    if (newLinks.length > 0) await tx.insert(promptFamilyLinks).values(newLinks);
+
+    if (changed.length > 0) {
+      await tx.insert(promptChangeLog).values(changed.map(({ existing }) => ({
+        id: crypto.randomUUID(),
+        workspaceId,
+        promptId: existing.id,
+        previousPromptText: existing.promptText,
+        previousMinWordCount: existing.minWordCount,
+        previousMaxWordCount: existing.maxWordCount,
+      })));
+      // Updates stay one statement per prompt: a changed official prompt is
+      // rare, so there is nothing to gain from a bulk CASE expression.
+      for (const { existing, raw } of changed) {
+        await tx.update(prompts).set({
+          title: raw.title,
+          promptText: raw.promptText,
+          minWordCount: raw.minWordCount ?? null,
+          maxWordCount: raw.maxWordCount ?? null,
+          minCharCount: raw.minCharCount ?? null,
+          maxCharCount: raw.maxCharCount ?? null,
+          requirement: raw.requirement,
+          conditionalNote: raw.conditionalNote ?? null,
+          verificationStatus: "needs-review",
+          sourceUrl: recordDefaults.sourceUrl,
+          retrievedAt: recordDefaults.retrievedAt,
+          updatedAt: new Date(),
+        }).where(eq(prompts.id, existing.id));
+      }
+    }
   });
-  counts.updated += 1;
-  counts.flagged += 1;
+
+  return counts;
 }
 
 export type ImportCollegeResult = {
@@ -194,7 +216,6 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
   const currentCycleId = await getOrCreateCycle(db, workspaceId, CURRENT_CYCLE_LABEL);
   const school = await getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), currentCycleId);
   const source = lookupSchoolSource(school.name);
-  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
 
   if (!source || source.prompts.length === 0) {
     const note = source?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.";
@@ -212,7 +233,7 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
       verificationStatus: source?.verificationStatus ?? "manual",
       sourceUrl: source?.sourceUrl ?? null,
       note,
-      counts,
+      counts: { created: 0, updated: 0, unchanged: 0, flagged: 0 },
     };
   }
 
@@ -220,16 +241,13 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
   // record actually represents (may differ from the school's own "current"
   // cycle for a previous-cycle record).
   const promptCycleId = await getOrCreateCycle(db, workspaceId, source.cycleLabel);
-  const retrievedAt = new Date(source.retrievedAt);
   const familyIds = await loadFamilyIds(db, workspaceId);
-  for (const raw of source.prompts) {
-    await upsertPrompt(db, workspaceId, school.id, promptCycleId, raw, {
-      status: source.verificationStatus,
-      sourceUrl: source.sourceUrl,
-      platform: source.applicationPlatform,
-      retrievedAt,
-    }, counts, familyIds);
-  }
+  const counts = await upsertPrompts(db, workspaceId, school.id, promptCycleId, source.prompts, {
+    status: source.verificationStatus,
+    sourceUrl: source.sourceUrl,
+    platform: source.applicationPlatform,
+    retrievedAt: new Date(source.retrievedAt),
+  }, familyIds);
 
   return {
     schoolId: school.id,

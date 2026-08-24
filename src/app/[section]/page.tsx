@@ -49,6 +49,13 @@ function withFilters(base: string, filters: Filters, extra: { edit?: string; rem
 
 export const dynamic = "force-dynamic";
 
+// Server Actions inherit their page's timeout. Everything a student does is
+// well under a second, but rebuilding the example workspace imports 19 schools
+// and rescores 784 matches - about 6s against Neon - so the default 10s leaves
+// no headroom for a cold database wake. 60s is the Vercel Hobby ceiling.
+export const maxDuration = 60;
+
+
 export function generateStaticParams() {
   return Object.keys(sections).map((section) => ({ section }));
 }
