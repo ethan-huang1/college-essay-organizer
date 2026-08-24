@@ -35,8 +35,9 @@ The application provides a responsive editorial shell and navigation, explicit
 personal/demo workspace actions, cookie-scoped active workspace state, useful
 personal empty states, and real read-only views of seeded schools, prompts,
 essays, families, and reuse examples. The SQLite schema, migration, taxonomy,
-isolated seed services, and database tests are complete. Phase 2 CRUD and search
-workflows are the next priority.
+isolated seed services, and database tests are complete. Phase 2 has begun with
+verified workspace-scoped school create, rename, and delete workflows. Prompt
+and essay CRUD and search remain unfinished.
 
 ## Completed
 
@@ -124,22 +125,29 @@ workflows are the next priority.
   models and verified code commit
   `2467657a621fb4a35716517c20fb000d38f91bc4` — "Connect workspace selection to
   local data".
+- Added workspace-scoped school services and server actions for create, rename,
+  and delete. Names are normalized and validated; attempts to mutate a school
+  through another workspace fail; the UI explicitly warns that delete cascades
+  the school-owned prompts.
+- Added compact create/edit/delete forms to the Schools page and a seventh
+  integration test covering validation, workspace isolation, update, delete,
+  and prompt cascade behavior. Verified code commit:
+  `122f13818d563e29840698d754476a48722ba3fe` — "Add workspace-scoped school
+  CRUD".
 
 ## In Progress
 
-P0 Phase 2 (Core Organization). School CRUD is the highest-priority unfinished
-slice, followed by prompt CRUD and essay CRUD with classification controls,
-filtering, and search.
+P0 Phase 2 (Core Organization). School CRUD is complete. Prompt CRUD with
+primary/secondary classification editing is the highest-priority unfinished
+slice, followed by essay CRUD, filtering, and search.
 
 ## Next Steps
 
-1. Implement tested school create/edit/delete operations scoped to the active
-   workspace, with safe cascading behavior made explicit in the UI.
-2. Implement prompt CRUD, primary plus secondary family editing, and manual
+1. Implement prompt CRUD, primary plus secondary family editing, and manual
    classification override; retain deterministic/manual provenance.
-3. Implement essay CRUD, search, status/family filters, and canonical versus
+2. Implement essay CRUD, search, status/family filters, and canonical versus
    school-adaptation labels using immutable versions for content changes.
-4. Add Playwright coverage for workspace selection and one complete
+3. Add Playwright coverage for workspace selection and one complete
    organization workflow before moving into Phase 3 matching work.
 
 ## Failed Approaches
@@ -170,6 +178,10 @@ filtering, and search.
   unidentified listener, likely from the earlier interrupted smoke run. No
   process was killed; the verification used port 3101 and stopped only its own
   server session.
+- The first school-CRUD staging command used the literal App Router path
+  `src/app/[section]/page.tsx` without shell quoting, so zsh rejected the glob
+  before Git ran. Quoting the same repository path resolved it; no files or Git
+  state were changed by the failed command.
 
 ## Blockers
 
@@ -217,11 +229,14 @@ None.
   91/58/35 including the Northstar danger warning; switching back restored the
   unchanged personal empty state. Curl posts lacked a browser `Origin` header,
   causing two expected server warnings; page responses and actions succeeded.
+- School CRUD verification: `npm test` — 7/7 integration tests passed. The full
+  `./run_tests.sh` checkpoint passed ESLint, strict type generation, all seven
+  tests, the dynamic production build, and 80/80 overnight assertions.
 - Browser automation does not exist yet and remains P0 verification work.
 
 ## Last Verified Commit
 
-`2467657a621fb4a35716517c20fb000d38f91bc4` — "Connect workspace selection to
-local data". `./run_tests.sh` and the production personal/demo runtime smoke
-passed immediately before this code commit. The next commit changes only this
-handoff document to record the checkpoint.
+`122f13818d563e29840698d754476a48722ba3fe` — "Add workspace-scoped school
+CRUD". `./run_tests.sh` passed immediately before this code commit, and the
+focused seven-test suite passed after the final assertion cleanup. The next
+commit changes only this handoff document to record the checkpoint.
