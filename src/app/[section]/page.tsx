@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { TOP_UNIVERSITIES } from "@/lib/top-universities";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
+import { addCollegeAction } from "../college-actions";
 import {
   createEssayAction,
   deleteEssayAction,
@@ -12,7 +14,7 @@ import {
   updateEssayMetadataAction,
 } from "../essay-actions";
 import { createPromptAction, deletePromptAction, updatePromptAction } from "../prompt-actions";
-import { createSchoolAction, deleteSchoolAction, updateSchoolAction } from "../school-actions";
+import { deleteSchoolAction, updateSchoolAction } from "../school-actions";
 
 const sections = {
   schools: { title: "Schools & prompts", eyebrow: "Build the application list", description: "See every school and the prompts waiting for a response." },
@@ -82,14 +84,52 @@ function PromptFields({ snapshot, prompt }: { snapshot: WorkspaceSnapshot; promp
   );
 }
 
+function AddCollegeForm() {
+  return (
+    <form action={addCollegeAction} className="crud-form">
+      <div>
+        <label htmlFor="college-name">Add a college</label>
+        <input
+          id="college-name"
+          name="collegeName"
+          required
+          minLength={2}
+          maxLength={120}
+          list="top-universities"
+          placeholder="Search the top 100, or type any school"
+        />
+        <datalist id="top-universities">
+          {TOP_UNIVERSITIES.map((name) => <option key={name} value={name} />)}
+        </datalist>
+      </div>
+      <button type="submit">Add college</button>
+      <p className="classification-help field-wide">
+        Choosing a school we have verified 2026–27 prompts for imports and classifies them automatically. Any other
+        name (from the list or typed manually) still adds the school — you can add its prompts yourself below.
+      </p>
+    </form>
+  );
+}
+
+function VerificationBadge({ status, sourceUrl }: { status: WorkspaceSnapshot["prompts"][number]["verificationStatus"]; sourceUrl: string | null }) {
+  const label = {
+    "verified-2026-27": "Verified 2026–27",
+    "likely-current-unverified": "Likely current · unverified",
+    "previous-cycle": "Previous cycle",
+    manual: "Manually entered",
+  }[status];
+  const tone = status === "verified-2026-27" ? "verified" : status === "manual" ? "manual" : "unverified";
+  return sourceUrl ? (
+    <a className={`verification-badge ${tone}`} href={sourceUrl} target="_blank" rel="noreferrer">{label}</a>
+  ) : (
+    <span className={`verification-badge ${tone}`}>{label}</span>
+  );
+}
+
 function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   return (
     <>
-      <form action={createSchoolAction} className="crud-form">
-        <div><label htmlFor="school-name">School name</label><input id="school-name" name="name" required minLength={2} maxLength={120} placeholder="Add a college or university" /></div>
-        <div><label htmlFor="school-notes">Notes <span>optional</span></label><input id="school-notes" name="notes" maxLength={500} placeholder="Deadline, portal, or context" /></div>
-        <button type="submit">Add school</button>
-      </form>
+      <AddCollegeForm />
 
       {snapshot.schools.length > 0 ? (
         <details className="prompt-create-panel">
@@ -142,6 +182,7 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                         {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
                       </div>
                       <span className="classification-source">{prompt.classificationSource === "manual" ? "Manual override" : `Deterministic suggestion · ${prompt.classificationConfidence}% confidence`}</span>
+                      <div className="verification-row"><VerificationBadge status={prompt.verificationStatus} sourceUrl={prompt.sourceUrl} /></div>
                       <details className="prompt-actions">
                         <summary>Edit classification or prompt</summary>
                         <form action={updatePromptAction} className="prompt-form">

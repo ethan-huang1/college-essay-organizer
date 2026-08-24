@@ -1,4 +1,4 @@
-import { count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { migrateDatabase, openDatabase } from "./client";
@@ -25,6 +25,7 @@ import { createSchool, deleteSchool, updateSchool } from "../schools";
 import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
 import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, updateEssayMetadata } from "../essays";
 import { recomputeWorkspaceMatches } from "../reuse";
+import { importCollege } from "../college-import";
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -390,5 +391,48 @@ describe("local persistence foundation", () => {
     // Demo's hand-curated matches are untouched by a personal-workspace recompute.
     resetDemoWorkspace(connection.db);
     expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(3);
+  });
+
+  it("imports and auto-classifies a verified school's prompts, idempotently", () => {
+    initializePersonalWorkspace(connection.db);
+
+    const first = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Stanford University");
+    expect(first.verificationStatus).toBe("verified-2026-27");
+    expect(first.importedPromptCount).toBeGreaterThan(0);
+    expect(first.sourceUrl).toMatch(/^https:\/\//);
+
+    const imported = connection.db.select().from(prompts)
+      .where(and(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID), eq(prompts.schoolId, first.schoolId)))
+      .all();
+    expect(imported).toHaveLength(first.importedPromptCount);
+    expect(imported.every((prompt) => prompt.classificationSource === "deterministic")).toBe(true);
+    expect(imported.every((prompt) => prompt.verificationStatus === "verified-2026-27")).toBe(true);
+    const links = connection.db.select().from(promptFamilyLinks)
+      .where(inArray(promptFamilyLinks.promptId, imported.map((prompt) => prompt.id)))
+      .all();
+    expect(links.length).toBeGreaterThan(0);
+
+    // Re-adding the same school does not duplicate its school row or prompts.
+    const second = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "  stanford university  ".trim());
+    expect(second.importedPromptCount).toBe(0);
+    expect(connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(1);
+    expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, first.schoolId)).all()).toHaveLength(first.importedPromptCount);
+  });
+
+  it("adds a school with no verified prompts as 'not yet verified' rather than guessing", () => {
+    initializePersonalWorkspace(connection.db);
+    const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Some Unlisted College");
+    expect(result.importedPromptCount).toBe(0);
+    expect(result.verificationStatus).toBe("manual");
+    expect(result.note).toMatch(/not yet verified/i);
+    expect(connection.db.select().from(schools).where(eq(schools.id, result.schoolId)).get()?.name).toBe("Some Unlisted College");
+  });
+
+  it("never presents a confirmed-stale cycle as current", () => {
+    initializePersonalWorkspace(connection.db);
+    const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Harvard University");
+    expect(result.verificationStatus).toBe("previous-cycle");
+    expect(result.importedPromptCount).toBe(0);
+    expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, result.schoolId)).all()).toHaveLength(0);
   });
 });

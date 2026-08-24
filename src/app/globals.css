@@ -981,8 +981,7 @@ h1 {
   color: var(--moss-dark);
 }
 
-.verification-badge.unverified,
-.verification-badge.previous-cycle {
+.verification-badge.unverified {
   border: 1px solid var(--oxblood);
   background: #f3e3df;
   color: var(--oxblood);
@@ -991,6 +990,10 @@ h1 {
 .verification-badge.manual {
   border: 1px solid var(--rule);
   color: var(--ink-soft);
+}
+
+.verification-row {
+  margin-top: 8px;
 }
 
 .prompt-list {
