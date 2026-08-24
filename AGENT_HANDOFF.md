@@ -33,11 +33,12 @@ test runner and setup notes, and committed the tested code at `1a34260`.
 
 The application provides a responsive editorial shell and navigation, explicit
 personal/demo workspace actions, cookie-scoped active workspace state, useful
-personal empty states, and real read-only views of seeded schools, prompts,
+personal empty states, and real views of seeded schools, prompts,
 essays, families, and reuse examples. The SQLite schema, migration, taxonomy,
-isolated seed services, and database tests are complete. Phase 2 has begun with
-verified workspace-scoped school create, rename, and delete workflows. Prompt
-and essay CRUD and search remain unfinished.
+isolated seed services, and database tests are complete. Phase 2 now has
+verified workspace-scoped school and prompt CRUD, including editable primary
+and secondary prompt families and manual classification overrides. Essay CRUD,
+filtering, and search remain unfinished.
 
 ## Completed
 
@@ -134,21 +135,42 @@ and essay CRUD and search remain unfinished.
   and prompt cascade behavior. Verified code commit:
   `122f13818d563e29840698d754476a48722ba3fe` — "Add workspace-scoped school
   CRUD".
+- Added workspace-scoped prompt create, edit, and delete services plus server
+  actions. The service validates that both the selected school and every
+  selected family belong to the active workspace, normalizes duplicate family
+  choices, and applies prompt and family-link changes atomically.
+- Extended the Schools page with compact prompt create/edit/delete workflows
+  using the existing visual language. Each prompt supports one optional primary
+  family, multiple secondary families, word-count bounds, requirement,
+  application status, deadline, notes, and visible deterministic/manual
+  provenance. Saving a family edit records a manual override without changing
+  the existing taxonomy or migration.
+- Preserved existing prompt text during classification-only edits, including
+  paragraph breaks. Manual overrides replace stale family links, mark every
+  current link as manual, and reset deterministic confidence to zero. Prompt
+  deletion uses existing foreign-key cascades for family links, matches, and
+  response assignments.
+- Expanded persistence coverage from seven to ten tests for prompt CRUD,
+  primary/secondary assignments and enriched reads, deterministic-to-manual
+  overrides, cross-workspace school/family rejection without partial writes,
+  scoped deletion, and relationship cascades. Verified code commit:
+  `52add4368f9cf60b5a46dbec62e599c1f6cdc534` — "Add workspace-scoped prompt
+  CRUD".
 
 ## In Progress
 
-P0 Phase 2 (Core Organization). School CRUD is complete. Prompt CRUD with
-primary/secondary classification editing is the highest-priority unfinished
-slice, followed by essay CRUD, filtering, and search.
+P0 Phase 2 (Core Organization). School and prompt CRUD are complete. Essay CRUD
+with immutable content versions is the highest-priority unfinished slice,
+followed by filtering, search, and browser workflow coverage.
 
 ## Next Steps
 
-1. Implement prompt CRUD, primary plus secondary family editing, and manual
-   classification override; retain deterministic/manual provenance.
-2. Implement essay CRUD, search, status/family filters, and canonical versus
+1. Implement essay CRUD, search, status/family filters, and canonical versus
    school-adaptation labels using immutable versions for content changes.
-3. Add Playwright coverage for workspace selection and one complete
+2. Add Playwright coverage for workspace selection and one complete
    organization workflow before moving into Phase 3 matching work.
+3. Continue Phase 3 with editable many-to-many essay/prompt relationships and
+   deterministic reuse scoring after Phase 2 organization is verified.
 
 ## Failed Approaches
 
@@ -182,6 +204,10 @@ slice, followed by essay CRUD, filtering, and search.
   `src/app/[section]/page.tsx` without shell quoting, so zsh rejected the glob
   before Git ran. Quoting the same repository path resolved it; no files or Git
   state were changed by the failed command.
+- No new command or verification failures occurred during the prompt CRUD
+  checkpoint. Diff review found and corrected a draft implementation issue
+  that would have collapsed multiline prompt text during an edit; focused and
+  canonical verification passed after the correction.
 
 ## Blockers
 
@@ -232,11 +258,18 @@ None.
 - School CRUD verification: `npm test` — 7/7 integration tests passed. The full
   `./run_tests.sh` checkpoint passed ESLint, strict type generation, all seven
   tests, the dynamic production build, and 80/80 overnight assertions.
+- Prompt CRUD focused verification: `npm run lint`, `npm run typecheck`, and
+  `npm test` passed after integration, then passed again after the multiline
+  preservation/manual-confidence correction; the final Vitest result was 10/10.
+- Prompt CRUD canonical verification: `./run_tests.sh` passed immediately
+  before commit `52add4368f9cf60b5a46dbec62e599c1f6cdc534` with ESLint, Next
+  route type generation plus strict `tsc --noEmit`, all 10 integration tests,
+  a successful optimized Next.js webpack production build, and 80/80 overnight
+  orchestration assertions.
 - Browser automation does not exist yet and remains P0 verification work.
 
 ## Last Verified Commit
 
-`122f13818d563e29840698d754476a48722ba3fe` — "Add workspace-scoped school
-CRUD". `./run_tests.sh` passed immediately before this code commit, and the
-focused seven-test suite passed after the final assertion cleanup. The next
+`52add4368f9cf60b5a46dbec62e599c1f6cdc534` — "Add workspace-scoped prompt
+CRUD". `./run_tests.sh` passed immediately before this code commit. The next
 commit changes only this handoff document to record the checkpoint.
