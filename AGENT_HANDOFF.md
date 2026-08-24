@@ -163,7 +163,8 @@ P0 Phase 2 (Core Organization). School and prompt CRUD are complete. Essay CRUD
 with immutable content versions is the highest-priority unfinished slice,
 followed by filtering, search, and browser workflow coverage. The repository is
 clean and ready for Claude Code to continue from the verified prompt CRUD
-checkpoint without repeating completed work.
+checkpoint without repeating completed work, but the local Claude CLI must be
+logged back into an eligible subscription before that transfer can start.
 
 ## Next Steps
 
@@ -210,10 +211,18 @@ checkpoint without repeating completed work.
   checkpoint. Diff review found and corrected a draft implementation issue
   that would have collapsed multiline prompt text during an edit; focused and
   canonical verification passed after the correction.
+- The requested Claude Code transfer stopped at the mandatory subscription
+  preflight because `claude auth status --json` reported `loggedIn: false` and
+  `authMethod: "none"`. Running Claude through an unverified API-key path was
+  intentionally not attempted.
 
 ## Blockers
 
-None.
+HUMAN-REQUIRED: Claude Code handoff cannot start because the fail-closed
+subscription preflight returned `loggedIn: false`, `authMethod: "none"`, and
+`apiProvider: "firstParty"`. A human must authenticate the installed Claude CLI
+with an eligible subscription. No API-key fallback was attempted, and no
+credentials were inspected or changed.
 
 ## Tests/Verification Performed
 
@@ -272,6 +281,10 @@ None.
   prompt CRUD checkpoint with the same ESLint/typecheck/build results, 10/10
   integration tests, and 80/80 overnight assertions. No regressions or code
   changes were required.
+- Claude transfer preflight: `env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY claude
+  auth status --json` exited nonzero and reported that the CLI is not logged in.
+  Claude was not invoked because subscription-only authentication could not be
+  established safely.
 - Browser automation does not exist yet and remains P0 verification work.
 
 ## Last Verified Commit
