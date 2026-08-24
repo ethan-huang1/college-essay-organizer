@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+
+import { loadDemoWorkspace, openPersonalWorkspace } from "./workspace-actions";
 
 const families = [
   "Personal Statement / Core Story",
@@ -13,7 +15,12 @@ const families = [
   "Short Takes & Personality",
 ] as const;
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const activeWorkspace = await getActiveWorkspaceSnapshot();
+  const demoIsActive = activeWorkspace.workspace.kind === "demo";
+
   return (
     <div className="page-frame">
       <header className="page-heading">
@@ -33,24 +40,38 @@ export default function Home() {
       </header>
 
       <section className="choice-grid" aria-label="Workspace choices">
-        <article className="workspace-choice">
-          <span className="status-label">Personal · empty</span>
+        <article className={`workspace-choice${demoIsActive ? "" : " active"}`}>
+          <span className="status-label">
+            Personal{demoIsActive ? " · empty" : " · active"}
+          </span>
           <h2>Begin with your schools</h2>
           <p>
             Start a clean private workspace, then add schools, prompts, and the essays
             you already have.
           </p>
-          <Link className="text-link" href="/schools">Open personal workspace <span aria-hidden="true">→</span></Link>
+          <form action={openPersonalWorkspace}>
+            <button className="text-link action-link" type="submit">
+              {demoIsActive ? "Switch to personal workspace" : "Open personal workspace"}
+              <span aria-hidden="true">→</span>
+            </button>
+          </form>
         </article>
 
-        <article className="workspace-choice demo">
-          <span className="status-label">Fictional · demo preview</span>
+        <article className={`workspace-choice demo${demoIsActive ? " active" : ""}`}>
+          <span className="status-label">
+            Fictional demo{demoIsActive ? " · active" : " · not loaded"}
+          </span>
           <h2>See how reuse works</h2>
           <p>
-            Preview the organizer with clearly labeled synthetic material. Demo data
-            loading arrives with the persistence foundation.
+            Load clearly labeled synthetic schools, prompts, essays, versions, and
+            reuse examples. Reloading resets demo records only.
           </p>
-          <Link className="text-link" href="/reuse">Preview the reuse map <span aria-hidden="true">→</span></Link>
+          <form action={loadDemoWorkspace}>
+            <button className="text-link action-link" type="submit">
+              {demoIsActive ? "Reset fictional demo" : "Load fictional demo"}
+              <span aria-hidden="true">→</span>
+            </button>
+          </form>
         </article>
       </section>
 

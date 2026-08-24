@@ -19,6 +19,7 @@ import {
   PERSONAL_WORKSPACE_ID,
   resetDemoWorkspace,
 } from "./seed";
+import { getWorkspaceSnapshot } from "../workspaces";
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -140,5 +141,25 @@ describe("local persistence foundation", () => {
 
     expect(new Set(assignments.map(({ schoolId }) => schoolId)).size).toBe(2);
     expect(connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId)).all()).toHaveLength(1);
+  });
+
+  it("returns strictly workspace-scoped read models", () => {
+    initializePersonalWorkspace(connection.db);
+    resetDemoWorkspace(connection.db);
+    connection.db.insert(essays).values({
+      id: `${PERSONAL_WORKSPACE_ID}:essay:private`,
+      workspaceId: PERSONAL_WORKSPACE_ID,
+      title: "Private draft",
+      currentContent: "Only the personal snapshot may return this essay.",
+    }).run();
+
+    const personal = getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    const demo = getWorkspaceSnapshot(connection.db, DEMO_WORKSPACE_ID);
+
+    expect(personal?.essays.map((essay) => essay.title)).toEqual(["Private draft"]);
+    expect(personal?.schools).toHaveLength(0);
+    expect(demo?.essays).toHaveLength(6);
+    expect(demo?.essays.some((essay) => essay.title === "Private draft")).toBe(false);
+    expect(demo?.matches).toHaveLength(3);
   });
 });
