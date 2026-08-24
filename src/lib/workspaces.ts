@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import type { AppDatabase } from "./db/client";
 import {
+  applicationCycles,
   assignedEssayResponses,
   essayFamilyLinks,
   essayPromptMatches,
@@ -13,6 +14,7 @@ import {
   schools,
   workspaces,
 } from "./db/schema";
+import { CURRENT_CYCLE_LABEL } from "./cycle";
 
 function wordCount(content: string) {
   return content.trim() ? content.trim().split(/\s+/).length : 0;
@@ -24,6 +26,10 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
 
   const workspaceSchools = db.select().from(schools).where(eq(schools.workspaceId, workspaceId)).all();
   const workspacePrompts = db.select().from(prompts).where(eq(prompts.workspaceId, workspaceId)).all();
+  const workspaceCycles = db.select().from(applicationCycles).where(eq(applicationCycles.workspaceId, workspaceId)).all();
+  const cycleLabelById = new Map(workspaceCycles.map((cycle) => [cycle.id, cycle.label]));
+  const isCurrentCyclePrompt = (prompt: (typeof workspacePrompts)[number]) =>
+    (prompt.cycleId ? cycleLabelById.get(prompt.cycleId) : CURRENT_CYCLE_LABEL) === CURRENT_CYCLE_LABEL;
   const workspaceEssays = db.select().from(essays).where(eq(essays.workspaceId, workspaceId)).all();
   const workspaceFamilies = db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId)).all();
   const versions = db.select().from(essayVersions).where(eq(essayVersions.workspaceId, workspaceId)).all();
@@ -36,7 +42,11 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
     workspace,
     stats: {
       schools: workspaceSchools.length,
-      prompts: workspacePrompts.length,
+      // Current-cycle prompts only - a previous-cycle prompt is visible and
+      // usable throughout the app, but must never count toward "how much
+      // of this cycle's work is done."
+      prompts: workspacePrompts.filter(isCurrentCyclePrompt).length,
+      previousCyclePrompts: workspacePrompts.filter((prompt) => !isCurrentCyclePrompt(prompt)).length,
       essays: workspaceEssays.length,
       assignments: assignments.length,
       strongMatches: matches.filter((match) => match.score >= 75).length,
@@ -64,6 +74,8 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
         }));
       return {
         ...prompt,
+        cycleLabel: prompt.cycleId ? (cycleLabelById.get(prompt.cycleId) ?? CURRENT_CYCLE_LABEL) : CURRENT_CYCLE_LABEL,
+        isCurrentCycle: isCurrentCyclePrompt(prompt),
         primaryFamily: workspaceFamilies.find((family) => family.id === primaryLink?.familyId) ?? null,
         secondaryFamilies: links
           .filter((link) => !link.isPrimary)

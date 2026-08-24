@@ -16,14 +16,25 @@ export function validateRecord(record: SchoolSourceRecord): string[] {
   if (!record.cycleLabel.trim()) errors.push("cycleLabel is required.");
   if (!record.note.trim()) errors.push("note is required (shown to the user - explain the verification status).");
 
-  if (record.verificationStatus === "previous-cycle" && record.prompts.length > 0) {
-    errors.push("previous-cycle records must not carry prompts - a stale cycle's wording must never be imported as current.");
+  const requiresPrompts = record.verificationStatus === "officially-verified"
+    || record.verificationStatus === "common-app-verified"
+    || record.verificationStatus === "previous-cycle";
+  const forbidsPrompts = record.verificationStatus === "no-supplement-confirmed" || record.verificationStatus === "needs-review";
+
+  // Every outcome - including needs-review - must cite what was actually
+  // checked, even if it confirmed nothing. "I looked and found nothing
+  // worth citing" is not a valid coverage record.
+  if (!record.sourceUrl) {
+    errors.push(`${record.verificationStatus} requires a sourceUrl (cite what was checked, even for needs-review).`);
   }
-  if ((record.verificationStatus === "officially-verified" || record.verificationStatus === "common-app-verified") && !record.sourceUrl) {
-    errors.push(`${record.verificationStatus} requires a sourceUrl.`);
+  if (requiresPrompts && record.prompts.length === 0) {
+    errors.push(`${record.verificationStatus} with zero prompts is contradictory - it must carry the prompt text it claims to have confirmed.`);
   }
-  if ((record.verificationStatus === "officially-verified" || record.verificationStatus === "common-app-verified") && record.prompts.length === 0) {
-    errors.push(`${record.verificationStatus} with zero prompts is contradictory - use previous-cycle or needs-review with an explanatory note instead.`);
+  if (forbidsPrompts && record.prompts.length > 0) {
+    errors.push(`${record.verificationStatus} must not carry prompts - there is nothing confirmed to import.`);
+  }
+  if (record.verificationStatus === "previous-cycle" && record.cycleLabel === "2026–27") {
+    errors.push("previous-cycle records must set cycleLabel to the actual (older) cycle they represent, not the current one - e.g. \"2025–26\".");
   }
 
   const seenRefs = new Set<string>();

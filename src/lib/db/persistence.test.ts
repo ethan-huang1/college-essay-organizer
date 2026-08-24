@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { migrateDatabase, openDatabase } from "./client";
 import {
+  applicationCycles,
   assignedEssayResponses,
   essayFamilyLinks,
   essayPromptMatches,
@@ -435,12 +436,28 @@ describe("local persistence foundation", () => {
     expect(connection.db.select().from(schools).where(eq(schools.id, result.schoolId)).get()?.name).toBe("Some Unlisted College");
   });
 
-  it("never presents a confirmed-stale cycle as current", () => {
+  it("imports confirmed previous-cycle prompts, distinctly cycle-labeled and never as current", () => {
     initializePersonalWorkspace(connection.db);
     const result = importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Harvard University");
     expect(result.verificationStatus).toBe("previous-cycle");
-    expect(result.counts.created).toBe(0);
-    expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, result.schoolId)).all()).toHaveLength(0);
+    expect(result.counts.created).toBeGreaterThan(0);
+
+    const imported = connection.db.select().from(prompts).where(eq(prompts.schoolId, result.schoolId)).all();
+    expect(imported).toHaveLength(result.counts.created);
+    expect(imported.every((prompt) => prompt.verificationStatus === "previous-cycle")).toBe(true);
+
+    const promptCycle = connection.db.select().from(applicationCycles).where(eq(applicationCycles.id, imported[0].cycleId!)).get();
+    const currentCycle = connection.db.select().from(applicationCycles).where(eq(applicationCycles.workspaceId, PERSONAL_WORKSPACE_ID)).all()
+      .find((cycle) => cycle.label === "2026–27");
+    expect(promptCycle?.label).toBe("2025–26");
+    expect(promptCycle?.id).not.toBe(currentCycle?.id);
+
+    // Previous-cycle prompts are visible/matchable but excluded from the
+    // "current cycle" prompt stat.
+    const snapshot = getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    expect(snapshot?.prompts.some((prompt) => prompt.schoolId === result.schoolId)).toBe(true);
+    expect(snapshot?.stats.prompts).toBe(0);
+    expect(snapshot?.stats.previousCyclePrompts).toBe(result.counts.created);
   });
 
   it("imports genuinely conditional, degree-dependent prompts with their note intact", () => {

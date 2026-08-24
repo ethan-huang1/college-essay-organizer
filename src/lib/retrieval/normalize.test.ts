@@ -56,9 +56,19 @@ describe("validateRecord", () => {
     expect(validateRecord(baseRecord)).toEqual([]);
   });
 
-  it("rejects a previous-cycle record that still carries prompts", () => {
+  it("accepts a well-formed previous-cycle record with its actual (older) cycle and prompts", () => {
+    const errors = validateRecord({ ...baseRecord, verificationStatus: "previous-cycle", cycleLabel: "2025–26" });
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects a previous-cycle record left labeled with the current cycle", () => {
     const errors = validateRecord({ ...baseRecord, verificationStatus: "previous-cycle" });
-    expect(errors.some((error) => error.includes("previous-cycle records must not carry prompts"))).toBe(true);
+    expect(errors.some((error) => error.includes("must set cycleLabel to the actual (older) cycle"))).toBe(true);
+  });
+
+  it("rejects a previous-cycle record with zero prompts as contradictory", () => {
+    const errors = validateRecord({ ...baseRecord, verificationStatus: "previous-cycle", cycleLabel: "2025–26", prompts: [] });
+    expect(errors.some((error) => error.includes("contradictory"))).toBe(true);
   });
 
   it("rejects officially-verified with no sourceUrl", () => {
@@ -69,6 +79,21 @@ describe("validateRecord", () => {
   it("rejects officially-verified with zero prompts as contradictory", () => {
     const errors = validateRecord({ ...baseRecord, prompts: [] });
     expect(errors.some((error) => error.includes("contradictory"))).toBe(true);
+  });
+
+  it("accepts a well-formed no-supplement-confirmed record (sourceUrl required, zero prompts required)", () => {
+    const errors = validateRecord({ ...baseRecord, verificationStatus: "no-supplement-confirmed", prompts: [] });
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects no-supplement-confirmed with prompts attached", () => {
+    const errors = validateRecord({ ...baseRecord, verificationStatus: "no-supplement-confirmed" });
+    expect(errors.some((error) => error.includes("must not carry prompts"))).toBe(true);
+  });
+
+  it("rejects needs-review with prompts attached", () => {
+    const errors = validateRecord({ ...baseRecord, verificationStatus: "needs-review" });
+    expect(errors.some((error) => error.includes("must not carry prompts"))).toBe(true);
   });
 
   it("rejects duplicate externalRef values within one school", () => {

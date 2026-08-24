@@ -115,20 +115,30 @@ function AddCollegeForm() {
   );
 }
 
-function VerificationBadge({ status, sourceUrl }: { status: WorkspaceSnapshot["prompts"][number]["verificationStatus"]; sourceUrl: string | null }) {
+function VerificationBadge({ status, sourceUrl, cycleLabel }: { status: WorkspaceSnapshot["prompts"][number]["verificationStatus"]; sourceUrl: string | null; cycleLabel: string }) {
   const label = {
     "officially-verified": "Officially verified",
     "common-app-verified": "Common App verified",
-    "previous-cycle": "Previous cycle",
+    "previous-cycle": `Previous cycle (${cycleLabel})`,
+    "no-supplement-confirmed": "No supplement confirmed",
     "needs-review": "Needs review",
     manual: "Manually entered",
   }[status];
-  const tone = status === "officially-verified" || status === "common-app-verified" ? "verified" : status === "manual" ? "manual" : "unverified";
+  const tone = status === "officially-verified" || status === "common-app-verified" ? "verified"
+    : status === "manual" || status === "no-supplement-confirmed" ? "manual"
+    : status === "previous-cycle" ? "previous-cycle"
+    : "unverified";
   return sourceUrl ? (
     <a className={`verification-badge ${tone}`} href={sourceUrl} target="_blank" rel="noreferrer">{label}</a>
   ) : (
     <span className={`verification-badge ${tone}`}>{label}</span>
   );
+}
+
+// The required prominent statement - deliberately separate from the small
+// pill badge above, which is too small/short for a full sentence.
+function PreviousCycleWarning({ cycleLabel }: { cycleLabel: string }) {
+  return <p className="cycle-warning">⚠ {cycleLabel} prompt — 2026–27 wording not yet confirmed. Do not treat as a current requirement.</p>;
 }
 
 function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
@@ -182,13 +192,14 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                         <span>{prompt.maxCharCount ? `${prompt.maxCharCount} chars` : `${prompt.maxWordCount ?? "—"} words`}</span>
                       </div>
                       <p>{prompt.promptText}</p>
+                      {prompt.verificationStatus === "previous-cycle" ? <PreviousCycleWarning cycleLabel={prompt.cycleLabel} /> : null}
                       {prompt.requirement === "conditional" && prompt.conditionalNote ? <p className="conditional-note">Conditional: {prompt.conditionalNote}</p> : null}
                       <div className="family-chips">
                         {prompt.primaryFamily ? <span className="primary-chip">Primary · {prompt.primaryFamily.name}</span> : <span>Unclassified</span>}
                         {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
                       </div>
                       <span className="classification-source">{prompt.classificationSource === "manual" ? "Manual override" : `Deterministic suggestion · ${prompt.classificationConfidence}% confidence`}</span>
-                      <div className="verification-row"><VerificationBadge status={prompt.verificationStatus} sourceUrl={prompt.sourceUrl} /></div>
+                      <div className="verification-row"><VerificationBadge status={prompt.verificationStatus} sourceUrl={prompt.sourceUrl} cycleLabel={prompt.cycleLabel} /></div>
                       <div className="assignment-block">
                         {prompt.assignedEssay ? (
                           <div className="assigned-essay">

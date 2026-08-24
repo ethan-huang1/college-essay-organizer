@@ -992,6 +992,23 @@ h1 {
   color: var(--ink-soft);
 }
 
+.verification-badge.previous-cycle {
+  border: 1px solid #b8860b;
+  background: #fbf0d9;
+  color: #8a6100;
+}
+
+.cycle-warning {
+  margin: 8px 0 0;
+  border: 1px solid #b8860b;
+  border-radius: 5px;
+  background: #fbf0d9;
+  padding: 6px 10px;
+  color: #8a6100;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .verification-row {
   margin-top: 8px;
 }

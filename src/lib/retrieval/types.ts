@@ -4,7 +4,7 @@
 // ../college-import.ts) can process any school identically instead of
 // special-casing each one.
 
-export type VerificationStatus = "officially-verified" | "common-app-verified" | "previous-cycle" | "needs-review" | "manual";
+export type VerificationStatus = "officially-verified" | "common-app-verified" | "previous-cycle" | "no-supplement-confirmed" | "needs-review" | "manual";
 export type ApplicationPlatform = "common-app" | "coalition-app" | "school-specific" | "questbridge" | "unknown";
 export type RequirementType = "required" | "optional" | "conditional";
 
@@ -36,6 +36,11 @@ export type SchoolSourceRecord = {
   // user can still add manually - the registry doesn't require list
   // membership, but canonicalizeUniversityName() only resolves listed names).
   schoolName: string;
+  // The cycle THIS DATA represents - "2026–27" for officially-verified,
+  // "2025–26" for previous-cycle (never left as the current label just
+  // because that's what we're tracking; must match what was actually
+  // confirmed). Ignored (but still required) for no-supplement-confirmed/
+  // needs-review, where there's no prompt content to date.
   cycleLabel: string;
   verificationStatus: VerificationStatus;
   applicationPlatform: ApplicationPlatform;
@@ -44,10 +49,14 @@ export type SchoolSourceRecord = {
   // "now" at import time.
   retrievedAt: string;
   // Human-readable justification for the verificationStatus - always shown
-  // to the user, especially important when prompts is empty.
+  // to the user, especially important when prompts is empty. For
+  // needs-review this must explain what was actually checked (which
+  // sources, why neither current nor previous wording could be confirmed) -
+  // never a placeholder.
   note: string;
-  // Empty when verificationStatus doesn't warrant import (previous-cycle,
-  // or nothing confidently found) - see normalize.ts's validateRecord for
-  // the enforced invariant.
+  // officially-verified and previous-cycle require at least one prompt
+  // (previous-cycle prompts ARE imported now, distinctly labeled - see
+  // MVP policy). no-supplement-confirmed and needs-review must be empty -
+  // see normalize.ts's validateRecord for the enforced invariant.
   prompts: RawPromptRecord[];
 };

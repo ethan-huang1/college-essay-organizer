@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { classifyText } from "./classification";
+import { CURRENT_CYCLE_LABEL } from "./cycle";
 import type { AppDatabase } from "./db/client";
 import { applicationCycles, promptChangeLog, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 import { PROMPT_FAMILIES } from "./db/taxonomy";
@@ -9,16 +10,29 @@ import { lookupSchoolSource } from "./retrieval/registry";
 import type { ApplicationPlatform, RawPromptRecord, VerificationStatus } from "./retrieval/types";
 import { canonicalizeUniversityName } from "./top-universities";
 
-const CYCLE_LABEL = "2026–27";
 const FAMILY_NAME_BY_SLUG = new Map<string, string>(PROMPT_FAMILIES.map(([slug, name]) => [slug, name]));
 
-function getOrCreateCycle(db: AppDatabase, workspaceId: string) {
+// Parses a "20XX–YY" label into (startYear, startYear+1) - every cycle here
+// spans one admissions year to the next, so the end year is never stored
+// independently of the label that names it.
+function parseCycleLabel(label: string) {
+  const match = label.match(/(\d{4})/);
+  const startYear = match ? Number(match[1]) : new Date().getFullYear();
+  return { startYear, endYear: startYear + 1 };
+}
+
+// Distinct cycle rows are created per label - a previous-cycle prompt's
+// "2025–26" cycle is a different row than the active "2026–27" one, which
+// is what lets the UI (and, later, dashboard stats) tell them apart
+// unambiguously rather than inferring it from verificationStatus alone.
+function getOrCreateCycle(db: AppDatabase, workspaceId: string, label: string) {
   const existing = db.select({ id: applicationCycles.id }).from(applicationCycles)
-    .where(and(eq(applicationCycles.workspaceId, workspaceId), eq(applicationCycles.label, CYCLE_LABEL)))
+    .where(and(eq(applicationCycles.workspaceId, workspaceId), eq(applicationCycles.label, label)))
     .get();
   if (existing) return existing.id;
+  const { startYear, endYear } = parseCycleLabel(label);
   const id = crypto.randomUUID();
-  db.insert(applicationCycles).values({ id, workspaceId, label: CYCLE_LABEL, startYear: 2026, endYear: 2027, isActive: true }).run();
+  db.insert(applicationCycles).values({ id, workspaceId, label, startYear, endYear, isActive: label === CURRENT_CYCLE_LABEL }).run();
   return id;
 }
 
@@ -168,25 +182,38 @@ export type ImportCollegeResult = {
 // through the shared upsert pipeline above - every school (however it was
 // researched) goes through identical logic, never special-cased here.
 export function importCollege(db: AppDatabase, workspaceId: string, schoolName: string): ImportCollegeResult {
-  const cycleId = getOrCreateCycle(db, workspaceId);
-  const school = getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), cycleId);
+  const currentCycleId = getOrCreateCycle(db, workspaceId, CURRENT_CYCLE_LABEL);
+  const school = getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), currentCycleId);
   const source = lookupSchoolSource(school.name);
   const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
 
   if (!source || source.prompts.length === 0) {
+    const note = source?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.";
+    // Persisted on the school record (reusing the existing notes column)
+    // so a no-supplement-confirmed/needs-review outcome stays visible on
+    // later visits, not just as this one-time return value - otherwise a
+    // school with zero prompts looks identical whether it's genuinely
+    // unresearched or confirmed to have no supplement.
+    if (source && !school.notes) {
+      db.update(schools).set({ notes: note }).where(eq(schools.id, school.id)).run();
+    }
     return {
       schoolId: school.id,
       schoolName: school.name,
       verificationStatus: source?.verificationStatus ?? "manual",
       sourceUrl: source?.sourceUrl ?? null,
-      note: source?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.",
+      note,
       counts,
     };
   }
 
+  // The prompts themselves are filed under whichever cycle the source
+  // record actually represents (may differ from the school's own "current"
+  // cycle for a previous-cycle record).
+  const promptCycleId = getOrCreateCycle(db, workspaceId, source.cycleLabel);
   const retrievedAt = new Date(source.retrievedAt);
   for (const raw of source.prompts) {
-    upsertPrompt(db, workspaceId, school.id, cycleId, raw, {
+    upsertPrompt(db, workspaceId, school.id, promptCycleId, raw, {
       status: source.verificationStatus,
       sourceUrl: source.sourceUrl,
       platform: source.applicationPlatform,

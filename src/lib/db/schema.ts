@@ -104,7 +104,7 @@ export const prompts = sqliteTable(
     status: text("status", { enum: ["not-started", "in-progress", "complete", "submitted"] }).notNull().default("not-started"),
     classificationConfidence: integer("classification_confidence").notNull().default(0),
     classificationSource: text("classification_source", { enum: ["deterministic", "manual"] }).notNull().default("deterministic"),
-    verificationStatus: text("verification_status", { enum: ["officially-verified", "common-app-verified", "previous-cycle", "needs-review", "manual"] }).notNull().default("manual"),
+    verificationStatus: text("verification_status", { enum: ["officially-verified", "common-app-verified", "previous-cycle", "no-supplement-confirmed", "needs-review", "manual"] }).notNull().default("manual"),
     applicationPlatform: text("application_platform", { enum: ["common-app", "coalition-app", "school-specific", "questbridge", "unknown"] }).notNull().default("unknown"),
     sourceUrl: text("source_url"),
     retrievedAt: integer("retrieved_at", { mode: "timestamp_ms" }),
