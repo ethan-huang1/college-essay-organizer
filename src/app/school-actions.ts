@@ -17,11 +17,13 @@ export async function updateSchoolAction(formData: FormData) {
     name: field(formData, "name"),
     notes: field(formData, "notes"),
   });
+  revalidatePath("/");
   revalidatePath("/schools");
 }
 
 export async function deleteSchoolAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   deleteSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"));
+  revalidatePath("/");
   revalidatePath("/schools");
 }

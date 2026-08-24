@@ -3,9 +3,16 @@
 import { revalidatePath } from "next/cache";
 
 import { getAppDatabase } from "@/lib/db/server";
-import { createPrompt, deletePrompt, type PromptInput, updatePrompt } from "@/lib/prompts";
+import { createPrompt, deletePrompt, type PromptInput, setPromptStatus, updatePrompt } from "@/lib/prompts";
 import { recomputeWorkspaceMatches } from "@/lib/reuse";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+
+function revalidatePromptPaths() {
+  revalidatePath("/");
+  revalidatePath("/schools");
+  revalidatePath("/families");
+  revalidatePath("/reuse");
+}
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -46,9 +53,7 @@ export async function createPromptAction(formData: FormData) {
   const db = getAppDatabase().db;
   createPrompt(db, snapshot.workspace.id, promptInput(formData));
   recomputeWorkspaceMatches(db, snapshot.workspace.id);
-  revalidatePath("/schools");
-  revalidatePath("/families");
-  revalidatePath("/reuse");
+  revalidatePromptPaths();
 }
 
 export async function updatePromptAction(formData: FormData) {
@@ -56,9 +61,7 @@ export async function updatePromptAction(formData: FormData) {
   const db = getAppDatabase().db;
   updatePrompt(db, snapshot.workspace.id, field(formData, "promptId"), promptInput(formData));
   recomputeWorkspaceMatches(db, snapshot.workspace.id);
-  revalidatePath("/schools");
-  revalidatePath("/families");
-  revalidatePath("/reuse");
+  revalidatePromptPaths();
 }
 
 export async function deletePromptAction(formData: FormData) {
@@ -66,7 +69,17 @@ export async function deletePromptAction(formData: FormData) {
   const db = getAppDatabase().db;
   deletePrompt(db, snapshot.workspace.id, field(formData, "promptId"));
   recomputeWorkspaceMatches(db, snapshot.workspace.id);
-  revalidatePath("/schools");
-  revalidatePath("/families");
-  revalidatePath("/reuse");
+  revalidatePromptPaths();
+}
+
+export async function setPromptStatusAction(formData: FormData) {
+  const snapshot = await getActiveWorkspaceSnapshot();
+  const status = field(formData, "status");
+  setPromptStatus(
+    getAppDatabase().db,
+    snapshot.workspace.id,
+    field(formData, "promptId"),
+    ["in-progress", "complete", "submitted"].includes(status) ? (status as PromptInput["status"]) : "not-started",
+  );
+  revalidatePromptPaths();
 }

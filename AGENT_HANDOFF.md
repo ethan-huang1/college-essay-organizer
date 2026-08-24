@@ -17,17 +17,59 @@ for the product spec.
 
 The core loop works end-to-end: **add a college (top-100 picker or manual) →
 its cited prompt record imports → prompts are classified → matching essays
-are suggested → a response is assigned → Families shows the cross-school
+are suggested → a response is assigned → Categories shows the cross-school
 picture.** P0 Phases 1–3 are substantially complete. Phase 4 has essay
 editing, immutable versions, comparison, restoration, and filtering, but
 not the deterministic accept/reject suggestion workflow. Phase 5 (JSON
 backup round trip, Playwright, final documentation/layout verification) has
 not started.
 
+**The UI was rebuilt as an information architecture** (see "UI architecture"
+below). No retrieval, classification, matching, essay-CRUD, versioning, or
+workspace-isolation behavior changed; the only data-layer additions are one
+narrow status mutation and a pure derived-progress module.
+
 Supplemental-prompt research is now complete for the existing top-100
 picker. Commit `a717720` added the 87 previously missing school records,
 registered all 100 schools, and made the full-coverage assertion mandatory.
 No school remains `unresearched`.
+
+## UI architecture
+
+Navigation lives in the persistent sidebar (`src/app/layout.tsx`, which now
+reads the workspace snapshot): Overview, All prompts, Categories, My essays,
+Reuse, followed by every school with its `complete/total` progress, and the
+workspace switcher. `src/app/nav-link.tsx` is the app's only client
+component — it marks the active section/school.
+
+Routes kept their paths; only their role changed:
+
+| Route | Role |
+|---|---|
+| `/` | Overview dashboard: real stat tiles, progress by school and by category, top reuse opportunities. Replaced the old workspace-picker hero (switching moved to the sidebar). |
+| `/schools` | **All prompts**, grouped by school, with compact school headers. `?school=&family=&status=&q=` filter it; `?edit=<promptId>` opens one edit form. |
+| `/families` | **Essay categories** — the same prompt rows grouped by the existing ten-family taxonomy, each group headed by the schools asking it. |
+| `/essays` | Essay library (largely unchanged, plus "answering N prompts / N more possible"). |
+| `/reuse` | Reuse grouped per essay: prompts it already answers vs. prompts it still could. |
+
+`src/app/prompt-ui.tsx` holds the one shared prompt row used by both the
+school and category views: a `<details>` whose `<summary>` is a table row
+(status dot, school · prompt, limit, category, status, essay) and whose body
+holds full prompt text, assignment/reuse actions, a quick status control,
+categories, and source/verification metadata. Two deliberate constraints:
+
+- **Previous-cycle warnings stay on the collapsed row**, never behind
+  disclosure — the spec requires that statement to be prominent.
+- **The full edit form is fetched via `?edit=<id>`, not inlined per row.**
+  107 inlined copies made `/schools` a 4 MB document; it is now ~1.5 MB raw
+  / ~155 KB gzipped, and the remaining bulk is Next's RSC payload.
+
+`src/lib/progress.ts` derives every number the UI shows (`workState`,
+`reuseCandidate`, `summarizePrompts`, `reuseOpportunities`) from a snapshot.
+Nothing is persisted or hardcoded, completion counts stay current-cycle-only
+per the existing policy, and "reusable" means the deterministic matcher
+returned `ready-to-reuse` or `minor-adaptation`. Its parameter types are
+structural, so snapshot rows satisfy them with no casting.
 
 ## Coverage (prompt retrieval)
 
@@ -52,6 +94,19 @@ from current-cycle completion statistics. `needs-review` and confirmed
 no-supplement outcomes remain distinguishable from an absent record.
 
 ## Completed Work
+
+**UI redesign (this session).** Replaced the school-page layout whose large
+left column went empty on schools with many prompts. Added the sidebar
+navigation with per-school progress, the overview dashboard, category-first
+browsing, and the compact scannable prompt row; demoted classification
+confidence and verification detail into the expanded row; added
+`src/lib/progress.ts` (+8 unit tests), `setPromptStatus` for the row's quick
+status control, and `draftEssayForPromptAction` ("start a new essay for this
+prompt", pre-classified from the prompt and assigned). All server actions now
+also revalidate `/` since the dashboard depends on their data. The three
+suggestion "Use this" buttons share one form (submitter name/value), verified
+by clicking through the running app.
+
 
 - Audited the clean starting checkpoint, recent commits/reflog/stashes,
   ignored and untracked paths, and overnight logs before researching. No
@@ -106,13 +161,14 @@ or to the completed one-outcome-per-school requirement.
 
 ## Tests/Verification Performed
 
-Full canonical `./run_tests.sh` passed immediately before code commit
-`a717720`:
+Full canonical `./run_tests.sh` passed immediately before the UI-redesign
+commit:
 
 - ESLint: pass, no warnings.
 - Strict typecheck (`next typegen && tsc --noEmit`): pass.
-- Vitest: **59/59 pass**, including the now-required 100/100 unique-school
-  coverage assertion; no skipped tests.
+- Vitest: **67/67 pass** (59 existing + 8 new `progress.ts` tests),
+  including the required 100/100 unique-school coverage assertion; no
+  skipped tests.
 - Coverage report: 46 current official, 12 no supplement, 36 needs review,
   6 previous cycle, 0 unresearched.
 - Production build (`next build --webpack`): pass; all routes generated.
@@ -123,8 +179,39 @@ The earlier established runtime tests for prompt import, conditional notes,
 change detection, history preservation, and no-duplicate refresh behavior
 remain covered by the existing verified commits and test suite.
 
+Browser verification of the redesign (Chrome DevTools against `next dev`,
+using a local personal workspace built through the real import path — 18
+schools, 112 prompts, 6 essays, 672 computed matches; `data/` is gitignored,
+so this is local-only fixture data, not committed):
+
+- Every route returns 200 with an empty console (no errors or warnings).
+- Assigning a suggested essay, changing work status (classification source
+  stayed `deterministic`, i.e. not falsely marked a manual override), and
+  "start a new essay for this prompt" (creates a `school-adaptation` essay
+  with version 1, prompt's category and word target, then assigns it) were
+  each clicked and confirmed in SQLite.
+- `?edit=<id>` renders exactly one edit form and keeps the active filters.
+- Workspace switching from the sidebar works both ways; the fictional demo
+  still resets to its own curated records.
+- Empty-workspace path checked against a temporary blank database: the
+  overview shows the Add-a-college CTA, and adding a real school imported and
+  classified its 8 prompts. The original database was restored afterwards.
+- Layout checked at 1440 / 1200 / 1024 / 768 px with no horizontal overflow
+  and no clipped category labels. **390 px was not directly verified** —
+  Chrome would not go below a ~500 px layout viewport in this environment and
+  the CDP viewport override did not take effect; the ≤620 px rules that would
+  apply were exercised at ~500 px, and fixed minimums were hardened with
+  `minmax(min(Xpx, 100%), 1fr)`.
+
 ## Next Steps
 
+0. **Redesign follow-ups worth a look:** (a) 390 px was not directly
+   verified — see above; (b) the fictional demo's three hand-curated matches
+   contain no *open* reuse opportunity, so the demo's Reuse page shows one
+   "already answering" row and zero open ones. Making the demo demonstrate
+   open reuse means either recomputing its matches on reset or adding curated
+   rows, and `persistence.test.ts` asserts exactly three demo matches — a
+   human should decide before that test changes.
 1. **Exact next priority:** finish P0 Phase 4's deterministic editing-
    suggestion workflow. Implement prompt-fit, clarity, concision, and
    word-limit suggestions with understandable before/after text; individual
@@ -141,6 +228,7 @@ remain covered by the existing verified commits and test suite.
 
 ## Last Verified Commit
 
-`a717720` — "Complete top-100 supplemental prompt coverage". Full canonical
-verification above passed immediately before this code commit. The handoff
-documentation is committed separately after this line is updated.
+The UI-redesign commit that follows this handoff update. Full canonical
+verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
+production build, 80 orchestration tests) passed immediately before it,
+alongside the browser verification listed above.

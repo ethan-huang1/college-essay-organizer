@@ -1,98 +1,179 @@
+import Link from "next/link";
+
+import { reuseOpportunities, summarizePrompts } from "@/lib/progress";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
-
-import { loadDemoWorkspace, openPersonalWorkspace } from "./workspace-actions";
-
-const families = [
-  "Personal Statement / Core Story",
-  "Identity & Background",
-  "Community & Contribution",
-  "Challenge, Setback & Growth",
-  "Intellectual Curiosity",
-  "Why Major / Academic Interests",
-  "Why This School / Program",
-  "Activities, Leadership & Impact",
-  "Values, Perspective & Meaning",
-  "Short Takes & Personality",
-] as const;
+import { assignEssayAction } from "./assignment-actions";
+import { AddCollegeForm, ProgressBar, ProgressLine } from "./prompt-ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const activeWorkspace = await getActiveWorkspaceSnapshot();
-  const demoIsActive = activeWorkspace.workspace.kind === "demo";
+export default async function Overview() {
+  const snapshot = await getActiveWorkspaceSnapshot();
+  const overall = summarizePrompts(snapshot.prompts);
+
+  const bySchool = snapshot.schools
+    .map((school) => ({ school, progress: summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id)) }))
+    .sort((a, b) => b.progress.remaining - a.progress.remaining || a.school.name.localeCompare(b.school.name));
+
+  const byCategory = snapshot.families
+    .map((family) => ({ family, progress: summarizePrompts(snapshot.prompts.filter((prompt) => prompt.primaryFamily?.id === family.id)) }))
+    .filter((row) => row.progress.total + row.progress.previousCycle > 0)
+    .sort((a, b) => b.progress.total - a.progress.total);
+
+  const reuse = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
+  // Each essay's single strongest opportunity, so the panel shows the breadth
+  // of the library rather than six rows of the same essay.
+  const topReuse = reuse
+    .flatMap((group) => (group.open[0] ? [{ match: group.open[0], essay: group.essay }] : []))
+    .sort((a, b) => b.match.score - a.match.score)
+    .slice(0, 6);
+  const openReuse = reuse.reduce((total, group) => total + group.open.length, 0);
+  const attention = snapshot.prompts.filter((prompt) => prompt.verificationStatus === "needs-review").length;
+
+  if (snapshot.schools.length === 0) {
+    return (
+      <div className="page-frame">
+        <header className="section-heading">
+          <div>
+            <h1>Start your list</h1>
+            <p className="lede">
+              Add the colleges you are applying to. Verified 2026–27 prompts import and classify themselves, so you can
+              see the whole workload — and where one essay can answer several prompts — from the first school on.
+            </p>
+          </div>
+        </header>
+        <div className="overview-empty">
+          <AddCollegeForm />
+          <p className="detail-note">
+            Prefer to look around first? Load the fictional demo from the workspace panel in the sidebar — it contains
+            clearly labeled synthetic schools, essays, and reuse examples, and never touches your personal work.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const tiles: [string, number, string?][] = [
+    ["Prompts", overall.total, "current cycle"],
+    ["Complete", overall.complete],
+    ["In progress", overall.inProgress],
+    ["Not started", overall.notStarted],
+    ["Reusable now", overall.reusable, "an essay already fits"],
+    ["Essays", snapshot.essays.length, `${overall.assigned} assigned`],
+  ];
 
   return (
     <div className="page-frame">
-      <header className="page-heading">
+      <header className="section-heading">
         <div>
-          <p className="eyebrow">Your writing desk</p>
-          <h1>One clear view of every essay.</h1>
+          <h1>Overview</h1>
           <p className="lede">
-            Organize drafts, understand what each prompt asks, and find the stories
-            worth adapting—without losing your voice.
+            {snapshot.schools.length} {snapshot.schools.length === 1 ? "school" : "schools"} · {overall.total} prompts
+            this cycle. You are building a reusable library, not starting over at every college.
           </p>
         </div>
-        <aside className="margin-note">
-          <span className="note-kicker">Getting started</span>
-          Keep personal work separate from the fictional demo. You can choose either
-          workspace without mixing their essays.
-        </aside>
+        <ProgressLine className="section-progress" progress={overall} />
       </header>
 
-      <section className="choice-grid" aria-label="Workspace choices">
-        <article className={`workspace-choice${demoIsActive ? "" : " active"}`}>
-          <span className="status-label">
-            Personal{demoIsActive ? " · empty" : " · active"}
-          </span>
-          <h2>Begin with your schools</h2>
-          <p>
-            Start a clean private workspace, then add schools, prompts, and the essays
-            you already have.
-          </p>
-          <form action={openPersonalWorkspace}>
-            <button className="text-link action-link" type="submit">
-              {demoIsActive ? "Switch to personal workspace" : "Open personal workspace"}
-              <span aria-hidden="true">→</span>
-            </button>
-          </form>
-        </article>
+      <dl className="stat-tiles">
+        {tiles.map(([label, value, note]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+            {note ? <span>{note}</span> : null}
+          </div>
+        ))}
+      </dl>
 
-        <article className={`workspace-choice demo${demoIsActive ? " active" : ""}`}>
-          <span className="status-label">
-            Fictional demo{demoIsActive ? " · active" : " · not loaded"}
-          </span>
-          <h2>See how reuse works</h2>
-          <p>
-            Load clearly labeled synthetic schools, prompts, essays, versions, and
-            reuse examples. Reloading resets demo records only.
+      <div className="overview-grid">
+        <section className="overview-panel">
+          <div className="panel-head">
+            <h2>Progress by school</h2>
+            <Link className="text-link" href="/schools">All prompts <span aria-hidden="true">→</span></Link>
+          </div>
+          <ul className="progress-rows">
+            {bySchool.map(({ school, progress }) => (
+              <li key={school.id}>
+                <Link href={`/schools?school=${school.id}`}>{school.name}</Link>
+                <ProgressBar progress={progress} />
+                <span className="progress-count">{progress.total > 0 ? `${progress.complete}/${progress.total}` : "—"}</span>
+                <span className="progress-reuse">{progress.reusable > 0 ? `${progress.reusable} reusable` : ""}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="overview-panel">
+          <div className="panel-head">
+            <h2>Progress by category</h2>
+            <Link className="text-link" href="/families">Categories <span aria-hidden="true">→</span></Link>
+          </div>
+          <ul className="progress-rows">
+            {byCategory.map(({ family, progress }) => (
+              <li key={family.id}>
+                <Link href={`/families?family=${family.id}`}>
+                  <span className="swatch" style={{ backgroundColor: family.color }} aria-hidden="true" />
+                  {family.name}
+                </Link>
+                <ProgressBar progress={progress} />
+                <span className="progress-count">{progress.total > 0 ? `${progress.complete}/${progress.total}` : "—"}</span>
+                <span className="progress-reuse">{progress.reusable > 0 ? `${progress.reusable} reusable` : ""}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      <section className="overview-panel">
+        <div className="panel-head">
+          <h2>Reuse opportunities</h2>
+          <Link className="text-link" href="/reuse">All {openReuse} <span aria-hidden="true">→</span></Link>
+        </div>
+        {topReuse.length === 0 ? (
+          <p className="detail-note">
+            {snapshot.essays.length === 0
+              ? "Once your library has essays, prompts they can answer show up here."
+              : "No unanswered prompt matches an existing essay closely enough yet."}
           </p>
-          <form action={loadDemoWorkspace}>
-            <button className="text-link action-link" type="submit">
-              {demoIsActive ? "Reset fictional demo" : "Load fictional demo"}
-              <span aria-hidden="true">→</span>
-            </button>
-          </form>
-        </article>
+        ) : (
+          <ul className="reuse-rows">
+            {topReuse.map(({ match, essay }) => (
+              <li key={match.id}>
+                <span className="match-score">{match.score}</span>
+                <span className="reuse-prompt">
+                  <span className="cell-school">{match.schoolName}</span>
+                  <span>{match.promptTitle}</span>
+                </span>
+                <span className="reuse-action">{essay.title}</span>
+                <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.recommendedAction.replaceAll("-", " ")}</span>
+                <form action={assignEssayAction}>
+                  <input name="promptId" type="hidden" value={match.promptId} />
+                  <input name="essayId" type="hidden" value={essay.id} />
+                  <button className="text-link" type="submit">Use here</button>
+                </form>
+                <span className="reuse-explanation">{match.explanation}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
-      <section className="family-section">
-        <div className="section-intro">
-          <p className="eyebrow">Taxonomy</p>
-          <h2>Ten useful families</h2>
-          <p>
-            Broad enough to reveal reuse opportunities, specific enough to explain why
-            two prompts belong together.
-          </p>
-        </div>
-        <div className="family-list">
-          {families.map((family, index) => (
-            <div className="family-item" key={family}>
-              <span className="family-index">{String(index + 1).padStart(2, "0")}</span>
-              <span>{family}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {overall.previousCycle > 0 || attention > 0 ? (
+        <p className="overview-note">
+          {overall.previousCycle > 0 ? (
+            <>
+              <strong>{overall.previousCycle}</strong> prompt{overall.previousCycle === 1 ? "" : "s"} came from a previous
+              cycle and are excluded from the counts above until the school publishes 2026–27 wording.
+            </>
+          ) : null}
+          {attention > 0 ? (
+            <>
+              {" "}
+              <strong>{attention}</strong> imported prompt{attention === 1 ? "" : "s"} need a source check.
+            </>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
-import { TOP_UNIVERSITIES } from "@/lib/top-universities";
+import { reuseOpportunities, summarizePrompts, workState } from "@/lib/progress";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
-import { assignEssayAction, unassignEssayAction } from "../assignment-actions";
-import { addCollegeAction } from "../college-actions";
+import { assignEssayAction } from "../assignment-actions";
 import {
   createEssayAction,
   deleteEssayAction,
@@ -14,17 +14,31 @@ import {
   saveEssayVersionAction,
   updateEssayMetadataAction,
 } from "../essay-actions";
-import { createPromptAction, deletePromptAction, updatePromptAction } from "../prompt-actions";
+import { createPromptAction } from "../prompt-actions";
+import { AddCollegeForm, ProgressBar, ProgressLine, PromptFields, PromptRow, PromptTableHead } from "../prompt-ui";
 import { deleteSchoolAction, updateSchoolAction } from "../school-actions";
 
 const sections = {
-  schools: { title: "Schools & prompts", eyebrow: "Build the application list", description: "See every school and the prompts waiting for a response." },
-  essays: { title: "Essay library", eyebrow: "Keep every draft findable", description: "Review essay status, word count, versions, and linked prompts." },
-  families: { title: "Prompt families", eyebrow: "See the shape of the work", description: "Explore the editable taxonomy and its prompt and essay coverage." },
-  reuse: { title: "Reuse map", eyebrow: "Connect essays to opportunities", description: "Compare transparent match scores, gaps, and institution-specific risk." },
+  schools: { title: "All prompts", description: "Every prompt on your list, grouped by school." },
+  families: { title: "Essay categories", description: "The same question, asked by different schools — where one essay can do more work." },
+  essays: { title: "My essays", description: "Your reusable library: drafts, versions, and the prompts each essay answers." },
+  reuse: { title: "Reuse opportunities", description: "Essays you already have that could answer prompts you have not started." },
 } as const;
 
 type SectionName = keyof typeof sections;
+
+type Filters = { school: string; family: string; status: string; q: string; edit: string };
+
+// Keeps the current filters in the "edit this prompt" link so opening (and
+// closing) an edit form never throws away the view the student was in.
+function withFilters(base: string, filters: Filters, edit: string) {
+  const params = new URLSearchParams();
+  for (const [key, value] of [["school", filters.school], ["family", filters.family], ["status", filters.status], ["q", filters.q], ["edit", edit]]) {
+    if (value) params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -37,221 +51,282 @@ export async function generateMetadata({ params }: { params: Promise<{ section: 
   return section in sections ? { title: sections[section as SectionName].title } : {};
 }
 
-function EmptyState({ section }: { section: SectionName }) {
-  const copy = {
-    schools: ["No schools yet", "Add school and prompt forms arrive in Phase 2. For now, load the fictional demo to explore the complete foundation."],
-    essays: ["No essays yet", "Your personal essay library is empty. The fictional demo contains six clearly labeled examples."],
-    families: ["Taxonomy ready", "The ten editable families are seeded, but no personal prompts or essays use them yet."],
-    reuse: ["Nothing to match yet", "Reuse candidates appear after a workspace has both essays and prompts. Load the fictional demo to inspect three examples."],
-  } as const;
-  const [title, description] = copy[section];
+function schoolNames(snapshot: WorkspaceSnapshot) {
+  return new Map(snapshot.schools.map((school) => [school.id, school.name]));
+}
 
+function EmptyWorkspace({ children }: { children: ReactNode }) {
   return (
     <div className="empty-state">
       <span className="empty-mark" aria-hidden="true">—</span>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <Link className="text-link" href="/">Choose a workspace <span aria-hidden="true">→</span></Link>
+      <p>{children}</p>
+      <Link className="text-link" href="/">Go to the overview <span aria-hidden="true">→</span></Link>
     </div>
   );
 }
 
-type WorkspacePrompt = WorkspaceSnapshot["prompts"][number];
+/* ------------------------------------------------------------------ prompts */
 
-function PromptFields({ snapshot, prompt }: { snapshot: WorkspaceSnapshot; prompt?: WorkspacePrompt }) {
-  const secondaryIds = new Set(prompt?.secondaryFamilies.map((family) => family.id));
-  const deadline = prompt?.deadline ? prompt.deadline.toISOString().slice(0, 10) : "";
+function PromptFilterBar({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
+  const active = filters.school || filters.family || filters.status || filters.q;
   return (
-    <div className="prompt-fields">
-      <label>School<select name="schoolId" required defaultValue={prompt?.schoolId ?? snapshot.schools[0]?.id}>
-        {snapshot.schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
-      </select></label>
-      <label>Title<input name="title" required minLength={2} maxLength={160} defaultValue={prompt?.title} placeholder="Community contribution" /></label>
-      <label className="field-wide">Full prompt<textarea name="promptText" required minLength={10} maxLength={5000} defaultValue={prompt?.promptText} placeholder="Paste the complete prompt text" /></label>
-      <label>Minimum words<input name="minWordCount" type="number" min={0} step={1} defaultValue={prompt?.minWordCount ?? ""} /></label>
-      <label>Maximum words<input name="maxWordCount" type="number" min={0} step={1} defaultValue={prompt?.maxWordCount ?? ""} /></label>
-      <label>Minimum characters<input name="minCharCount" type="number" min={0} step={1} defaultValue={prompt?.minCharCount ?? ""} /></label>
-      <label>Maximum characters<input name="maxCharCount" type="number" min={0} step={1} defaultValue={prompt?.maxCharCount ?? ""} /></label>
-      <label>Requirement<select name="requirement" defaultValue={prompt?.requirement ?? "required"}><option value="required">Required</option><option value="optional">Optional</option><option value="conditional">Conditional</option></select></label>
-      <label className="field-wide">Conditional note <span>required if Requirement is Conditional</span><input name="conditionalNote" maxLength={300} defaultValue={prompt?.conditionalNote ?? ""} placeholder="Applies only to applicants selecting..." /></label>
-      <label>Status<select name="status" defaultValue={prompt?.status ?? "not-started"}><option value="not-started">Not started</option><option value="in-progress">In progress</option><option value="complete">Complete</option><option value="submitted">Submitted</option></select></label>
-      <label>Deadline<input name="deadline" type="date" defaultValue={deadline} /></label>
-      <label>Primary family<select name="primaryFamilyId" defaultValue={prompt?.primaryFamily?.id ?? ""}><option value="">No primary family</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
-      <fieldset className="family-picker field-wide">
-        <legend>Secondary families <span>choose any that also apply</span></legend>
-        <div>{snapshot.families.map((family) => (
-          <label key={family.id}><input type="checkbox" name="secondaryFamilyIds" value={family.id} defaultChecked={secondaryIds.has(family.id)} /><span>{family.name}</span></label>
-        ))}</div>
-      </fieldset>
-      <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={prompt?.notes ?? ""} placeholder="Requirements, ideas, or context" /></label>
-    </div>
-  );
-}
-
-function AddCollegeForm() {
-  return (
-    <form action={addCollegeAction} className="crud-form">
-      <div>
-        <label htmlFor="college-name">Add a college</label>
-        <input
-          id="college-name"
-          name="collegeName"
-          required
-          minLength={2}
-          maxLength={120}
-          list="top-universities"
-          placeholder="Search the top 100, or type any school"
-        />
-        <datalist id="top-universities">
-          {TOP_UNIVERSITIES.map((name) => <option key={name} value={name} />)}
-        </datalist>
-      </div>
-      <button type="submit">Add college</button>
-      <p className="classification-help field-wide">
-        Choosing a school we have verified 2026–27 prompts for imports and classifies them automatically. Any other
-        name (from the list or typed manually) still adds the school — you can add its prompts yourself below.
-      </p>
+    <form className="filter-bar" action="/schools">
+      <label>
+        <span>School</span>
+        <select name="school" defaultValue={filters.school}>
+          <option value="">All schools</option>
+          {[...snapshot.schools].sort((a, b) => a.name.localeCompare(b.name)).map((school) => (
+            <option key={school.id} value={school.id}>{school.name}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Category</span>
+        <select name="family" defaultValue={filters.family}>
+          <option value="">All categories</option>
+          {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Status</span>
+        <select name="status" defaultValue={filters.status}>
+          <option value="">Any status</option>
+          <option value="not-started">Not started</option>
+          <option value="in-progress">In progress</option>
+          <option value="complete">Complete</option>
+        </select>
+      </label>
+      <label className="filter-search">
+        <span>Search</span>
+        <input name="q" defaultValue={filters.q} placeholder="Prompt or school" />
+      </label>
+      <button type="submit">Filter</button>
+      {active ? <Link className="text-link" href="/schools">Clear</Link> : null}
     </form>
   );
 }
 
-function VerificationBadge({ status, sourceUrl, cycleLabel }: { status: WorkspaceSnapshot["prompts"][number]["verificationStatus"]; sourceUrl: string | null; cycleLabel: string }) {
-  const label = {
-    "officially-verified": "Officially verified",
-    "common-app-verified": "Common App verified",
-    "previous-cycle": `Previous cycle (${cycleLabel})`,
-    "no-supplement-confirmed": "No supplement confirmed",
-    "needs-review": "Needs review",
-    manual: "Manually entered",
-  }[status];
-  const tone = status === "officially-verified" || status === "common-app-verified" ? "verified"
-    : status === "manual" || status === "no-supplement-confirmed" ? "manual"
-    : status === "previous-cycle" ? "previous-cycle"
-    : "unverified";
-  return sourceUrl ? (
-    <a className={`verification-badge ${tone}`} href={sourceUrl} target="_blank" rel="noreferrer">{label}</a>
-  ) : (
-    <span className={`verification-badge ${tone}`}>{label}</span>
-  );
-}
-
-// The required prominent statement - deliberately separate from the small
-// pill badge above, which is too small/short for a full sentence.
-function PreviousCycleWarning({ cycleLabel }: { cycleLabel: string }) {
-  return <p className="cycle-warning">⚠ {cycleLabel} prompt — 2026–27 wording not yet confirmed. Do not treat as a current requirement.</p>;
-}
-
-function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+function AddPanel({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   return (
-    <>
-      <AddCollegeForm />
-
+    <div className="add-panel-row">
+      <details className="add-panel">
+        <summary>Add a college</summary>
+        <AddCollegeForm />
+      </details>
       {snapshot.schools.length > 0 ? (
-        <details className="prompt-create-panel">
-          <summary>Add a prompt</summary>
+        <details className="add-panel">
+          <summary>Add a prompt by hand</summary>
           <form action={createPromptAction} className="prompt-form">
             <PromptFields snapshot={snapshot} />
-            <p className="classification-help">Families selected here are saved as a transparent manual classification.</p>
+            <p className="classification-help">Categories chosen here are saved as your manual classification.</p>
             <button type="submit">Add prompt</button>
           </form>
         </details>
       ) : null}
+    </div>
+  );
+}
 
-      {snapshot.schools.length === 0 ? <EmptyState section="schools" /> : (
-        <div className="record-list">
-          {snapshot.schools.map((school) => {
-            const schoolPrompts = snapshot.prompts.filter((prompt) => prompt.schoolId === school.id);
-            return (
-              <article className="record-row" key={school.id}>
-                <div>
-                  <span className="record-meta">
-                    {snapshot.workspace.kind === "demo" ? "Fictional" : "Personal"} school · {school.promptCount} prompts
-                  </span>
-                  <h2>{school.name}</h2>
-                  <p>{school.notes}</p>
-                  <details className="record-actions">
-                    <summary>Edit or remove</summary>
-                    <form action={updateSchoolAction} className="inline-edit-form">
-                      <input name="schoolId" type="hidden" value={school.id} />
-                      <label>School name<input name="name" required minLength={2} maxLength={120} defaultValue={school.name} /></label>
-                      <label>Notes<input name="notes" maxLength={500} defaultValue={school.notes ?? ""} /></label>
-                      <button type="submit">Save changes</button>
-                    </form>
-                    <form action={deleteSchoolAction} className="delete-form">
-                      <input name="schoolId" type="hidden" value={school.id} />
-                      <span>Deleting also removes this school&apos;s prompts.</span>
-                      <button type="submit">Delete school</button>
-                    </form>
-                  </details>
-                </div>
-                <div className="prompt-list">
-                  {schoolPrompts.map((prompt) => (
-                    <article className="prompt-record" key={prompt.id}>
-                      <div className="prompt-record-heading">
-                        <div><span className="record-meta">{prompt.requirement} · {prompt.status.replace("-", " ")}</span><h3>{prompt.title}</h3></div>
-                        <span>{prompt.maxCharCount ? `${prompt.maxCharCount} chars` : `${prompt.maxWordCount ?? "—"} words`}</span>
-                      </div>
-                      <p>{prompt.promptText}</p>
-                      {prompt.verificationStatus === "previous-cycle" ? <PreviousCycleWarning cycleLabel={prompt.cycleLabel} /> : null}
-                      {prompt.requirement === "conditional" && prompt.conditionalNote ? <p className="conditional-note">Conditional: {prompt.conditionalNote}</p> : null}
-                      <div className="family-chips">
-                        {prompt.primaryFamily ? <span className="primary-chip">Primary · {prompt.primaryFamily.name}</span> : <span>Unclassified</span>}
-                        {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
-                      </div>
-                      <span className="classification-source">{prompt.classificationSource === "manual" ? "Manual override" : `Deterministic suggestion · ${prompt.classificationConfidence}% confidence`}</span>
-                      <div className="verification-row"><VerificationBadge status={prompt.verificationStatus} sourceUrl={prompt.sourceUrl} cycleLabel={prompt.cycleLabel} /></div>
-                      <div className="assignment-block">
-                        {prompt.assignedEssay ? (
-                          <div className="assigned-essay">
-                            <span>Response: <strong>{prompt.assignedEssay.title}</strong></span>
-                            <form action={unassignEssayAction}>
-                              <input name="promptId" type="hidden" value={prompt.id} />
-                              <button type="submit" className="text-link">Unassign</button>
-                            </form>
-                          </div>
-                        ) : prompt.suggestedMatches.length > 0 ? (
-                          <div className="suggested-matches">
-                            <span className="record-meta">Suggested essays · {prompt.suggestedMatches.length}</span>
-                            {prompt.suggestedMatches.map((match) => (
-                              <form action={assignEssayAction} key={match.essayId} className="suggested-match-row">
-                                <input name="promptId" type="hidden" value={prompt.id} />
-                                <input name="essayId" type="hidden" value={match.essayId} />
-                                <span>{match.essayTitle}</span>
-                                <span className="match-score">{match.score}</span>
-                                <span>{match.recommendedAction.replaceAll("-", " ")}</span>
-                                <button type="submit">Use this essay</button>
-                              </form>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="record-meta">No essay assigned yet</span>
-                        )}
-                      </div>
-                      <details className="prompt-actions">
-                        <summary>Edit classification or prompt</summary>
-                        <form action={updatePromptAction} className="prompt-form">
-                          <input name="promptId" type="hidden" value={prompt.id} />
-                          <PromptFields snapshot={snapshot} prompt={prompt} />
-                          <p className="classification-help">Saving replaces the family assignment and marks it as a manual override.</p>
-                          <button type="submit">Save prompt</button>
-                        </form>
-                        <form action={deletePromptAction} className="delete-form">
-                          <input name="promptId" type="hidden" value={prompt.id} />
-                          <span>Deleting also removes this prompt&apos;s family links, matches, and response assignment.</span>
-                          <button type="submit">Delete prompt</button>
-                        </form>
-                      </details>
-                    </article>
+function SchoolHeader({ snapshot, school, focused }: { snapshot: WorkspaceSnapshot; school: WorkspaceSnapshot["schools"][number]; focused: boolean }) {
+  const progress = summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id));
+  return (
+    <div className={`school-header${focused ? " focused" : ""}`}>
+      <div>
+        {focused ? null : (
+          <>
+            <h2><Link href={`/schools?school=${school.id}`}>{school.name}</Link></h2>
+            <ProgressLine progress={progress} />
+          </>
+        )}
+        {school.notes ? <p className="detail-note">{school.notes}</p> : null}
+      </div>
+      <div className="school-header-side">
+        <ProgressBar progress={progress} />
+        <details className="school-edit">
+          <summary>Edit</summary>
+          <form action={updateSchoolAction} className="inline-edit-form">
+            <input name="schoolId" type="hidden" value={school.id} />
+            <label>School name<input name="name" required minLength={2} maxLength={120} defaultValue={school.name} /></label>
+            <label>Notes<input name="notes" maxLength={500} defaultValue={school.notes ?? ""} /></label>
+            <button type="submit">Save changes</button>
+          </form>
+          <form action={deleteSchoolAction} className="delete-form">
+            <input name="schoolId" type="hidden" value={school.id} />
+            <span>Deleting also removes this school&apos;s prompts.</span>
+            <button type="submit">Delete school</button>
+          </form>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
+  const names = schoolNames(snapshot);
+  const query = filters.q.trim().toLowerCase();
+  const visible = snapshot.prompts.filter((prompt) => {
+    if (filters.school && prompt.schoolId !== filters.school) return false;
+    if (filters.family && prompt.primaryFamily?.id !== filters.family && !prompt.secondaryFamilies.some((family) => family.id === filters.family)) return false;
+    if (filters.status && workState(prompt) !== filters.status) return false;
+    if (query) {
+      const haystack = `${prompt.title} ${prompt.promptText} ${names.get(prompt.schoolId) ?? ""}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+
+  const schools = [...snapshot.schools]
+    .filter((school) => !filters.school || school.id === filters.school)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((school) => ({ school, prompts: visible.filter((prompt) => prompt.schoolId === school.id) }))
+    .filter((group) => group.prompts.length > 0 || Boolean(filters.school));
+
+  return (
+    <>
+      <AddPanel snapshot={snapshot} />
+      <PromptFilterBar snapshot={snapshot} filters={filters} />
+
+      {snapshot.schools.length === 0 ? (
+        <EmptyWorkspace>No schools yet. Add a college above and its verified prompts import automatically.</EmptyWorkspace>
+      ) : schools.length === 0 ? (
+        <p className="empty-note">No prompts match this filter.</p>
+      ) : (
+        <div className="school-sections">
+          {schools.map(({ school, prompts }) => (
+            <section key={school.id}>
+              <SchoolHeader snapshot={snapshot} school={school} focused={Boolean(filters.school)} />
+              {prompts.length === 0 ? (
+                <p className="empty-note">No prompts match this filter for {school.name}.</p>
+              ) : (
+                <div className="prompt-table">
+                  <PromptTableHead showSchool={false} />
+                  {prompts.map((prompt) => (
+                    <PromptRow
+                      key={prompt.id}
+                      snapshot={snapshot}
+                      prompt={prompt}
+                      schoolName={school.name}
+                      showSchool={false}
+                      editing={filters.edit === prompt.id}
+                      editHref={`${withFilters("/schools", filters, prompt.id)}#prompt-${prompt.id}`}
+                      cancelHref={`${withFilters("/schools", filters, "")}#prompt-${prompt.id}`}
+                    />
                   ))}
                 </div>
-              </article>
-            );
-          })}
+              )}
+            </section>
+          ))}
         </div>
       )}
     </>
   );
 }
+
+/* --------------------------------------------------------------- categories */
+
+function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
+  const names = schoolNames(snapshot);
+  const focused = filters.family;
+  const groups = snapshot.families
+    .filter((family) => !focused || family.id === focused)
+    .map((family) => ({
+      family,
+      prompts: snapshot.prompts.filter((prompt) => prompt.primaryFamily?.id === family.id),
+    }));
+  const unclassified = focused ? [] : snapshot.prompts.filter((prompt) => !prompt.primaryFamily);
+
+  const used = groups.filter((group) => group.prompts.length > 0);
+  const unused = groups.filter((group) => group.prompts.length === 0);
+
+  if (snapshot.prompts.length === 0) {
+    return <EmptyWorkspace>Categories fill in as soon as you add a college — every imported prompt is classified automatically.</EmptyWorkspace>;
+  }
+
+  return (
+    <>
+      {focused ? <p className="filter-note"><Link className="text-link" href="/families">← All categories</Link></p> : null}
+
+      <div className="category-list">
+        {used.map(({ family, prompts }) => {
+          const progress = summarizePrompts(prompts);
+          const schoolsAsking = [...new Set(prompts.map((prompt) => names.get(prompt.schoolId) ?? ""))];
+          return (
+            <details className="category-group" key={family.id} open>
+              <summary>
+                <span className="swatch large" style={{ backgroundColor: family.color }} aria-hidden="true" />
+                <span className="category-heading">
+                  <span className="category-name">{family.name}</span>
+                  <span className="category-schools">
+                    {schoolsAsking.length} {schoolsAsking.length === 1 ? "school" : "schools"} · {schoolsAsking.slice(0, 4).join(", ")}
+                    {schoolsAsking.length > 4 ? ` +${schoolsAsking.length - 4} more` : ""}
+                  </span>
+                </span>
+                <span className="category-count"><strong>{prompts.length}</strong> prompts</span>
+                <ProgressBar progress={progress} />
+              </summary>
+              <div className="category-body">
+                <p className="category-description">{family.description}</p>
+                <div className="prompt-table">
+                  <PromptTableHead />
+                  {prompts.map((prompt) => (
+                    <PromptRow
+                      key={prompt.id}
+                      snapshot={snapshot}
+                      prompt={prompt}
+                      schoolName={names.get(prompt.schoolId) ?? "Unknown school"}
+                      editing={filters.edit === prompt.id}
+                      editHref={`${withFilters("/families", filters, prompt.id)}#prompt-${prompt.id}`}
+                      cancelHref={`${withFilters("/families", filters, "")}#prompt-${prompt.id}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </details>
+          );
+        })}
+
+        {unclassified.length > 0 ? (
+          <details className="category-group">
+            <summary>
+              <span className="swatch large muted-swatch" aria-hidden="true" />
+              <span className="category-heading">
+                <span className="category-name">Unclassified</span>
+                <span className="category-schools">Prompts with no primary category yet</span>
+              </span>
+              <span className="category-count"><strong>{unclassified.length}</strong> prompts</span>
+              <ProgressBar progress={summarizePrompts(unclassified)} />
+            </summary>
+            <div className="category-body">
+              <div className="prompt-table">
+                <PromptTableHead />
+                {unclassified.map((prompt) => (
+                  <PromptRow
+                    key={prompt.id}
+                    snapshot={snapshot}
+                    prompt={prompt}
+                    schoolName={names.get(prompt.schoolId) ?? "Unknown school"}
+                    editing={filters.edit === prompt.id}
+                    editHref={`${withFilters("/families", filters, prompt.id)}#prompt-${prompt.id}`}
+                    cancelHref={`${withFilters("/families", filters, "")}#prompt-${prompt.id}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </details>
+        ) : null}
+      </div>
+
+      {unused.length > 0 ? (
+        <p className="unused-categories">
+          <span className="detail-label">No prompts yet</span>
+          {unused.map(({ family }) => <span key={family.id}>{family.name}</span>)}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------- essays */
 
 type WorkspaceEssay = WorkspaceSnapshot["essays"][number];
 
@@ -270,9 +345,9 @@ function EssayFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?:
         <option value="canonical">Canonical (reusable original)</option>
         <option value="school-adaptation">School-specific adaptation</option>
       </select></label>
-      <label>Primary family<select name="primaryFamilyId" defaultValue={essay?.primaryFamily?.id ?? ""}><option value="">No primary family</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
+      <label>Primary category<select name="primaryFamilyId" defaultValue={essay?.primaryFamily?.id ?? ""}><option value="">No primary category</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
       <fieldset className="family-picker field-wide">
-        <legend>Secondary families <span>choose any that also apply</span></legend>
+        <legend>Secondary categories <span>choose any that also apply</span></legend>
         <div>{snapshot.families.map((family) => (
           <label key={family.id}><input type="checkbox" name="secondaryFamilyIds" value={family.id} defaultChecked={secondaryIds.has(family.id)} /><span>{family.name}</span></label>
         ))}</div>
@@ -282,28 +357,6 @@ function EssayFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?:
       </label>
       <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={essay?.notes ?? ""} placeholder="Context, ideas, or reminders" /></label>
     </div>
-  );
-}
-
-function EssayFilterForm({ snapshot, status, familyId, query }: { snapshot: WorkspaceSnapshot; status: string; familyId: string; query: string }) {
-  return (
-    <form className="crud-form essay-filter-form" action="/essays">
-      <div><label htmlFor="essay-q">Search</label><input id="essay-q" name="q" defaultValue={query} placeholder="Title or content" /></div>
-      <div><label htmlFor="essay-status">Status</label>
-        <select id="essay-status" name="status" defaultValue={status}>
-          <option value="">Any status</option>
-          {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
-      </div>
-      <div><label htmlFor="essay-family">Family</label>
-        <select id="essay-family" name="family" defaultValue={familyId}>
-          <option value="">Any family</option>
-          {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
-        </select>
-      </div>
-      <button type="submit">Filter</button>
-      {(status || familyId || query) ? <Link className="text-link" href="/essays">Clear</Link> : null}
-    </form>
   );
 }
 
@@ -335,60 +388,93 @@ function EssayVersionHistory({ essay }: { essay: WorkspaceEssay }) {
   );
 }
 
-function EssaysView({ snapshot, status, familyId, query }: { snapshot: WorkspaceSnapshot; status: string; familyId: string; query: string }) {
-  const normalizedQuery = query.trim().toLowerCase();
+function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
+  const query = filters.q.trim().toLowerCase();
+  const openByEssay = new Map(
+    reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts).map((group) => [group.essay.id, group.open.length]),
+  );
   const filteredEssays = snapshot.essays.filter((essay) => {
-    if (status && essay.status !== status) return false;
-    if (familyId && essay.primaryFamily?.id !== familyId && !essay.secondaryFamilies.some((family) => family.id === familyId)) return false;
-    if (normalizedQuery && !essay.title.toLowerCase().includes(normalizedQuery) && !essay.currentContent.toLowerCase().includes(normalizedQuery)) return false;
+    if (filters.status && essay.status !== filters.status) return false;
+    if (filters.family && essay.primaryFamily?.id !== filters.family && !essay.secondaryFamilies.some((family) => family.id === filters.family)) return false;
+    if (query && !essay.title.toLowerCase().includes(query) && !essay.currentContent.toLowerCase().includes(query)) return false;
     return true;
   });
 
   return (
     <>
-      <details className="prompt-create-panel">
-        <summary>Add an essay</summary>
-        <form action={createEssayAction} className="prompt-form">
-          <EssayFields snapshot={snapshot} />
-          <label className="field-wide">Starting content<textarea name="content" maxLength={20000} placeholder="Draft the first version here, or leave blank and write later" /></label>
-          <button type="submit">Add essay</button>
-        </form>
-      </details>
+      <div className="add-panel-row">
+        <details className="add-panel">
+          <summary>Add an essay</summary>
+          <form action={createEssayAction} className="prompt-form">
+            <EssayFields snapshot={snapshot} />
+            <label className="field-wide">Starting content<textarea name="content" maxLength={20000} placeholder="Draft the first version here, or leave blank and write later" /></label>
+            <button type="submit">Add essay</button>
+          </form>
+        </details>
+      </div>
 
-      <EssayFilterForm snapshot={snapshot} status={status} familyId={familyId} query={query} />
+      <form className="filter-bar" action="/essays">
+        <label>
+          <span>Status</span>
+          <select name="status" defaultValue={filters.status}>
+            <option value="">Any status</option>
+            {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Category</span>
+          <select name="family" defaultValue={filters.family}>
+            <option value="">All categories</option>
+            {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+          </select>
+        </label>
+        <label className="filter-search">
+          <span>Search</span>
+          <input name="q" defaultValue={filters.q} placeholder="Title or content" />
+        </label>
+        <button type="submit">Filter</button>
+        {filters.status || filters.family || filters.q ? <Link className="text-link" href="/essays">Clear</Link> : null}
+      </form>
 
-      {snapshot.essays.length === 0 ? <EmptyState section="essays" /> : filteredEssays.length === 0 ? (
+      {snapshot.essays.length === 0 ? (
+        <EmptyWorkspace>No essays yet. Open a prompt and choose “Start a new essay for this prompt”, or add one here.</EmptyWorkspace>
+      ) : filteredEssays.length === 0 ? (
         <p className="empty-note">No essays match this filter.</p>
       ) : (
         <div className="record-grid">
           {filteredEssays.map((essay) => (
-            <article className="essay-record" key={essay.id}>
+            <article className="essay-record" id={`essay-${essay.id}`} key={essay.id}>
               <div className="record-meta-row">
-                <span className="record-meta">{essay.designation.replace("-", " ")}</span>
                 <span className={`status-pill ${essay.status}`}>{essay.status}</span>
+                <span className="record-meta">
+                  {essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""} words · v{essay.versionCount}
+                </span>
               </div>
               <h2>{essay.title}</h2>
-              <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
               <div className="family-chips">
-                {essay.primaryFamily ? <span className="primary-chip">Primary · {essay.primaryFamily.name}</span> : <span>Unclassified</span>}
+                {essay.primaryFamily ? (
+                  <span className="primary-chip">
+                    <span className="swatch" style={{ backgroundColor: essay.primaryFamily.color }} aria-hidden="true" />
+                    {essay.primaryFamily.name}
+                  </span>
+                ) : <span>Unclassified</span>}
                 {essay.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
               </div>
+              <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
+              <p className="essay-usage">
+                {essay.linkedPromptCount > 0
+                  ? `Answering ${essay.linkedPromptCount} ${essay.linkedPromptCount === 1 ? "prompt" : "prompts"}`
+                  : "Not assigned to a prompt yet"}
+                {openByEssay.get(essay.id) ? <> · <Link className="text-link" href="/reuse">{openByEssay.get(essay.id)} more possible</Link></> : null}
+              </p>
               {essay.linkedPrompts.length > 0 ? (
-                <p className="linked-prompts-note">Used for: {essay.linkedPrompts.map((link) => `${link.schoolName} · ${link.title}`).join("; ")}</p>
+                <ul className="linked-prompt-list">
+                  {essay.linkedPrompts.map((link) => <li key={link.id}>{link.schoolName} · {link.title}</li>)}
+                </ul>
               ) : null}
               {essay.schoolSpecificPhrases.length > 0 ? <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p> : null}
-              <dl className="record-stats">
-                <div><dt>Words</dt><dd>{essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""}</dd></div>
-                <div><dt>Versions</dt><dd>{essay.versionCount}</dd></div>
-                <div><dt>Prompts</dt><dd>{essay.linkedPromptCount}</dd></div>
-              </dl>
               <details className="record-actions">
-                <summary>Edit, write, or remove</summary>
-                <form action={updateEssayMetadataAction} className="prompt-form">
-                  <input name="essayId" type="hidden" value={essay.id} />
-                  <EssayFields snapshot={snapshot} essay={essay} />
-                  <button type="submit">Save essay details</button>
-                </form>
+                <summary>Write, edit, or remove</summary>
                 <form action={saveEssayVersionAction} className="prompt-form">
                   <input name="essayId" type="hidden" value={essay.id} />
                   <label className="field-wide">New content <span>saving creates a new version; the essay is never edited in place</span>
@@ -396,6 +482,11 @@ function EssaysView({ snapshot, status, familyId, query }: { snapshot: Workspace
                   </label>
                   <label className="field-wide">Reason for this version<input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
                   <button type="submit">Save as new version</button>
+                </form>
+                <form action={updateEssayMetadataAction} className="prompt-form">
+                  <input name="essayId" type="hidden" value={essay.id} />
+                  <EssayFields snapshot={snapshot} essay={essay} />
+                  <button type="submit">Save essay details</button>
                 </form>
                 <EssayVersionHistory essay={essay} />
                 <form action={deleteEssayAction} className="delete-form">
@@ -412,63 +503,91 @@ function EssaysView({ snapshot, status, familyId, query }: { snapshot: Workspace
   );
 }
 
-function FamiliesView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+/* --------------------------------------------------------------------- reuse */
+
+function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+  const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
+  const openTotal = groups.reduce((total, group) => total + group.open.length, 0);
+  const needsNew = snapshot.prompts.filter(
+    (prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !groups.some((group) => group.open.some((match) => match.promptId === prompt.id)),
+  ).length;
+
+  if (groups.length === 0) {
+    return (
+      <EmptyWorkspace>
+        {snapshot.essays.length === 0
+          ? "Reuse appears once your library has essays. Open a prompt and start one, or add an essay from My essays."
+          : "None of your essays match an unanswered prompt closely enough to reuse yet. Classify prompts or essays to improve the match."}
+      </EmptyWorkspace>
+    );
+  }
+
   return (
-    <div className="taxonomy-table">
-      {snapshot.families.map((family) => (
-        <article className="taxonomy-row" key={family.id}>
-          <span className="family-swatch" style={{ backgroundColor: family.color }} aria-hidden="true" />
-          <span className="family-index">{String(family.sortOrder).padStart(2, "0")}</span>
-          <div>
-            <h2>{family.name}</h2>
-            <p>{family.description}</p>
-            {family.prompts.length > 0 ? (
-              <ul className="cross-school-prompt-list">
-                {family.prompts.map((prompt) => (
-                  <li key={prompt.id}>
-                    <strong>{prompt.schoolName}</strong> — {prompt.title}
-                    {prompt.maxWordCount ? <span> · {prompt.maxWordCount} words</span> : null}
+    <>
+      <p className="reuse-lede">
+        <strong>{openTotal}</strong> unanswered {openTotal === 1 ? "prompt" : "prompts"} can likely be served by an essay you already have.
+        {needsNew > 0 ? <> {needsNew} still need something new.</> : null}
+      </p>
+
+      <div className="reuse-list">
+        {groups.map(({ essay, inUse, open }) => (
+          <article className="reuse-group" key={essay.id}>
+            <div className="reuse-group-head">
+              <div>
+                <h2><Link href={`/essays#essay-${essay.id}`}>{essay.title}</Link></h2>
+                <p className="reuse-group-meta">{essay.wordCount} words · {essay.status}</p>
+              </div>
+              <p className="reuse-tally">
+                <span><strong>{inUse.length}</strong> in use</span>
+                <span><strong>{open.length}</strong> open</span>
+              </p>
+            </div>
+
+            {open.length > 0 ? (
+              <ul className="reuse-rows">
+                {open.map((match) => (
+                  <li key={match.id}>
+                    <span className="match-score">{match.score}</span>
+                    <span className="reuse-prompt">
+                      <span className="cell-school">{match.schoolName}</span>
+                      <span>{match.promptTitle}</span>
+                    </span>
+                    <span className="reuse-action">{match.recommendedAction.replaceAll("-", " ")}</span>
+                    <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
+                    <form action={assignEssayAction}>
+                      <input name="promptId" type="hidden" value={match.promptId} />
+                      <input name="essayId" type="hidden" value={essay.id} />
+                      <button className="text-link" type="submit">Use here</button>
+                    </form>
+                    <span className="reuse-explanation">{match.explanation}</span>
                   </li>
                 ))}
               </ul>
+            ) : (
+              <p className="detail-note">No further prompts match this essay yet.</p>
+            )}
+
+            {inUse.length > 0 ? (
+              <p className="reuse-inuse">
+                <span className="detail-label">Already answering</span>
+                {inUse.map((match) => <span key={match.id}>{match.schoolName} · {match.promptTitle}</span>)}
+              </p>
             ) : null}
-          </div>
-          <div className="coverage-counts">
-            <span><strong>{family.promptCount}</strong> prompts</span>
-            <span><strong>{family.essayCount}</strong> essays</span>
-          </div>
-        </article>
-      ))}
-    </div>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
 
-function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  if (snapshot.matches.length === 0) return <EmptyState section="reuse" />;
-  return (
-    <div className="match-list">
-      {snapshot.matches.map((match) => (
-        <article className={`match-row risk-${match.schoolSpecificityRisk}`} key={match.id}>
-          <div className="score-block"><strong>{match.score}</strong><span>match</span></div>
-          <div>
-            <span className="record-meta">{match.schoolName} · {match.recommendedAction.replaceAll("-", " ")}</span>
-            <h2>{match.essayTitle} <span aria-hidden="true">→</span> {match.promptTitle}</h2>
-            <p>{match.explanation}</p>
-            {match.missingRequirements.length > 0 ? <p className="missing-note">Missing: {match.missingRequirements.join(", ")}</p> : null}
-          </div>
-          <span className="risk-label">{match.schoolSpecificityRisk} school risk</span>
-        </article>
-      ))}
-    </div>
-  );
-}
+/* ---------------------------------------------------------------------- page */
 
 export default async function SectionPage({
   params,
   searchParams,
 }: {
   params: Promise<{ section: string }>;
-  searchParams: Promise<{ status?: string; family?: string; q?: string }>;
+  searchParams: Promise<{ school?: string; status?: string; family?: string; q?: string; edit?: string }>;
 }) {
   const { section } = await params;
   if (!(section in sections)) notFound();
@@ -476,32 +595,50 @@ export default async function SectionPage({
   const sectionName = section as SectionName;
   const content = sections[sectionName];
   const snapshot = await getActiveWorkspaceSnapshot();
-  const filters = await searchParams;
+  const raw = await searchParams;
+  const filters: Filters = {
+    school: raw.school ?? "",
+    family: raw.family ?? "",
+    status: raw.status ?? "",
+    q: raw.q ?? "",
+    edit: raw.edit ?? "",
+  };
+  const focusedSchool = snapshot.schools.find((school) => school.id === filters.school);
+  const focusedFamily = snapshot.families.find((family) => family.id === filters.family);
+
+  const heading = sectionName === "schools" && focusedSchool
+    ? focusedSchool.name
+    : sectionName === "families" && focusedFamily
+      ? focusedFamily.name
+      : content.title;
+
   const views = {
-    schools: <SchoolsView snapshot={snapshot} />,
-    essays: <EssaysView snapshot={snapshot} status={filters.status ?? ""} familyId={filters.family ?? ""} query={filters.q ?? ""} />,
-    families: <FamiliesView snapshot={snapshot} />,
+    schools: <PromptsView snapshot={snapshot} filters={filters} />,
+    families: <CategoriesView snapshot={snapshot} filters={filters} />,
+    essays: <EssaysView snapshot={snapshot} filters={filters} />,
     reuse: <ReuseView snapshot={snapshot} />,
   };
 
   return (
-    <div className="page-frame data-page">
-      <header className="data-heading">
-        <div><p className="eyebrow">{content.eyebrow}</p><h1>{content.title}</h1><p className="lede">{content.description}</p></div>
-        <aside className={`workspace-badge ${snapshot.workspace.kind}`}>
-          <span className="note-kicker">Active workspace</span>
-          <strong>{snapshot.workspace.name}</strong>
-          <span>{snapshot.workspace.kind === "demo" ? "Synthetic data only" : "Private personal data"}</span>
-          <Link href="/">Switch workspace</Link>
-        </aside>
+    <div className="page-frame">
+      <header className="section-heading">
+        <div>
+          <h1>{heading}</h1>
+          <p className="lede">
+            {focusedSchool
+              ? "Every prompt this school asks, and the essays that can answer them."
+              : focusedFamily
+                ? focusedFamily.description
+                : content.description}
+          </p>
+        </div>
+        <ProgressLine
+          className="section-progress"
+          progress={summarizePrompts(
+            filters.school ? snapshot.prompts.filter((prompt) => prompt.schoolId === filters.school) : snapshot.prompts,
+          )}
+        />
       </header>
-
-      <dl className="summary-strip">
-        <div><dt>Schools</dt><dd>{snapshot.stats.schools}</dd></div>
-        <div><dt>Prompts</dt><dd>{snapshot.stats.prompts}</dd></div>
-        <div><dt>Essays</dt><dd>{snapshot.stats.essays}</dd></div>
-        <div><dt>Strong matches</dt><dd>{snapshot.stats.strongMatches}</dd></div>
-      </dl>
       {views[sectionName]}
     </div>
   );

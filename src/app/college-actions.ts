@@ -16,6 +16,7 @@ export async function addCollegeAction(formData: FormData) {
   importCollege(db, snapshot.workspace.id, name);
   recomputeWorkspaceMatches(db, snapshot.workspace.id);
 
+  revalidatePath("/");
   revalidatePath("/schools");
   revalidatePath("/families");
   revalidatePath("/reuse");

@@ -160,6 +160,17 @@ export function updatePrompt(db: AppDatabase, workspaceId: string, promptId: str
   });
 }
 
+// Status is the one prompt field a student flips constantly while working, so
+// it gets its own narrow update: unlike updatePrompt it deliberately leaves
+// classification (and its manual-override flag) untouched.
+export function setPromptStatus(db: AppDatabase, workspaceId: string, promptId: string, status: PromptInput["status"]) {
+  const result = db.update(prompts)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))
+    .run();
+  if (result.changes !== 1) throw new Error("Prompt not found in the active workspace.");
+}
+
 export function deletePrompt(db: AppDatabase, workspaceId: string, promptId: string) {
   const result = db.delete(prompts)
     .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))

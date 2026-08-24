@@ -45,6 +45,8 @@ function essayMetadataInput(formData: FormData): EssayMetadataInput {
 }
 
 function revalidateEssayPaths() {
+  revalidatePath("/");
+  revalidatePath("/schools");
   revalidatePath("/essays");
   revalidatePath("/families");
   revalidatePath("/reuse");
