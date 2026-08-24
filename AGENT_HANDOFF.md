@@ -228,7 +228,8 @@ so this is local-only fixture data, not committed):
 
 ## Last Verified Commit
 
-The UI-redesign commit that follows this handoff update. Full canonical
+`a4fc7a6` — "Rebuild the UI as an essay-management information
+architecture". Full canonical
 verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
 production build, 80 orchestration tests) passed immediately before it,
 alongside the browser verification listed above.
