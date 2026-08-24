@@ -7,28 +7,27 @@ this once at the start of a session and follow it for the whole run.
 
 ## Objective
 
-<!-- TEMPORARY — Layer 3 automated-pipeline test. Delete this section and the
-     file it creates once a human confirms the automated Claude -> Codex run
-     (scripts/overnight_handoff.sh) worked end-to-end for real. -->
+Build the College Essay Organizer MVP. The full product spec — mission,
+prompt-family taxonomy, data model, UX, matching/suggestion architecture,
+demo workspace, tech/visual direction, phased priorities, and the P0
+Definition of Done — lives in [MVP_SPEC.md](MVP_SPEC.md). Read it completely
+before starting or resuming work; this file only holds the rules for *how*
+to work, not *what* to build.
 
-Build `scripts/layer3_smoke.py`, a tiny throwaway module with two pure
-functions, each implemented and verified **one at a time** as its own commit
-— same pattern as the (now cleaned up) Layer 2 test, new file/functions so
-there's no confusion with that history. This does not touch the real College
-Essay Organizer app.
+Tonight's run is scoped to **one Codex phase, then one Claude phase, then
+stop** (see [CLAUDE.md](CLAUDE.md) for the automated pipeline that runs
+this). That is not expected to reach the full P0 Definition of Done in one
+night — make as much verified progress as the phases allow, checkpoint, and
+leave [AGENT_HANDOFF.md](AGENT_HANDOFF.md) accurate for whoever (human or
+agent) continues from there.
 
-1. Implement `multiply(a, b)`. Verify it with an assert-based self-check in
-   the file's `if __name__ == "__main__":` block (no test framework — this
-   repo has no dependencies). Run it, confirm it passes, then commit.
-2. Implement `divide(a, b)` (integer inputs, return a float; no need to
-   handle division by zero specially — just let it raise). Extend the
-   self-check to cover it, run it, confirm it passes, then commit.
-
-Definition of Done for this objective: both functions implemented and
-covered by the self-check, the self-check passes end-to-end, and each step
-landed as its own verified commit. Once a human confirms the automated
-handoff worked, delete `scripts/layer3_smoke.py` and this Objective section
-— none of it is part of the real product.
+(This replaces a staged-but-never-run Layer 3 pipeline smoke-test objective
+— `scripts/layer3_smoke.py`, multiply/divide — which never got a real run
+and never produced a `scripts/layer3_smoke.py` file; there is nothing to
+clean up for it. The earlier Layer 2 handoff-test objective —
+`scripts/handoff_check.py` with `add`/`subtract` — did run for real, passed,
+and was cleaned up by human authorization; its commits remain in git
+history for reference.)
 
 ## Rules
 
@@ -64,14 +63,49 @@ handoff worked, delete `scripts/layer3_smoke.py` and this Objective section
    at the repo root, it is the canonical way to run this repo's tests — use
    it instead of guessing a test command, and it's what the automated
    pipeline runs to verify each phase. If it doesn't exist yet, there is
-   nothing to run.
+   nothing to run. MVP_SPEC.md's Phase 1 (Foundation) includes creating one.
+9. **Bounded effort.** For each discrete work item, attempt no more than
+   two substantially different approaches. Never repeat an unchanged
+   failing command or strategy without a specific new hypothesis. A small,
+   evidence-backed correction (a typo fix, a change directly justified by
+   new test output) does not itself count as a new approach. Use soft time
+   budgets as guidance, not hard timers (roughly 30 min for an ordinary
+   item, up to ~60 min for a foundational one; stop and reassess after
+   ~30 min with no verified progress). After two failed approaches, record
+   them under a **Failed Approaches** section in AGENT_HANDOFF.md, mark the
+   item `BLOCKED`, and move to the next independent item — do not build
+   dependent work on top of a broken foundation. Never revert unrelated or
+   previously-verified work while doing this.
+10. **No external spend or external state changes.** Beyond rule 6: do not
+    create external accounts, do not modify Vercel/Neon/GitHub/or other
+    cloud resources, do not use a paid API or any API key, and never
+    reveal, print, or copy a secret or credential value. This app is
+    designed (see MVP_SPEC.md §5) to need none of that — if something seems
+    to require it, that's a sign to stop and record a `HUMAN-REQUIRED:`
+    blocker (rule 7), not to work around it.
+11. **Usage limits and degraded runs are not implementation failures.** A
+    usage-limit, context-limit, permission-denial, or authentication-
+    preflight stop does not consume the retry allowance in rule 9. The
+    automated pipeline (`scripts/overnight_handoff.sh`) may report a
+    "degraded but recovered" run (exit code 12) when one phase ended
+    nonzero but still left a safe, verified checkpoint that the next phase
+    successfully continued from — that is a successful handoff, not a bug
+    to chase.
+12. **A changed spec invalidates stale verification.** If MVP_SPEC.md
+    changes materially (a human edits it) partway through, update
+    AGENT_HANDOFF.md to reflect the new requirement and re-verify any
+    already-written code the change affects — never let code silently keep
+    representing a superseded spec as satisfied.
 
 ## Definition of Done
 
-- [ ] The objective above is fully implemented.
+- [ ] MVP_SPEC.md's P0 Definition of Done is reached, OR the gap between
+      current state and P0 is accurately recorded in AGENT_HANDOFF.md
+      (tonight's run is not expected to finish P0 in one Codex+Claude
+      round — see the Objective above).
 - [ ] All tests pass, and no unrelated tests were weakened or removed.
 - [ ] No unrelated code was changed or reverted.
 - [ ] [AGENT_HANDOFF.md](AGENT_HANDOFF.md) is up to date and reflects the
-      final state.
+      final state, including Failed Approaches if any.
 - [ ] A final verified commit exists and its hash is recorded in
       AGENT_HANDOFF.md under "Last Verified Commit".
