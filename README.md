@@ -52,8 +52,7 @@ npm run dev                    # http://localhost:3000
 ```
 
 `.env.local` is gitignored. See [Access control](#access-control) for the
-`BASIC_AUTH_*` variables, which are optional locally and required in
-production.
+`AUTH_*` variables, which are optional locally and required in production.
 
 The personal workspace and its taxonomy are created automatically on first
 request, so a freshly migrated database opens to an empty workspace ready for
@@ -64,29 +63,47 @@ Useful scripts: `npm run db:generate` (after an intentional schema change),
 
 ## Access control
 
-The whole app sits behind HTTP Basic auth, enforced in
-[`src/proxy.ts`](src/proxy.ts) (Next.js 16 renamed `middleware.ts` to
-`proxy.ts`) with the credential check in
-[`basic-auth.ts`](src/lib/basic-auth.ts).
+The app is guarded by a single shared account with a real sign-in page at
+`/sign-in`, not the browser's Basic-auth dialog. Credentials are exchanged for
+an HMAC-signed session cookie; the gate lives in [`src/proxy.ts`](src/proxy.ts)
+(Next.js 16 renamed `middleware.ts` to `proxy.ts`) and the logic in
+[`auth.ts`](src/lib/auth.ts).
 
 ```bash
-BASIC_AUTH_USER="you"
-BASIC_AUTH_PASSWORD="a long random string"
+AUTH_USERNAME="you"
+AUTH_PASSWORD="a long random string"
+AUTH_SECRET="another long random string"   # signs the session cookie
 ```
 
-Two deliberate behaviours:
+Generate the secret with:
 
-- **It fails closed in production.** If either variable is missing, the
-  deployment returns 503 for every request instead of serving your essays
-  unprotected. A missing environment variable is the most likely way this
-  protection would silently disappear, so it is loud.
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Behaviour worth knowing:
+
+- **It fails closed in production.** If any of the three is missing, every
+  route redirects to a sign-in page that explains it is unconfigured, rather
+  than serving your essays unprotected. A missing environment variable is the
+  likeliest way this protection would silently disappear.
 - **Local development is not gated** while the variables are unset, so `npm run
   dev` needs no setup. Set them locally and the gate applies there too.
+- Sessions are **stateless**: the cookie carries its own expiry (14 days) and a
+  signature over it, so nothing is stored server-side. Consequently individual
+  sessions cannot be revoked — rotating `AUTH_SECRET` signs everyone out.
+- The cookie is `httpOnly`, `sameSite=lax`, and `secure` in production.
+- The sign-in page renders under a deliberately minimal root layout, so it
+  works even when the database is unreachable. The sidebar and its workspace
+  queries live in the `(app)` route group's layout, behind the gate.
+- The post-sign-in redirect is validated to be a same-site path, so the page
+  cannot be turned into an open redirect.
 
-This is a single shared credential, not a user system: there are no accounts,
-and anyone who authenticates can read and edit everything in both workspaces.
-That matches the product today — one student, one private deployment — but it
-is the thing to replace first if this is ever shared.
+This is one shared credential, not a user system: anyone who signs in can read
+and edit everything in both workspaces. That matches the product today — one
+student, one private deployment — but it is the thing to replace first if this
+is ever shared. There is also no rate limiting on the sign-in form; the
+protection is the password's entropy, so use a long random one.
 
 ## How prompts get into the app
 
@@ -149,11 +166,14 @@ database connection.
 
 ```
 src/app/
-  layout.tsx            sidebar navigation, per-school progress, workspace switch
-  page.tsx              Overview dashboard
-  [section]/page.tsx    All prompts / Categories / My essays / Reuse
+  layout.tsx            minimal root: no database, so /sign-in always renders
+  sign-in/page.tsx      the sign-in form
+  proxy.ts (src/)       the auth gate, in front of every route
+  (app)/layout.tsx      sidebar navigation, per-school progress, workspace switch
+  (app)/page.tsx        Overview dashboard
+  (app)/[section]/      All prompts / Categories / My essays / Reuse
   prompt-ui.tsx         the shared prompt row used by two views
-  *-actions.ts          server actions (college, school, prompt, essay, assignment)
+  *-actions.ts          server actions (auth, college, school, prompt, essay)
 src/lib/
   retrieval/            typed school records + registry + validation
   college-import.ts     the single "Add College" entry point
@@ -234,9 +254,10 @@ Recorded honestly rather than papered over:
 - **36 of 100 schools import no prompts** (`needs-review` above). This is a
   data-availability limit, not a bug, and each record says exactly what was
   unresolved.
-- Single user and a single shared Basic-auth credential rather than accounts;
-  no multi-device sync. Workspaces are separated by a cookie, not by identity,
-  so everyone who logs in shares the same personal workspace.
+- Single user and a single shared credential rather than accounts; no
+  multi-device sync, no password reset, no rate limiting on sign-in. Workspaces
+  are separated by a cookie, not by identity, so everyone who signs in shares
+  the same personal workspace.
 - Migrations are applied manually (`npm run db:migrate`), deliberately not on
   boot: concurrent serverless instances racing migrations is how a schema gets
   corrupted.

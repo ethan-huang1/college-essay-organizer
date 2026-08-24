@@ -3,8 +3,8 @@ import Link from "next/link";
 import { DEMO_SCHOOLS } from "@/lib/db/demo-workspace";
 import { reuseOpportunities, summarizePrompts } from "@/lib/progress";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
-import { assignEssayAction } from "./assignment-actions";
-import { AddCollegeForm, ProgressBar, ProgressLine } from "./prompt-ui";
+import { assignEssayAction } from "../assignment-actions";
+import { AddCollegeForm, ProgressBar, ProgressLine } from "../prompt-ui";
 
 export const dynamic = "force-dynamic";
 

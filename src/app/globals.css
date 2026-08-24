@@ -301,6 +301,106 @@ h3 {
   margin: 0 auto;
 }
 
+/* ----------------------------------------------------------------- sign in */
+
+.sign-in-frame {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px 20px;
+}
+
+.sign-in-card {
+  width: min(100%, 396px);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  padding: 34px 32px 28px;
+}
+
+.sign-in-card .brand-mark {
+  margin-bottom: 20px;
+}
+
+.sign-in-card h1 {
+  margin-bottom: 8px;
+  font-size: 25px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.sign-in-lede {
+  margin-bottom: 22px;
+  color: var(--ink-soft);
+  font-family: var(--font-editorial);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.sign-in-error {
+  border-left: 2px solid var(--oxblood);
+  padding: 2px 0 2px 10px;
+  margin-bottom: 18px;
+  color: var(--oxblood);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.sign-in-form {
+  display: grid;
+  gap: 14px;
+}
+
+.sign-in-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.sign-in-form input {
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper);
+  padding: 10px 11px;
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.sign-in-form button {
+  margin-top: 4px;
+  border: 1px solid var(--moss-dark);
+  border-radius: 5px;
+  background: var(--moss-dark);
+  padding: 11px 16px;
+  color: #f7f4ea;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sign-in-form button:hover {
+  background: #2a3325;
+}
+
+.sign-in-note {
+  margin: 22px 0 0;
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.sign-out-form {
+  margin-top: 12px;
+}
+
 /* --------------------------------------------------------- page furniture */
 
 .section-heading {

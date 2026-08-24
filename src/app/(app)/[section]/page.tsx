@@ -6,17 +6,17 @@ import type { ReactNode } from "react";
 import { reuseOpportunities, summarizePrompts, workState } from "@/lib/progress";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
-import { assignEssayAction } from "../assignment-actions";
+import { assignEssayAction } from "../../assignment-actions";
 import {
   createEssayAction,
   deleteEssayAction,
   restoreEssayVersionAction,
   saveEssayVersionAction,
   updateEssayMetadataAction,
-} from "../essay-actions";
-import { createPromptAction } from "../prompt-actions";
-import { AddCollegeForm, ProgressBar, ProgressLine, PromptFields, PromptRow, PromptTableHead } from "../prompt-ui";
-import { deleteSchoolAction, updateSchoolAction } from "../school-actions";
+} from "../../essay-actions";
+import { createPromptAction } from "../../prompt-actions";
+import { AddCollegeForm, ProgressBar, ProgressLine, PromptFields, PromptRow, PromptTableHead } from "../../prompt-ui";
+import { deleteSchoolAction, updateSchoolAction } from "../../school-actions";
 
 const sections = {
   schools: { title: "All prompts", description: "Every prompt on your list, grouped by school." },
