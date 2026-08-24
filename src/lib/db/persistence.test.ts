@@ -26,6 +26,7 @@ import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
 import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, updateEssayMetadata } from "../essays";
 import { recomputeWorkspaceMatches } from "../reuse";
 import { importCollege } from "../college-import";
+import { assignEssayToPrompt, unassignPrompt } from "../assignments";
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -434,5 +435,30 @@ describe("local persistence foundation", () => {
     expect(result.verificationStatus).toBe("previous-cycle");
     expect(result.importedPromptCount).toBe(0);
     expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, result.schoolId)).all()).toHaveLength(0);
+  });
+
+  it("assigns exactly one essay response per prompt, replacing a prior assignment, and can unassign", () => {
+    initializePersonalWorkspace(connection.db);
+    const school = createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Lakeview University" });
+    if (!school) throw new Error("Expected the school to be created.");
+    const promptId = createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+      schoolId: school.id, title: "Community", promptText: "Describe a community you belong to.",
+      requirement: "required", status: "not-started",
+    });
+    const essayOneId = createEssay(connection.db, PERSONAL_WORKSPACE_ID, { title: "Essay one", content: "x", status: "draft", designation: "canonical" });
+    const essayTwoId = createEssay(connection.db, PERSONAL_WORKSPACE_ID, { title: "Essay two", content: "y", status: "draft", designation: "canonical" });
+
+    assignEssayToPrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId, essayOneId);
+    let snapshot = getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay?.id).toBe(essayOneId);
+
+    assignEssayToPrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId, essayTwoId);
+    expect(connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.promptId, promptId)).all()).toHaveLength(1);
+    snapshot = getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay?.id).toBe(essayTwoId);
+
+    unassignPrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId);
+    snapshot = getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay).toBeNull();
   });
 });

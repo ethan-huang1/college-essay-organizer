@@ -48,6 +48,20 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
     prompts: workspacePrompts.map((prompt) => {
       const links = familyPromptLinks.filter((link) => link.promptId === prompt.id);
       const primaryLink = links.find((link) => link.isPrimary);
+      const assignment = assignments.find((candidate) => candidate.promptId === prompt.id);
+      const assignedEssay = assignment
+        ? workspaceEssays.find((essay) => essay.id === assignment.essayId)
+        : undefined;
+      const suggestedMatches = matches
+        .filter((match) => match.promptId === prompt.id && match.essayId !== assignment?.essayId)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map((match) => ({
+          essayId: match.essayId,
+          essayTitle: workspaceEssays.find((essay) => essay.id === match.essayId)?.title ?? "Unknown essay",
+          score: match.score,
+          recommendedAction: match.recommendedAction,
+        }));
       return {
         ...prompt,
         primaryFamily: workspaceFamilies.find((family) => family.id === primaryLink?.familyId) ?? null,
@@ -55,6 +69,8 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
           .filter((link) => !link.isPrimary)
           .map((link) => workspaceFamilies.find((family) => family.id === link.familyId))
           .filter((family): family is NonNullable<typeof family> => Boolean(family)),
+        assignedEssay: assignedEssay ? { id: assignedEssay.id, title: assignedEssay.title } : null,
+        suggestedMatches,
       };
     }),
     essays: workspaceEssays.map((essay) => {
@@ -85,11 +101,23 @@ export function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string) {
           .filter((family): family is NonNullable<typeof family> => Boolean(family)),
       };
     }),
-    families: workspaceFamilies.map((family) => ({
-      ...family,
-      promptCount: familyPromptLinks.filter((link) => link.familyId === family.id).length,
-      essayCount: familyEssayLinks.filter((link) => link.familyId === family.id).length,
-    })),
+    families: workspaceFamilies.map((family) => {
+      const linkedPromptIds = new Set(familyPromptLinks.filter((link) => link.familyId === family.id).map((link) => link.promptId));
+      const familyPrompts = workspacePrompts
+        .filter((prompt) => linkedPromptIds.has(prompt.id))
+        .map((prompt) => ({
+          id: prompt.id,
+          title: prompt.title,
+          schoolName: workspaceSchools.find((school) => school.id === prompt.schoolId)?.name ?? "Unknown school",
+          maxWordCount: prompt.maxWordCount,
+        }));
+      return {
+        ...family,
+        promptCount: familyPrompts.length,
+        essayCount: familyEssayLinks.filter((link) => link.familyId === family.id).length,
+        prompts: familyPrompts,
+      };
+    }),
     matches: matches.map((match) => ({
       ...match,
       essayTitle: workspaceEssays.find((essay) => essay.id === match.essayId)?.title ?? "Unknown essay",

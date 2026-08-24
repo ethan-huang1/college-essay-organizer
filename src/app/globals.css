@@ -996,6 +996,61 @@ h1 {
   margin-top: 8px;
 }
 
+.assignment-block {
+  margin-top: 12px;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+
+.assigned-essay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.suggested-matches {
+  display: grid;
+  gap: 6px;
+}
+
+.suggested-match-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.suggested-match-row span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.match-score {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-weight: 700;
+}
+
+.suggested-match-row button {
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  font: 700 10px var(--font-utility);
+}
+
+.cross-school-prompt-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .prompt-list {
   display: grid;
   gap: 12px;

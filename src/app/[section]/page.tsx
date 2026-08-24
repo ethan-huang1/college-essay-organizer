@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { TOP_UNIVERSITIES } from "@/lib/top-universities";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
+import { assignEssayAction, unassignEssayAction } from "../assignment-actions";
 import { addCollegeAction } from "../college-actions";
 import {
   createEssayAction,
@@ -183,6 +184,33 @@ function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                       </div>
                       <span className="classification-source">{prompt.classificationSource === "manual" ? "Manual override" : `Deterministic suggestion · ${prompt.classificationConfidence}% confidence`}</span>
                       <div className="verification-row"><VerificationBadge status={prompt.verificationStatus} sourceUrl={prompt.sourceUrl} /></div>
+                      <div className="assignment-block">
+                        {prompt.assignedEssay ? (
+                          <div className="assigned-essay">
+                            <span>Response: <strong>{prompt.assignedEssay.title}</strong></span>
+                            <form action={unassignEssayAction}>
+                              <input name="promptId" type="hidden" value={prompt.id} />
+                              <button type="submit" className="text-link">Unassign</button>
+                            </form>
+                          </div>
+                        ) : prompt.suggestedMatches.length > 0 ? (
+                          <div className="suggested-matches">
+                            <span className="record-meta">Suggested essays · {prompt.suggestedMatches.length}</span>
+                            {prompt.suggestedMatches.map((match) => (
+                              <form action={assignEssayAction} key={match.essayId} className="suggested-match-row">
+                                <input name="promptId" type="hidden" value={prompt.id} />
+                                <input name="essayId" type="hidden" value={match.essayId} />
+                                <span>{match.essayTitle}</span>
+                                <span className="match-score">{match.score}</span>
+                                <span>{match.recommendedAction.replaceAll("-", " ")}</span>
+                                <button type="submit">Use this essay</button>
+                              </form>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="record-meta">No essay assigned yet</span>
+                        )}
+                      </div>
                       <details className="prompt-actions">
                         <summary>Edit classification or prompt</summary>
                         <form action={updatePromptAction} className="prompt-form">
@@ -375,7 +403,20 @@ function FamiliesView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
         <article className="taxonomy-row" key={family.id}>
           <span className="family-swatch" style={{ backgroundColor: family.color }} aria-hidden="true" />
           <span className="family-index">{String(family.sortOrder).padStart(2, "0")}</span>
-          <div><h2>{family.name}</h2><p>{family.description}</p></div>
+          <div>
+            <h2>{family.name}</h2>
+            <p>{family.description}</p>
+            {family.prompts.length > 0 ? (
+              <ul className="cross-school-prompt-list">
+                {family.prompts.map((prompt) => (
+                  <li key={prompt.id}>
+                    <strong>{prompt.schoolName}</strong> — {prompt.title}
+                    {prompt.maxWordCount ? <span> · {prompt.maxWordCount} words</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
           <div className="coverage-counts">
             <span><strong>{family.promptCount}</strong> prompts</span>
             <span><strong>{family.essayCount}</strong> essays</span>
