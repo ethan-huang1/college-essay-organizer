@@ -15,126 +15,132 @@ for the product spec.
 
 ## Current Status
 
-The core loop works end-to-end and is real, not scaffolded: **add a college
-(top-100 picker or manual) → its real 2026–27 prompts import from an
-official, cited source → each prompt is auto-classified → matching essays
-are suggested → a response is assigned → the Families page shows the
-cross-school picture.** P0 Phases 1–3 are substantially done; Phase 4 has
-versions/restore/filtering but not the accept/reject editing-suggestion
-workflow; Phase 5 (JSON export/import, Playwright) hasn't started.
+The core loop works end-to-end: **add a college (top-100 picker or manual) →
+its cited prompt record imports → prompts are classified → matching essays
+are suggested → a response is assigned → Families shows the cross-school
+picture.** P0 Phases 1–3 are substantially complete. Phase 4 has essay
+editing, immutable versions, comparison, restoration, and filtering, but
+not the deterministic accept/reject suggestion workflow. Phase 5 (JSON
+backup round trip, Playwright, final documentation/layout verification) has
+not started.
 
-This session (continuing from Codex's `52add43`) rebuilt prompt retrieval
-from a flat 3-school curated object into a proper adapter pipeline: typed
-per-school data files, shared validation/normalization, externalRef-keyed
-deduplication, and real change detection with a history log. 8 schools are
-now covered (see Coverage below), each researched today against its own
-official source.
+Supplemental-prompt research is now complete for the existing top-100
+picker. Commit `a717720` added the 87 previously missing school records,
+registered all 100 schools, and made the full-coverage assertion mandatory.
+No school remains `unresearched`.
 
 ## Coverage (prompt retrieval)
 
-`src/lib/retrieval/sources/`, registered in `registry.ts`:
+All 100 records live under `src/lib/retrieval/sources/` and are registered
+in `registry.ts`. The enforced breakdown is:
 
-- **officially-verified** (imported): Stanford, MIT, Princeton, Yale,
-  Georgetown (core 3 essays only — see below), UC Berkeley, UC Berkeley's
-  UCLA counterpart (shared canonical 8 Personal Insight Questions).
-- **needs-review** (imported, flagged): Georgetown's 7 school-specific
-  essay variants — only retrievable as summaries, not exact quotes, so each
-  is conditional + needs-review rather than presented as verbatim.
-- **previous-cycle** (refused, zero prompts imported): Harvard — official
-  page only confirmed 2025-26 content; will re-check once Harvard publishes
-  its 2026-27 supplement.
-- **Not yet researched**: the other ~92 schools on the top-100 list. Adding
-  one is: research via WebFetch against the official source, write a
-  `SchoolSourceRecord` in a new `sources/<school>.ts` file (see any existing
-  one for the shape), register it, done — the pipeline (validation, import,
-  dedup, classification, change detection) needs no changes per school.
+- **46 `officially-verified`** for 2026–27. This includes all seven picker
+  UC campuses sharing the university's canonical eight PIQs.
+- **12 `no-supplement-confirmed`**, each with an official source and a
+  school-specific explanation.
+- **6 `previous-cycle`** official 2025–26 sets: Carnegie Mellon, Harvard,
+  Harvey Mudd, Pomona, Illinois Urbana-Champaign, and UMass Amherst.
+- **36 `needs-review`**, each with zero imported prompts plus the official
+  sources checked and the specific unresolved issue (usually portal-only
+  wording, an omitted cycle label, or incomplete conditional-program
+  coverage).
+- **0 `unresearched`**.
 
-## Key decisions this session
+Previous-cycle prompts remain usable for planning and classification, but
+the UI labels them **“2025–26—2026–27 not confirmed”** and excludes them
+from current-cycle completion statistics. `needs-review` and confirmed
+no-supplement outcomes remain distinguishable from an absent record.
 
-- **Common App's "Writing Requirements by College" resource cannot be used
-  as a bulk source.** Investigated directly: it lives behind Common App's
-  authenticated Dashboard/Solutions Center (student or counselor login),
-  and Common App's own public college pages explicitly redirect to each
-  school's official site for prompt text rather than hosting it themselves.
-  Automating that login was explicitly out of scope. The compliant
-  architecture is therefore: **one adapter type (official college source),
-  not a separate Common App adapter** — `applicationPlatform` is stored as
-  metadata on each prompt, not a different code path.
-- **Retrieval is a curated dataset, not live scraping.** The running app
-  has no paid search/AI API (OVERNIGHT_TASK.md rule 10) and none was added.
-  "Automatic retrieval" means: a human/agent researches a school once via
-  WebFetch against its official site, writes a structured, cited record,
-  and the app imports from that instantly at click-time. Refreshable later
-  behind the same `PromptRetrievalProvider`-shaped interface if a real
-  search integration is ever authorized.
-- **Verification status can be per-prompt, not just per-school.**
-  Georgetown proved this necessary: 3 essays verbatim-confirmed, 7 variants
-  only summarized. `RawPromptRecord.verificationStatus` overrides the
-  school record's default when present.
-- **externalRef, not title/text, is the dedup key.** A school's prompt can
-  be reworded by the college without becoming "a new prompt" — matching on
-  a stable per-school slug (assigned by whoever writes the data file) is
-  what makes change detection possible instead of just duplicate-avoidance.
-- **UC campuses share one canonical prompt set** (the 8 PIQs are identical
-  university-wide) rather than being re-researched per campus — one shared
-  array, two `SchoolSourceRecord`s.
+## Completed Work
 
-## Failed Approaches
+- Audited the clean starting checkpoint, recent commits/reflog/stashes,
+  ignored and untracked paths, and overnight logs before researching. No
+  unpublished Claude research artifact existed; the later UC commit
+  `a537ecc` was the true starting code state despite this handoff having
+  been stale.
+- Researched every unprocessed picker school against official institution
+  pages, preserving uncertainty instead of importing consultant-blog text.
+- Added 87 typed school records, including exact current prompts where
+  officially available and detailed negative/unresolved outcomes elsewhere.
+- Registered all 100 picker schools and retained the existing validator,
+  stable `externalRef` deduplication, change history, current/previous-cycle
+  policy, taxonomy, and import architecture.
+- Unskipped the top-100 completion test and strengthened it to require
+  exactly 100 unique registry records, not merely successful lookups.
+- Removed two obsolete ESLint suppression comments; lint is warning-free.
 
-- A drizzle-kit-generated migration (`0002_curved_yellow_claw.sql`) had a
-  real bug: its `INSERT INTO __new_prompts ... SELECT ... FROM prompts`
-  listed 5 brand-new columns in the SELECT-FROM-old-table clause, but the
-  pre-migration table didn't have them (`no such column: min_char_count`).
-  This is a drizzle-kit table-rebuild-strategy defect, not a mistake in the
-  schema definition. Fixed by hand: removed the new columns from both the
-  target and source column lists so they take their declared defaults for
-  pre-existing rows. Verified against both `:memory:` (vitest) and a real
-  file-backed DB (`npm run db:migrate`) after the fix. **If a future schema
-  migration needs a SQLite full-table-rebuild (new CHECK constraints,
-  etc.), read the generated SQL before trusting it — don't assume
-  drizzle-kit's INSERT/SELECT column lists are correct.**
-- No other failed approaches this session — Yale/Princeton/Georgetown/UC
-  research and every code change landed and verified on the first attempt.
+## Important Decisions
+
+- Official school sources remain the only basis for current-cycle claims.
+  Authenticated Common App content and secondary/consultant sources were
+  not used to fill gaps.
+- A school with an incomplete official set (for example a known scholarship
+  supplement whose exact wording is hidden) is conservatively
+  `needs-review`, even when one general prompt is public. This avoids
+  presenting partial coverage as complete.
+- Previous-cycle prompt sets are imported as planning material with their
+  actual `2025–26` cycle and warning; they are never relabeled current.
+- Verification can still be overridden per prompt where one official page
+  mixes exact and summarized content (the established Georgetown case).
+- UC's seven picker campuses share one canonical prompt array because the
+  university-wide PIQs are identical.
+
+## Failures / Failed Approaches
+
+- One isolated `tsx` validation invocation hit a sandbox IPC `EPERM` while
+  creating its temporary socket. The same records were validated through a
+  safe loader and then by the canonical typecheck/vitest/build suite; this
+  was a tooling-path failure, not an application failure.
+- Many official sites do not expose exact 2026–27 wording publicly. Those
+  cases are deliberately recorded as `needs-review`; no retries against
+  unofficial sources or authenticated portals were attempted.
+- Historical migration warning remains relevant: drizzle-kit once emitted
+  an invalid SQLite table-rebuild migration. Inspect generated table-rebuild
+  SQL before accepting future migrations.
 
 ## Blockers
 
-None active. (Last session's Claude-CLI-auth blocker was resolved and
-confirmed working; not re-blocked this session — this was an interactive
-session, not the automated pipeline.)
+None active. The 36 `needs-review` outcomes are known data-source
+limitations with precise follow-up notes, not blockers to the application
+or to the completed one-outcome-per-school requirement.
 
 ## Tests/Verification Performed
 
-Every commit this session was verified independently before committing:
-lint, strict typecheck, full vitest suite, production build (`next build
---webpack`), and the 80-assertion overnight-orchestration suite — all green
-at `898399e`. Plus real runtime smoke tests against the built production
-server (not just unit tests): imported Princeton/Yale/Georgetown via actual
-HTTP POSTs (reverse-engineered Next.js's Server Action multipart encoding
-for this, since a naive curl POST silently no-ops), confirmed conditional
-notes and character limits render, confirmed DB verification-status counts
-match expectations per school, and manually rewrote an already-imported
-prompt's text in the database to prove change detection fires end-to-end
-(flagged needs-review, prior text preserved in `promptChangeLog`, no
-duplicate row). Every spawned dev/prod server was confirmed killed after
-each test round (`lsof`/`ps`).
+Full canonical `./run_tests.sh` passed immediately before code commit
+`a717720`:
+
+- ESLint: pass, no warnings.
+- Strict typecheck (`next typegen && tsc --noEmit`): pass.
+- Vitest: **59/59 pass**, including the now-required 100/100 unique-school
+  coverage assertion; no skipped tests.
+- Coverage report: 46 current official, 12 no supplement, 36 needs review,
+  6 previous cycle, 0 unresearched.
+- Production build (`next build --webpack`): pass; all routes generated.
+- Overnight orchestration suite: **80/80 pass**.
+- Whitespace/trailing-space and `git diff --check`: pass.
+
+The earlier established runtime tests for prompt import, conditional notes,
+change detection, history preservation, and no-duplicate refresh behavior
+remain covered by the existing verified commits and test suite.
 
 ## Next Steps
 
-1. Expand retrieval coverage toward top-25/top-100, a few schools at a
-   time, same method: WebFetch the official source, write a
-   `SchoolSourceRecord`, register it. Good next candidates: Columbia, UPenn,
-   Duke, Cornell, Brown, Chicago, Dartmouth, UC Los Angeles's PIQ file is
-   already done — verify the remaining UC campuses if added, same shared set.
-2. Essay editor's deterministic accept/reject suggestion workflow (Phase 4)
-   — explicitly deferred this session, not started.
-3. Phase 5: JSON export/import preserving relationships; at least one
-   Playwright workflow (not installed yet); README/architecture docs.
-4. Minor: `/reuse` is still a flat global list, not organized per-school;
-   short (~50-word) prompts sometimes get no deterministic classification
-   at all (expected for a keyword classifier on very short text).
+1. **Exact next priority:** finish P0 Phase 4's deterministic editing-
+   suggestion workflow. Implement prompt-fit, clarity, concision, and
+   word-limit suggestions with understandable before/after text; individual
+   accept must create a new immutable version, while reject must leave essay
+   content and version history unchanged. Add unit/integration coverage.
+2. P0 Phase 5: JSON export and re-import preserving core relationships.
+3. Add at least one complete Playwright workflow, then verify desktop/mobile
+   overflow and browser console cleanliness.
+4. Finish README/architecture/limitations/future-AI documentation and run
+   the full P0 Definition-of-Done audit.
+5. Periodically revisit the 36 `needs-review` and 6 `previous-cycle`
+   records as schools publish additional official 2026–27 material; this is
+   maintenance, not a prerequisite for the next product milestone.
 
 ## Last Verified Commit
 
-`898399e` — "Build a real prompt-retrieval pipeline: adapters, versioning,
-dedup, change detection". Working tree clean; full canonical verification
-(above) passed immediately before it.
+`a717720` — "Complete top-100 supplemental prompt coverage". Full canonical
+verification above passed immediately before this code commit. The handoff
+documentation is committed separately after this line is updated.
