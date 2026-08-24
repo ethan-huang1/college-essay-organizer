@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
+import { createSchoolAction, deleteSchoolAction, updateSchoolAction } from "../school-actions";
 
 const sections = {
   schools: { title: "Schools & prompts", eyebrow: "Build the application list", description: "See every school and the prompts waiting for a response." },
@@ -45,29 +46,52 @@ function EmptyState({ section }: { section: SectionName }) {
 }
 
 function SchoolsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  if (snapshot.schools.length === 0) return <EmptyState section="schools" />;
   return (
-    <div className="record-list">
-      {snapshot.schools.map((school) => {
-        const schoolPrompts = snapshot.prompts.filter((prompt) => prompt.schoolId === school.id);
-        return (
-          <article className="record-row" key={school.id}>
-            <div>
-              <span className="record-meta">
-                {snapshot.workspace.kind === "demo" ? "Fictional" : "Personal"} school · {school.promptCount} prompts
-              </span>
-              <h2>{school.name}</h2>
-              <p>{school.notes}</p>
-            </div>
-            <ul className="compact-list">
-              {schoolPrompts.map((prompt) => (
-                <li key={prompt.id}><span>{prompt.title}</span><span>{prompt.maxWordCount ?? "—"} words</span></li>
-              ))}
-            </ul>
-          </article>
-        );
-      })}
-    </div>
+    <>
+      <form action={createSchoolAction} className="crud-form">
+        <div><label htmlFor="school-name">School name</label><input id="school-name" name="name" required minLength={2} maxLength={120} placeholder="Add a college or university" /></div>
+        <div><label htmlFor="school-notes">Notes <span>optional</span></label><input id="school-notes" name="notes" maxLength={500} placeholder="Deadline, portal, or context" /></div>
+        <button type="submit">Add school</button>
+      </form>
+
+      {snapshot.schools.length === 0 ? <EmptyState section="schools" /> : (
+        <div className="record-list">
+          {snapshot.schools.map((school) => {
+            const schoolPrompts = snapshot.prompts.filter((prompt) => prompt.schoolId === school.id);
+            return (
+              <article className="record-row" key={school.id}>
+                <div>
+                  <span className="record-meta">
+                    {snapshot.workspace.kind === "demo" ? "Fictional" : "Personal"} school · {school.promptCount} prompts
+                  </span>
+                  <h2>{school.name}</h2>
+                  <p>{school.notes}</p>
+                  <details className="record-actions">
+                    <summary>Edit or remove</summary>
+                    <form action={updateSchoolAction} className="inline-edit-form">
+                      <input name="schoolId" type="hidden" value={school.id} />
+                      <label>School name<input name="name" required minLength={2} maxLength={120} defaultValue={school.name} /></label>
+                      <label>Notes<input name="notes" maxLength={500} defaultValue={school.notes ?? ""} /></label>
+                      <button type="submit">Save changes</button>
+                    </form>
+                    <form action={deleteSchoolAction} className="delete-form">
+                      <input name="schoolId" type="hidden" value={school.id} />
+                      <span>Deleting also removes this school&apos;s prompts.</span>
+                      <button type="submit">Delete school</button>
+                    </form>
+                  </details>
+                </div>
+                <ul className="compact-list">
+                  {schoolPrompts.map((prompt) => (
+                    <li key={prompt.id}><span>{prompt.title}</span><span>{prompt.maxWordCount ?? "—"} words</span></li>
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 

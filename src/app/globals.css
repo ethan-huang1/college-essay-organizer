@@ -709,6 +709,92 @@ h1 {
   text-align: center;
 }
 
+.crud-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 22px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper-raised);
+  padding: 18px;
+}
+
+.crud-form div,
+.inline-edit-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crud-form label span {
+  font-weight: 400;
+}
+
+.crud-form input,
+.inline-edit-form input {
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: white;
+  padding: 10px 11px;
+  color: var(--ink);
+  font: 13px var(--font-utility);
+}
+
+.crud-form button,
+.inline-edit-form button {
+  border: 1px solid var(--moss-dark);
+  border-radius: 5px;
+  background: var(--moss-dark);
+  padding: 10px 14px;
+  color: white;
+  cursor: pointer;
+  font: 700 12px var(--font-utility);
+}
+
+.record-actions {
+  margin-top: 18px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.record-actions summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.inline-edit-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.delete-form {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+
+.delete-form button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--oxblood);
+  cursor: pointer;
+  font: 800 11px var(--font-utility);
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -768,6 +854,10 @@ h1 {
 
   .summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crud-form {
+    grid-template-columns: 1fr;
   }
 
   .summary-strip > div:nth-child(2) {

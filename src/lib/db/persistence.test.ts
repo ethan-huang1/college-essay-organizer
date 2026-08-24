@@ -20,6 +20,7 @@ import {
   resetDemoWorkspace,
 } from "./seed";
 import { getWorkspaceSnapshot } from "../workspaces";
+import { createSchool, deleteSchool, updateSchool } from "../schools";
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -161,5 +162,27 @@ describe("local persistence foundation", () => {
     expect(demo?.essays).toHaveLength(6);
     expect(demo?.essays.some((essay) => essay.title === "Private draft")).toBe(false);
     expect(demo?.matches).toHaveLength(3);
+  });
+
+  it("creates, updates, and deletes schools only inside the selected workspace", () => {
+    initializePersonalWorkspace(connection.db);
+    resetDemoWorkspace(connection.db);
+    const created = createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "  Harbor   College  ", notes: "Personal note" });
+    expect(created?.name).toBe("Harbor College");
+    if (!created) throw new Error("Expected the school to be created.");
+
+    expect(() => updateSchool(connection.db, DEMO_WORKSPACE_ID, created.id, { name: "Wrong workspace" })).toThrow();
+    updateSchool(connection.db, PERSONAL_WORKSPACE_ID, created.id, { name: "Harbor University", notes: "Updated" });
+    connection.db.insert(prompts).values({
+      id: `${PERSONAL_WORKSPACE_ID}:prompt:cascade-test`,
+      workspaceId: PERSONAL_WORKSPACE_ID,
+      schoolId: created.id,
+      title: "Cascade test",
+      promptText: "This prompt should be removed with its school.",
+    }).run();
+
+    deleteSchool(connection.db, PERSONAL_WORKSPACE_ID, created.id);
+    expect(connection.db.select().from(schools).where(eq(schools.id, created.id)).all()).toHaveLength(0);
+    expect(connection.db.select().from(prompts).where(eq(prompts.schoolId, created.id)).all()).toHaveLength(0);
   });
 });
