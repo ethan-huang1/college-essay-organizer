@@ -1,0 +1,95 @@
+import type { SchoolSourceRecord } from "../types";
+
+// W&L's current admissions pages publish the optional Applicant Portal
+// responses, and its separate Johnson Scholarship page explicitly labels the
+// scholarship choices as 2026-2027 prompts.
+export const washingtonAndLee: SchoolSourceRecord = {
+  schoolName: "Washington and Lee University",
+  cycleLabel: "2026–27",
+  verificationStatus: "officially-verified",
+  applicationPlatform: "common-app",
+  sourceUrl: "https://www.wlu.edu/admissions/apply/supplemental-application-prompts",
+  retrievedAt: "2026-08-24",
+  note: "Official W&L supplemental-prompt page, corroborated as current by the official Apply page's 2026–27 deadlines and test-optional page. Applicants may submit the independent optional Why W&L statement and one optional short answer in writing or as a two-minute video. The conditional Johnson Scholarship choices come from W&L's official page explicitly headed \"2026-2027 Prompts\" (https://www.wlu.edu/admissions/the-johnson-scholarship/johnson-scholarship-prompts); scholarship applicants choose one 800-word response. W&L also accepts Coalition and QuestBridge applications.",
+  prompts: [
+    {
+      externalRef: "optional-why-wlu",
+      title: "Why W&L?",
+      promptText: "There are over 8,200 accredited colleges and universities in the U.S. alone. You have chosen to apply to Washington and Lee University. Please describe how you have familiarized yourself with W&L and what aspects of its community are most exciting to you.",
+      maxWordCount: 250,
+      requirement: "optional",
+    },
+    {
+      externalRef: "optional-short-answer-life-outside-school",
+      title: "Life outside school",
+      promptText: "Please describe an aspect of your life outside of school that is important to you, such as an extracurricular activity, a job, or a family responsibility. How has your involvement shaped your personal qualities and growth, and how has it impacted those around you?",
+      maxWordCount: 250,
+      requirement: "conditional",
+      conditionalNote: "Optional; applicants may choose one of four short-answer prompts and respond in 250 words or less or with a video of no more than two minutes.",
+    },
+    {
+      externalRef: "optional-short-answer-diversity",
+      title: "A diverse aspect you would bring",
+      promptText: "W&L’s mission statement focuses on preparing graduates for lifelong learning in a global and diverse society. Engaging with faculty, staff, and classmates with diverse identities, experiences, and perspectives is an essential component of our education. Recognizing that diversity takes many forms, what diverse aspect would you bring to W&L?",
+      maxWordCount: 250,
+      requirement: "conditional",
+      conditionalNote: "Optional; applicants may choose one of four short-answer prompts and respond in 250 words or less or with a video of no more than two minutes.",
+    },
+    {
+      externalRef: "optional-short-answer-curiosity",
+      title: "Your curious mind",
+      promptText: "Reveal to us how your curious mind works by sharing something you spend considerable time thinking or learning about.",
+      maxWordCount: 250,
+      requirement: "conditional",
+      conditionalNote: "Optional; applicants may choose one of four short-answer prompts and respond in 250 words or less or with a video of no more than two minutes.",
+    },
+    {
+      externalRef: "optional-short-answer-name",
+      title: "The story of your name",
+      promptText: "On a residential college campus with a Speaking Tradition that encourages connections between individuals, using each other’s names matters. Please share the story of any name you go by and what significance it holds for you.",
+      maxWordCount: 250,
+      requirement: "conditional",
+      conditionalNote: "Optional; applicants may choose one of four short-answer prompts and respond in 250 words or less or with a video of no more than two minutes.",
+    },
+    {
+      externalRef: "johnson-art",
+      title: "Johnson Scholarship: a work of art",
+      promptText: "\"To promote literature in this rising empire and to encourage the arts, have ever been amongst the warmest wishes of my heart” (George Washington, 1798, first president of the United States and first major benefactor of Washington and Lee University). Describe a work of art that has influenced you, and discuss the impact it has had on you.",
+      maxWordCount: 800,
+      requirement: "conditional",
+      conditionalNote: "Required only for Johnson Scholarship consideration; choose one of the five 2026–27 Johnson prompts.",
+    },
+    {
+      externalRef: "johnson-unexpected-path",
+      title: "Johnson Scholarship: an unexpected path",
+      promptText: "In mathematics, the shortest distance between two points on a flat surface is a straight line. While geometry is predictable, sometimes daily life is not. Reflect on a time when your path was not as simple or direct as anticipated. How did you manage, and what did you learn?",
+      maxWordCount: 800,
+      requirement: "conditional",
+      conditionalNote: "Required only for Johnson Scholarship consideration; choose one of the five 2026–27 Johnson prompts.",
+    },
+    {
+      externalRef: "johnson-authentic-representation",
+      title: "Johnson Scholarship: authentic representation",
+      promptText: "We live in a world in which much of our self-representation is curated online via short-lived social media ‘stories’ and disappearing photos. What photo or other representation of yourself is authentically you? What does it say about your growth into the person you are today and the person you want to become? Please use only the words in your essay to address this question. Do not include photographs or other materials in your answer.",
+      maxWordCount: 800,
+      requirement: "conditional",
+      conditionalNote: "Required only for Johnson Scholarship consideration; choose one of the five 2026–27 Johnson prompts.",
+    },
+    {
+      externalRef: "johnson-spring-term",
+      title: "Johnson Scholarship: design a Spring Term course",
+      promptText: "W&L’s Spring Term is a four-week, intensive experience during which students take only one course, allowing for undivided attention to the subject matter. Spring Term courses are known for innovative pedagogy, interdisciplinary scholarship, travel, and fieldwork in diverse settings. If you could design a Spring Term course, what would you propose, and why would you choose to pursue that topic?",
+      maxWordCount: 800,
+      requirement: "conditional",
+      conditionalNote: "Required only for Johnson Scholarship consideration; choose one of the five 2026–27 Johnson prompts.",
+    },
+    {
+      externalRef: "johnson-education-social-framework",
+      title: "Johnson Scholarship: education and social frameworks",
+      promptText: "In his October 1963, A Talk to Teachers, James Baldwin said “…the whole process of education occurs within a social framework and is designed to perpetuate the aims of society.” Yet, as he aptly notes, “the paradox of education is precisely this – that as one begins to become conscious, one begins to examine the society in which he is being educated.\"  Baldwin suggests that the purpose of education is to teach us to think for ourselves, to question – and change – the “framework” that we have come to understand and accept. What norms of your home or community have you become conscious of during your time in high school, and how would you like to use that knowledge to make it a better place?",
+      maxWordCount: 800,
+      requirement: "conditional",
+      conditionalNote: "Required only for Johnson Scholarship consideration; choose one of the five 2026–27 Johnson prompts.",
+    },
+  ],
+};

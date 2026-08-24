@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { CURRENT_CYCLE_LABEL } from "../cycle";
 import { TOP_UNIVERSITIES } from "../top-universities";
-import { lookupSchoolSource } from "./registry";
+import { listCoveredSchoolNames, lookupSchoolSource } from "./registry";
 
 // A secondary-source (admissions-consultant-blog) domain must never be the
 // sole citation for a current-cycle claim - see the college-import.ts /
@@ -22,17 +22,16 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
     expect(new Set(TOP_UNIVERSITIES).size).toBe(100);
   });
 
-  // WIP: research is being done in batches (see AGENT_HANDOFF.md). Un-skip
-  // once every school in TOP_UNIVERSITIES has a registry entry - that's the
-  // actual completion signal for this effort, not any individual commit.
-  it.skip("has a coverage record for every one of the 100 picker schools - none unresearched", () => {
+  it("has a coverage record for every one of the 100 picker schools - none unresearched", () => {
     const missing = TOP_UNIVERSITIES.filter((name) => !lookupSchoolSource(name));
     expect(missing).toEqual([]);
+    const covered = listCoveredSchoolNames();
+    expect(covered).toHaveLength(100);
+    expect(new Set(covered).size).toBe(100);
   });
 
   it("reports how many of the 100 schools still need research (informational, always passes)", () => {
     const missing = TOP_UNIVERSITIES.filter((name) => !lookupSchoolSource(name));
-    // eslint-disable-next-line no-console
     console.log(`Coverage: ${TOP_UNIVERSITIES.length - missing.length}/${TOP_UNIVERSITIES.length} schools researched.`);
     expect(missing.length).toBeGreaterThanOrEqual(0);
   });
@@ -91,7 +90,6 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
       const status = lookupSchoolSource(name)?.verificationStatus ?? "unresearched";
       counts[status] = (counts[status] ?? 0) + 1;
     }
-    // eslint-disable-next-line no-console
     console.log("Coverage breakdown:", counts);
     expect(Object.values(counts).reduce((sum, n) => sum + n, 0)).toBe(100);
   });
