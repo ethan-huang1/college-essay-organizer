@@ -1,2 +1,5 @@
 logs/
 .overnight_handoff.lock/
+node_modules/
+.next/
+*.tsbuildinfo
