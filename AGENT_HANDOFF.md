@@ -23,19 +23,20 @@ Organizer MVP product spec).
 
 ## Current Status
 
-P0 Phase 1 is in progress with verified application and persistence checkpoints.
+P0 Phase 1 (Foundation) is complete with verified application, persistence, and
+workspace-integration checkpoints.
 The interrupted Claude run left a partially transferred `create-next-app`
 scaffold and a complete local dependency installation despite its final log
 claiming the scaffold had been removed. Codex audited and preserved that work,
 restored the missing App Router layout and pages, added the required canonical
 test runner and setup notes, and committed the tested code at `1a34260`.
 
-The application provides a responsive editorial shell, navigation, clearly
-separated personal/demo entry states, the ten-family overview, and honestly
-labeled placeholders for unfinished sections. The local SQLite schema,
-migration, editable taxonomy, isolated personal/demo seed services, and database
-tests are complete at `dd4753f`. The UI does not call those services yet, so the
-workspace choices and organization pages remain non-interactive.
+The application provides a responsive editorial shell and navigation, explicit
+personal/demo workspace actions, cookie-scoped active workspace state, useful
+personal empty states, and real read-only views of seeded schools, prompts,
+essays, families, and reuse examples. The SQLite schema, migration, taxonomy,
+isolated seed services, and database tests are complete. Phase 2 CRUD and search
+workflows are the next priority.
 
 ## Completed
 
@@ -110,25 +111,36 @@ workspace choices and organization pages remain non-interactive.
 - Verified persistence code commit:
   `dd4753f97636ed6fe7e8480e0ff178f008583a38` — "Add local SQLite persistence
   foundation".
+- Added a server-only database lifecycle boundary that applies migrations and
+  initializes the personal workspace on first use; better-sqlite3 remains
+  external to the browser bundle.
+- Made personal/demo choice explicit through server actions and an HTTP-only,
+  same-site active-workspace cookie. Loading the demo resets demo-owned records
+  only; switching back leaves personal data untouched.
+- Replaced all four static placeholders with workspace-scoped views: school and
+  prompt lists, essay/version/link summaries, family coverage, and transparent
+  reuse examples with missing requirements and school-specific risk.
+- Added a sixth database integration test for strictly scoped workspace read
+  models and verified code commit
+  `2467657a621fb4a35716517c20fb000d38f91bc4` — "Connect workspace selection to
+  local data".
 
 ## In Progress
 
-P0 Phase 1 (Foundation). The remaining highest-priority work is wiring database
-initialization and the explicit personal/demo workspace choice into the App
-Router UI, then exposing the seeded data through real foundation views.
+P0 Phase 2 (Core Organization). School CRUD is the highest-priority unfinished
+slice, followed by prompt CRUD and essay CRUD with classification controls,
+filtering, and search.
 
 ## Next Steps
 
-1. Add a server-only repository/service boundary that migrates the local
-   database, initializes the personal workspace, and returns scoped workspace
-   summaries without leaking records across workspaces.
-2. Make the home-page workspace choices explicit actions: open the empty
-   personal workspace or load/reset the clearly labeled synthetic demo, with a
-   visible active-workspace state and no silent mixing.
-3. Replace the static section placeholders with read-only views of the seeded
-   schools, prompts, essays, families, and reuse examples.
-4. Add browser coverage for workspace selection once the end-to-end flow is
-   interactive; continue to Phase 2 CRUD only after Phase 1 is fully verified.
+1. Implement tested school create/edit/delete operations scoped to the active
+   workspace, with safe cascading behavior made explicit in the UI.
+2. Implement prompt CRUD, primary plus secondary family editing, and manual
+   classification override; retain deterministic/manual provenance.
+3. Implement essay CRUD, search, status/family filters, and canonical versus
+   school-adaptation labels using immutable versions for content changes.
+4. Add Playwright coverage for workspace selection and one complete
+   organization workflow before moving into Phase 3 matching work.
 
 ## Failed Approaches
 
@@ -154,6 +166,10 @@ Router UI, then exposing the seeded data through real foundation views.
   synthetic fixture error: both intended cross-school assignments pointed to
   prompts at the same school. The fixture was corrected to use two schools; the
   unchanged assertion and all other tests then passed.
+- The first runtime port choice (`127.0.0.1:3100`) was already occupied by an
+  unidentified listener, likely from the earlier interrupted smoke run. No
+  process was killed; the verification used port 3101 and stopped only its own
+  server session.
 
 ## Blockers
 
@@ -193,11 +209,19 @@ None.
 - `npm audit --omit=dev` — zero production dependency vulnerabilities. The
   install reported four moderate advisories in development-only transitive
   packages; no risky forced upgrade was attempted.
-- Browser automation does not exist yet and remains later P0 work.
+- Workspace integration verification: `npm test` — 6/6 tests passed;
+  `./run_tests.sh` passed ESLint, strict route/type generation, all six database
+  tests, a dynamic-route production build, and the existing 80/80 assertions.
+- Production runtime smoke: personal `/schools` showed the isolated empty state;
+  the demo action then rendered three fictional schools and reuse scores
+  91/58/35 including the Northstar danger warning; switching back restored the
+  unchanged personal empty state. Curl posts lacked a browser `Origin` header,
+  causing two expected server warnings; page responses and actions succeeded.
+- Browser automation does not exist yet and remains P0 verification work.
 
 ## Last Verified Commit
 
-`dd4753f97636ed6fe7e8480e0ff178f008583a38` — "Add local SQLite persistence
-foundation". `./run_tests.sh`, migration consistency/application checks, and
-the production dependency audit passed immediately before this code commit.
-The next commit changes only this handoff document to record the checkpoint.
+`2467657a621fb4a35716517c20fb000d38f91bc4` — "Connect workspace selection to
+local data". `./run_tests.sh` and the production personal/demo runtime smoke
+passed immediately before this code commit. The next commit changes only this
+handoff document to record the checkpoint.
