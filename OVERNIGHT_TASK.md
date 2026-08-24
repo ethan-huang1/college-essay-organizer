@@ -7,27 +7,10 @@ this once at the start of a session and follow it for the whole run.
 
 ## Objective
 
-<!-- TEMPORARY — Layer 2 handoff test. Delete this section and the file it
-     creates once the Claude → Codex handoff test is confirmed working. -->
-
-Build `scripts/handoff_check.py`, a tiny throwaway module with two pure
-functions, each implemented and verified **one at a time** as its own
-commit. This does not touch the real College Essay Organizer app — it exists
-only to generate enough real state (code + a passing check + git history) to
-prove an agent can pick up mid-task from `AGENT_HANDOFF.md` alone.
-
-1. Implement `add(a, b)`. Verify it with an assert-based self-check in the
-   file's `if __name__ == "__main__":` block (see repo README-less convention:
-   no test framework, just asserts — this repo has no dependencies yet).
-   Run the self-check, confirm it passes, then commit.
-2. Implement `subtract(a, b)`. Extend the self-check to cover it, run it,
-   confirm it passes, then commit.
-
-Definition of Done for this objective: both functions implemented and
-covered by the self-check, the self-check passes end-to-end, and each step
-landed as its own verified commit. Once a human confirms the handoff test
-worked, delete `scripts/handoff_check.py` and this Objective section — none
-of it is part of the real product.
+<!-- Fill in before starting an overnight run. -->
+(No objective set yet. The Layer 2 handoff-test objective that lived here —
+`scripts/handoff_check.py` with `add`/`subtract` — passed and was cleaned up
+by human authorization; its commits remain in git history for reference.)
 
 ## Rules
 
@@ -48,7 +31,22 @@ of it is part of the real product.
 6. **No irreversible production/deployment actions.** Do not deploy, publish
    packages, force-push, modify shared infrastructure, or take other
    hard-to-reverse actions outside this repo unless explicitly authorized in
-   this file for this specific run.
+   this file for this specific run. Never push to a remote, amend or rebase
+   existing history, or touch global/user-level config — commits stay local
+   and additive.
+7. **Escalate instead of guessing.** If you hit something that needs a human
+   decision (ambiguous requirements, a test that looks wrong, a destructive
+   or irreversible step, anything the rules above don't clearly cover), do
+   not guess. Add a line starting with exactly `HUMAN-REQUIRED:` under
+   Blockers in [AGENT_HANDOFF.md](AGENT_HANDOFF.md) describing what you need,
+   commit any safe/verified work you already have, and stop. The automated
+   handoff pipeline (`scripts/overnight_handoff.sh`) checks for this marker
+   and will halt rather than hand the run to the next agent.
+8. **Use the repo's test runner if one exists.** If `./run_tests.sh` exists
+   at the repo root, it is the canonical way to run this repo's tests — use
+   it instead of guessing a test command, and it's what the automated
+   pipeline runs to verify each phase. If it doesn't exist yet, there is
+   nothing to run.
 
 ## Definition of Done
 
