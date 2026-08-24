@@ -7,8 +7,27 @@ this once at the start of a session and follow it for the whole run.
 
 ## Objective
 
-<!-- Fill in before starting an overnight run. -->
-(No objective set yet.)
+<!-- TEMPORARY — Layer 2 handoff test. Delete this section and the file it
+     creates once the Claude → Codex handoff test is confirmed working. -->
+
+Build `scripts/handoff_check.py`, a tiny throwaway module with two pure
+functions, each implemented and verified **one at a time** as its own
+commit. This does not touch the real College Essay Organizer app — it exists
+only to generate enough real state (code + a passing check + git history) to
+prove an agent can pick up mid-task from `AGENT_HANDOFF.md` alone.
+
+1. Implement `add(a, b)`. Verify it with an assert-based self-check in the
+   file's `if __name__ == "__main__":` block (see repo README-less convention:
+   no test framework, just asserts — this repo has no dependencies yet).
+   Run the self-check, confirm it passes, then commit.
+2. Implement `subtract(a, b)`. Extend the self-check to cover it, run it,
+   confirm it passes, then commit.
+
+Definition of Done for this objective: both functions implemented and
+covered by the self-check, the self-check passes end-to-end, and each step
+landed as its own verified commit. Once a human confirms the handoff test
+worked, delete `scripts/handoff_check.py` and this Objective section — none
+of it is part of the real product.
 
 ## Rules
 
