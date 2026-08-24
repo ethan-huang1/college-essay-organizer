@@ -106,24 +106,29 @@ function PromptFilterBar({ snapshot, filters }: { snapshot: WorkspaceSnapshot; f
   );
 }
 
+// Adding a college is the primary action on this page and the entry point to
+// the whole product, so it stays open; adding a prompt by hand is the rare
+// fallback and stays behind disclosure.
 function AddPanel({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   return (
-    <div className="add-panel-row">
-      <details className="add-panel">
-        <summary>Add a college</summary>
+    <>
+      <section className="add-college-panel" id="add-college" aria-labelledby="add-college-heading">
+        <h2 id="add-college-heading">Add a college</h2>
         <AddCollegeForm />
-      </details>
+      </section>
       {snapshot.schools.length > 0 ? (
-        <details className="add-panel">
-          <summary>Add a prompt by hand</summary>
-          <form action={createPromptAction} className="prompt-form">
-            <PromptFields snapshot={snapshot} />
-            <p className="classification-help">Categories chosen here are saved as your manual classification.</p>
-            <button type="submit">Add prompt</button>
-          </form>
-        </details>
+        <div className="add-panel-row">
+          <details className="add-panel">
+            <summary>Add a prompt by hand</summary>
+            <form action={createPromptAction} className="prompt-form">
+              <PromptFields snapshot={snapshot} />
+              <p className="classification-help">Categories chosen here are saved as your manual classification.</p>
+              <button type="submit">Add prompt</button>
+            </form>
+          </details>
+        </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -143,7 +148,7 @@ function SchoolHeader({ snapshot, school, focused }: { snapshot: WorkspaceSnapsh
       <div className="school-header-side">
         <ProgressBar progress={progress} />
         <details className="school-edit">
-          <summary>Edit</summary>
+          <summary>Manage</summary>
           <form action={updateSchoolAction} className="inline-edit-form">
             <input name="schoolId" type="hidden" value={school.id} />
             <label>School name<input name="name" required minLength={2} maxLength={120} defaultValue={school.name} /></label>
@@ -184,10 +189,10 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
   return (
     <>
       <AddPanel snapshot={snapshot} />
-      <PromptFilterBar snapshot={snapshot} filters={filters} />
+      {snapshot.prompts.length > 0 ? <PromptFilterBar snapshot={snapshot} filters={filters} /> : null}
 
       {snapshot.schools.length === 0 ? (
-        <EmptyWorkspace>No schools yet. Add a college above and its verified prompts import automatically.</EmptyWorkspace>
+        <EmptyWorkspace>No colleges yet. Add one above — its verified 2026–27 prompts import and classify themselves.</EmptyWorkspace>
       ) : schools.length === 0 ? (
         <p className="empty-note">No prompts match this filter.</p>
       ) : (
@@ -508,6 +513,7 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
 function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
   const openTotal = groups.reduce((total, group) => total + group.open.length, 0);
+  const riskyTotal = groups.reduce((total, group) => total + group.risky.length, 0);
   const needsNew = snapshot.prompts.filter(
     (prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !groups.some((group) => group.open.some((match) => match.promptId === prompt.id)),
   ).length;
@@ -527,10 +533,11 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
       <p className="reuse-lede">
         <strong>{openTotal}</strong> unanswered {openTotal === 1 ? "prompt" : "prompts"} can likely be served by an essay you already have.
         {needsNew > 0 ? <> {needsNew} still need something new.</> : null}
+        {riskyTotal > 0 ? <> {riskyTotal} would be unsafe to reuse as-is.</> : null}
       </p>
 
       <div className="reuse-list">
-        {groups.map(({ essay, inUse, open }) => (
+        {groups.map(({ essay, inUse, open, risky }) => (
           <article className="reuse-group" key={essay.id}>
             <div className="reuse-group-head">
               <div>
@@ -564,13 +571,26 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                 ))}
               </ul>
             ) : (
-              <p className="detail-note">No further prompts match this essay yet.</p>
+              <p className="detail-note">No further prompts match this essay closely enough to reuse yet.</p>
             )}
 
             {inUse.length > 0 ? (
               <p className="reuse-inuse">
                 <span className="detail-label">Already answering</span>
                 {inUse.map((match) => <span key={match.id}>{match.schoolName} · {match.promptTitle}</span>)}
+              </p>
+            ) : null}
+
+            {risky.length > 0 ? (
+              <p className="reuse-risky">
+                <span className="detail-label">Do not reuse here</span>
+                {risky.map((match) => (
+                  <span key={match.id}>{match.schoolName} · {match.promptTitle}</span>
+                ))}
+                <span className="reuse-risky-why">
+                  This essay names a different institution, so reusing it for another school&apos;s fit prompt reads as a
+                  copy-paste. Write those fresh.
+                </span>
               </p>
             ) : null}
           </article>

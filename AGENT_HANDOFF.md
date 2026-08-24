@@ -29,6 +29,20 @@ below). No retrieval, classification, matching, essay-CRUD, versioning, or
 workspace-isolation behavior changed; the only data-layer additions are one
 narrow status mutation and a pure derived-progress module.
 
+**Two distinct workspaces**, both reachable from the sidebar's Workspace
+panel:
+
+- **My workspace** (personal) starts genuinely empty. The student adds their
+  own colleges through the always-visible **Add a college** form on
+  `/schools#add-college`, which runs the existing `importCollege` pipeline;
+  the Overview / All prompts / Categories / My essays / Reuse views then
+  populate from that real data. Colleges can be added and removed at any time
+  ("Manage" on each school header).
+- **Example workspace** (demo) is a reproducible seed built by running the
+  *same* import pipeline over 19 real schools, plus 7 clearly labelled sample
+  essays: ~112 prompts, all ten categories, 7 assignments, 784 computed
+  matches. "Reset example" rebuilds it and touches no personal record.
+
 Supplemental-prompt research is now complete for the existing top-100
 picker. Commit `a717720` added the 87 previously missing school records,
 registered all 100 schools, and made the full-coverage assertion mandatory.
@@ -64,8 +78,47 @@ categories, and source/verification metadata. Two deliberate constraints:
   107 inlined copies made `/schools` a 4 MB document; it is now ~1.5 MB raw
   / ~155 KB gzipped, and the remaining bulk is Next's RSC payload.
 
+## Workspace modes
+
+`src/lib/db/demo-workspace.ts` owns the example workspace: `DEMO_SCHOOLS`
+(19 real names), `DEMO_ESSAYS` (7 sample essays, 2 of which declare a second
+immutable version), a two-entry manual-reclassification list, and
+`resetDemoWorkspace`, which returns a `DemoWorkspaceSummary` counted from the
+database rather than from what the seed intended. `src/lib/db/seed.ts` now
+holds only workspace ids, `seedTaxonomy`, and `initializePersonalWorkspace`.
+
+Deliberate decisions worth knowing:
+
+- **MVP_SPEC §6 asks for *fictional* schools; the repo owner overrode that**
+  in favour of the real retrieval pipeline, because a demo made of invented
+  prompts cannot show the product at 19 schools and 112 prompts. Registry
+  data therefore stays real and cited. Only the essays are written for the
+  demo, and each carries a "not your writing" note, so the spec's "never
+  imply that synthetic essays belong to the user" rule still holds.
+- The spec's other demo requirements are met deliberately, not by accident,
+  and a test enforces each: all ten categories represented; `ready-to-reuse`,
+  `major-adaptation`, and a **high** school-specificity risk all present;
+  complete / in-progress / not-started all present; ≥2 essays with multiple
+  versions; one essay answering prompts at two different schools.
+- **The deterministic classifier never assigns "Why This School / Program".**
+  Its keywords are organizer-side phrasing ("why us", "our campus"), while
+  real supplements say "Why are you applying to Nursing" or "what aspects of
+  our location". Two genuinely institution-fit demo prompts are corrected via
+  the product's own manual-override path instead, which also demonstrates
+  that feature. Widening the shared heuristic would change classifications in
+  every real workspace, so it is left as a decision for a human — see Next
+  Steps.
+- `resetDemoWorkspace` runs its teardown in one transaction and then calls
+  `importCollege` / `createEssay` / `recomputeWorkspaceMatches` outside it,
+  because better-sqlite3 will not nest their transactions.
+
 `src/lib/progress.ts` derives every number the UI shows (`workState`,
 `reuseCandidate`, `summarizePrompts`, `reuseOpportunities`) from a snapshot.
+`reuseOpportunities` returns three buckets per essay — `inUse` (actual
+assignments, regardless of match strength), `open`, and `risky` (high
+school-specificity risk on an unanswered prompt, which the Reuse page renders
+as "Do not reuse here" so MVP_SPEC's institution-specific warning stays
+visible even though such matches score below the reuse threshold).
 Nothing is persisted or hardcoded, completion counts stay current-cycle-only
 per the existing policy, and "reusable" means the deterministic matcher
 returned `ready-to-reuse` or `minor-adaptation`. Its parameter types are
@@ -95,7 +148,26 @@ no-supplement outcomes remain distinguishable from an absent record.
 
 ## Completed Work
 
-**UI redesign (this session).** Replaced the school-page layout whose large
+**Personal-vs-example workspace restoration (this session, after the
+redesign).** The redesign had left the Add College form collapsed behind a
+disclosure and the personal workspace polluted with 18 throwaway fixture
+schools, so the app opened looking pre-populated. Nothing had actually been
+deleted — `git diff ac6e2b2..HEAD -- src/lib src/app/*-actions.ts` was
+additions only, and `openPersonalWorkspace` / `loadDemoWorkspace` /
+`addCollegeAction` / `updateSchoolAction` / `deleteSchoolAction` were all
+still wired up. Fixed by: converting the fixture data into the reproducible
+example-workspace seed above; wiping the personal workspace empty (owner's
+explicit choice, including the pre-existing Brown import); restoring
+Add-a-college to an always-visible panel with a `#add-college` anchor and a
+sidebar "+ Add college" link; relabelling the workspace switcher as *My
+workspace* / *Example workspace*; renaming each school's "Edit" to "Manage";
+and hiding the filter bar on an empty workspace. Two seed defects found by
+verification were fixed: the school-specific essay was overwriting another
+essay's assignment, and the returned summary counted intended rather than
+actual assignments. One redesign regression was found and fixed: high
+school-specificity risks had stopped being visible anywhere.
+
+**UI redesign (earlier this session).** Replaced the school-page layout whose large
 left column went empty on schools with many prompts. Added the sidebar
 navigation with per-school progress, the overview dashboard, category-first
 browsing, and the compact scannable prompt row; demoted classification
@@ -166,9 +238,15 @@ commit:
 
 - ESLint: pass, no warnings.
 - Strict typecheck (`next typegen && tsc --noEmit`): pass.
-- Vitest: **67/67 pass** (59 existing + 8 new `progress.ts` tests),
-  including the required 100/100 unique-school coverage assertion; no
-  skipped tests.
+- Vitest: **72/72 pass** (59 original + 12 `progress.ts` tests + 1 new demo
+  coverage test), including the required 100/100 unique-school coverage
+  assertion; no skipped tests.
+- The demo assertions in `persistence.test.ts` were rewritten, not loosened:
+  because the example workspace is now built through the real import pipeline
+  its rows carry generated ids, so the tests resolve their anchors by name
+  and assert the seed summary against actual database counts, exact
+  `DEMO_SCHOOLS` / `DEMO_ESSAYS` lengths, a >80-prompt scale floor, distinct
+  assignment targets, and the spec-required category/action/status coverage.
 - Coverage report: 46 current official, 12 no supplement, 36 needs review,
   6 previous cycle, 0 unresearched.
 - Production build (`next build --webpack`): pass; all routes generated.
@@ -179,10 +257,26 @@ The earlier established runtime tests for prompt import, conditional notes,
 change detection, history preservation, and no-duplicate refresh behavior
 remain covered by the existing verified commits and test suite.
 
-Browser verification of the redesign (Chrome DevTools against `next dev`,
-using a local personal workspace built through the real import path — 18
-schools, 112 prompts, 6 essays, 672 computed matches; `data/` is gitignored,
-so this is local-only fixture data, not committed):
+Both workspace paths were verified independently in the browser (Chrome
+DevTools against `next dev`):
+
+1. **Empty personal workspace → first college.** Personal workspace wiped to
+   0 schools / 0 prompts / 0 essays; Overview showed the Add-a-college CTA;
+   typing "Brown University" imported 8 officially-verified prompts with
+   citations, 9 category links, and the 2026–27 cycle, and the sidebar, nav
+   counts, and filter bar all appeared. A second college (Rice) was added and
+   then removed via **Manage → Delete school**, cascading its prompts and
+   leaving Brown's 8 intact.
+2. **Example workspace.** "Example workspace" rebuilt to 19 schools / 112
+   prompts / 7 essays / 9 versions / 7 assignments / 784 matches, all ten
+   categories populated, 12 complete and 12 in progress, and a Reuse page
+   showing 39 open opportunities plus the "Do not reuse here" warning for the
+   Brown-specific essay. Personal data was untouched throughout (checked in
+   SQLite after every switch), and "Reset example" is idempotent.
+
+Earlier browser verification of the redesign itself, against a 18-school /
+112-prompt / 6-essay / 672-match local workspace (`data/` is gitignored, so
+none of this fixture data was committed):
 
 - Every route returns 200 with an empty console (no errors or warnings).
 - Assigning a suggested essay, changing work status (classification source
@@ -193,9 +287,6 @@ so this is local-only fixture data, not committed):
 - `?edit=<id>` renders exactly one edit form and keeps the active filters.
 - Workspace switching from the sidebar works both ways; the fictional demo
   still resets to its own curated records.
-- Empty-workspace path checked against a temporary blank database: the
-  overview shows the Add-a-college CTA, and adding a real school imported and
-  classified its 8 prompts. The original database was restored afterwards.
 - Layout checked at 1440 / 1200 / 1024 / 768 px with no horizontal overflow
   and no clipped category labels. **390 px was not directly verified** —
   Chrome would not go below a ~500 px layout viewport in this environment and
@@ -205,13 +296,17 @@ so this is local-only fixture data, not committed):
 
 ## Next Steps
 
-0. **Redesign follow-ups worth a look:** (a) 390 px was not directly
-   verified — see above; (b) the fictional demo's three hand-curated matches
-   contain no *open* reuse opportunity, so the demo's Reuse page shows one
-   "already answering" row and zero open ones. Making the demo demonstrate
-   open reuse means either recomputing its matches on reset or adding curated
-   rows, and `persistence.test.ts` asserts exactly three demo matches — a
-   human should decide before that test changes.
+0. **Open decisions for a human:** (a) 390 px was never directly verified —
+   see above. (b) **The classifier cannot recognise real "why us" prompts.**
+   `FAMILY_KEYWORDS["why-school"]` matches organizer-side phrasing that no
+   real supplement uses, so genuine fit prompts land in
+   Community & Contribution instead, and no *personal* workspace will ever
+   populate the Why This School / Program category. Adding phrasings such as
+   "why are you applying", "aspects of our", "our mission" would fix it but
+   changes classifications for every existing prompt in every workspace, so
+   it was deliberately left alone. (c) Adding a school not in the registry
+   still silently produces a school with zero prompts plus a note; worth a
+   clearer UI affordance.
 1. **Exact next priority:** finish P0 Phase 4's deterministic editing-
    suggestion workflow. Implement prompt-fit, clarity, concision, and
    word-limit suggestions with understandable before/after text; individual
@@ -228,8 +323,8 @@ so this is local-only fixture data, not committed):
 
 ## Last Verified Commit
 
-`a4fc7a6` — "Rebuild the UI as an essay-management information
-architecture". Full canonical
+The workspace-restoration commit that follows this handoff update
+(the preceding redesign commit was `a4fc7a6`). Full canonical
 verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
 production build, 80 orchestration tests) passed immediately before it,
 alongside the browser verification listed above.

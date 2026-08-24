@@ -32,6 +32,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   ];
 
   const schools = [...snapshot.schools].sort((a, b) => a.name.localeCompare(b.name));
+  const isDemo = snapshot.workspace.kind === "demo";
 
   return (
     <html lang="en">
@@ -55,11 +56,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               ))}
             </nav>
 
-            {schools.length > 0 ? (
-              <div className="nav-schools">
-                <p className="nav-label">
-                  Schools <span>{schools.length}</span>
-                </p>
+            <div className="nav-schools">
+              <p className="nav-label">
+                Schools <span>{schools.length}</span>
+              </p>
+              {schools.length > 0 ? (
                 <ul>
                   {schools.map((school) => {
                     const progress = summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id));
@@ -75,19 +76,24 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     );
                   })}
                 </ul>
-              </div>
-            ) : null}
+              ) : (
+                <p className="nav-empty">No colleges yet.</p>
+              )}
+              <Link className="nav-add" href="/schools#add-college">
+                <span aria-hidden="true">+</span> Add college
+              </Link>
+            </div>
 
             <div className="workspace-switch">
               <p className="nav-label">Workspace</p>
               <strong>{snapshot.workspace.name}</strong>
-              <span>{snapshot.workspace.kind === "demo" ? "Fictional demo data" : "Private personal data"}</span>
+              <span>{isDemo ? "Real prompts · sample essays" : "Your colleges · private to you"}</span>
               <div className="workspace-switch-actions">
                 <form action={openPersonalWorkspace}>
-                  <button type="submit">{snapshot.workspace.kind === "demo" ? "Use personal" : "Personal"}</button>
+                  <button type="submit" aria-current={isDemo ? undefined : "true"}>My workspace</button>
                 </form>
                 <form action={loadDemoWorkspace}>
-                  <button type="submit">{snapshot.workspace.kind === "demo" ? "Reset demo" : "Load demo"}</button>
+                  <button type="submit">{isDemo ? "Reset example" : "Example workspace"}</button>
                 </form>
               </div>
             </div>

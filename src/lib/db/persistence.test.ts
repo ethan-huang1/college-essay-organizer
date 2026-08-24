@@ -17,11 +17,12 @@ import {
   workspaces,
 } from "./schema";
 import {
-  DEMO_WORKSPACE_ID,
-  initializePersonalWorkspace,
-  PERSONAL_WORKSPACE_ID,
+  DEMO_ESSAYS,
+  DEMO_SCHOOLS,
+  DEMO_WORKSPACE_NAME,
   resetDemoWorkspace,
-} from "./seed";
+} from "./demo-workspace";
+import { DEMO_WORKSPACE_ID, initializePersonalWorkspace, PERSONAL_WORKSPACE_ID } from "./seed";
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
 import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
@@ -29,6 +30,21 @@ import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, update
 import { recomputeWorkspaceMatches } from "../reuse";
 import { importCollege } from "../college-import";
 import { assignEssayToPrompt, unassignPrompt } from "../assignments";
+
+// The demo workspace is built through the real import pipeline, so its rows
+// carry generated ids - these resolve the anchors the tests need by name.
+function demoEssayIdByTitle(db: ReturnType<typeof openDatabase>["db"], title: string) {
+  const essay = db.select({ id: essays.id }).from(essays)
+    .where(and(eq(essays.workspaceId, DEMO_WORKSPACE_ID), eq(essays.title, title))).get();
+  if (!essay) throw new Error(`Expected a demo essay titled "${title}".`);
+  return essay.id;
+}
+
+function demoSchoolId(db: ReturnType<typeof openDatabase>["db"]) {
+  const school = db.select({ id: schools.id }).from(schools).where(eq(schools.workspaceId, DEMO_WORKSPACE_ID)).get();
+  if (!school) throw new Error("Expected the demo workspace to have schools.");
+  return school.id;
+}
 
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openDatabase>;
@@ -82,14 +98,17 @@ describe("local persistence foundation", () => {
 
   it("supports one primary and multiple secondary prompt families with manual override", () => {
     resetDemoWorkspace(connection.db);
-    const promptId = `${DEMO_WORKSPACE_ID}:prompt:1`;
-    const prompt = connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get();
+    // A required prompt: this test is about family override, and re-saving a
+    // conditional prompt would additionally demand its conditional note.
+    const prompt = connection.db.select().from(prompts)
+      .where(and(eq(prompts.workspaceId, DEMO_WORKSPACE_ID), eq(prompts.requirement, "required"))).get();
+    if (!prompt) throw new Error("Expected a seeded prompt.");
+    const promptId = prompt.id;
     const secondaryFamilies = connection.db
       .select({ id: promptFamilies.id })
       .from(promptFamilies)
-      .where(inArray(promptFamilies.sortOrder, [2, 3]))
+      .where(and(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID), inArray(promptFamilies.sortOrder, [2, 3])))
       .all();
-    if (!prompt) throw new Error("Expected a seeded prompt.");
 
     updatePrompt(connection.db, DEMO_WORKSPACE_ID, promptId, {
       schoolId: prompt.schoolId,
@@ -125,7 +144,7 @@ describe("local persistence foundation", () => {
     }).run()).toThrow();
   });
 
-  it("resets synthetic demo data without changing personal data", () => {
+  it("resets the example demo workspace without changing personal data", () => {
     initializePersonalWorkspace(connection.db);
     connection.db.insert(essays).values({
       id: `${PERSONAL_WORKSPACE_ID}:essay:keep`,
@@ -134,20 +153,75 @@ describe("local persistence foundation", () => {
       currentContent: "This content belongs only to the personal workspace.",
     }).run();
 
-    resetDemoWorkspace(connection.db);
+    const first = resetDemoWorkspace(connection.db);
+    const second = resetDemoWorkspace(connection.db);
+
+    // Rebuilding twice must land on exactly the same workspace, not double it.
+    expect(second).toEqual(first);
+    expect(connection.db.select({ value: count() }).from(workspaces).get()?.value).toBe(2);
+    expect(connection.db.select().from(workspaces).where(eq(workspaces.id, DEMO_WORKSPACE_ID)).get()?.name).toBe(DEMO_WORKSPACE_NAME);
+    expect(connection.db.select().from(essays).where(eq(essays.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(1);
+    expect(connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(0);
+
+    // The reported summary has to match what actually landed in the database.
+    const demoSchools = connection.db.select().from(schools).where(eq(schools.workspaceId, DEMO_WORKSPACE_ID)).all();
+    const demoPrompts = connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all();
+    const demoEssays = connection.db.select().from(essays).where(eq(essays.workspaceId, DEMO_WORKSPACE_ID)).all();
+    expect(demoSchools).toHaveLength(DEMO_SCHOOLS.length);
+    expect(demoEssays).toHaveLength(DEMO_ESSAYS.length);
+    expect(first.schools).toBe(demoSchools.length);
+    expect(first.prompts).toBe(demoPrompts.length);
+    expect(first.essays).toBe(demoEssays.length);
+    expect(first.assignments).toBe(
+      connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.workspaceId, DEMO_WORKSPACE_ID)).all().length,
+    );
+    // Every planned assignment must land on a distinct prompt; a collision
+    // would silently replace one demo essay's response with another's.
+    expect(first.assignments).toBe(7);
+
+    // The point of the example workspace is realistic scale.
+    expect(demoPrompts.length).toBeGreaterThan(80);
+    const demoSchoolIds = new Set(demoSchools.map((school) => school.id));
+    expect(demoPrompts.every((prompt) => demoSchoolIds.has(prompt.schoolId))).toBe(true);
+
+    // One immutable version per essay, plus one more for each declared revision.
+    const expectedVersions = DEMO_ESSAYS.length + DEMO_ESSAYS.filter((essay) => essay.revision).length;
+    expect(connection.db.select().from(essayVersions).where(eq(essayVersions.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(expectedVersions);
+    expect(DEMO_ESSAYS.filter((essay) => essay.revision).length).toBeGreaterThanOrEqual(2);
+
+    // Demo essays must never read as the student's own work.
+    expect(demoEssays.every((essay) => (essay.notes ?? "").includes("not your writing"))).toBe(true);
+  });
+
+  it("covers every taxonomy category and every reuse recommendation in the demo workspace", () => {
     resetDemoWorkspace(connection.db);
 
-    expect(connection.db.select({ value: count() }).from(workspaces).get()?.value).toBe(2);
-    expect(connection.db.select().from(essays).where(eq(essays.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(1);
-    expect(connection.db.select().from(schools).where(eq(schools.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(3);
-    expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(10);
-    expect(connection.db.select().from(essays).where(eq(essays.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(6);
-    expect(connection.db.select().from(essayVersions).where(eq(essayVersions.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(8);
+    const classified = connection.db
+      .select({ familyName: promptFamilies.name })
+      .from(promptFamilyLinks)
+      .innerJoin(promptFamilies, eq(promptFamilies.id, promptFamilyLinks.familyId))
+      .where(and(eq(promptFamilyLinks.workspaceId, DEMO_WORKSPACE_ID), eq(promptFamilyLinks.isPrimary, true)))
+      .all();
+    const demoFamilies = connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID)).all();
+    expect(new Set(classified.map((row) => row.familyName)).size).toBe(demoFamilies.length);
+
+    // Strong reuse, substantial adaptation, and a dangerous institution-
+    // specific reuse case all have to be demonstrable (MVP_SPEC section 6).
+    const matches = connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID)).all();
+    const actions = new Set(matches.map((match) => match.recommendedAction));
+    expect(actions.has("ready-to-reuse")).toBe(true);
+    expect(actions.has("major-adaptation")).toBe(true);
+    expect(matches.some((match) => match.schoolSpecificityRisk === "high")).toBe(true);
+
+    const statuses = connection.db.select({ status: prompts.status }).from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all();
+    expect(statuses.some((row) => row.status === "complete")).toBe(true);
+    expect(statuses.some((row) => row.status === "in-progress")).toBe(true);
+    expect(statuses.some((row) => row.status === "not-started")).toBe(true);
   });
 
   it("links one essay to prompts at multiple schools", () => {
     resetDemoWorkspace(connection.db);
-    const essayId = `${DEMO_WORKSPACE_ID}:essay:1`;
+    const essayId = demoEssayIdByTitle(connection.db, "The Metronome");
     const assignments = connection.db
       .select({ schoolId: prompts.schoolId })
       .from(assignedEssayResponses)
@@ -174,9 +248,11 @@ describe("local persistence foundation", () => {
 
     expect(personal?.essays.map((essay) => essay.title)).toEqual(["Private draft"]);
     expect(personal?.schools).toHaveLength(0);
-    expect(demo?.essays).toHaveLength(6);
+    expect(personal?.matches).toHaveLength(0);
+    expect(demo?.essays).toHaveLength(DEMO_ESSAYS.length);
     expect(demo?.essays.some((essay) => essay.title === "Private draft")).toBe(false);
-    expect(demo?.matches).toHaveLength(3);
+    // Every demo essay is scored against every demo prompt.
+    expect(demo?.matches).toHaveLength(DEMO_ESSAYS.length * (demo?.prompts.length ?? 0));
   });
 
   it("creates, updates, and deletes schools only inside the selected workspace", () => {
@@ -262,7 +338,7 @@ describe("local persistence foundation", () => {
 
     const baseline = connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID)).all().length;
     expect(() => createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
-      schoolId: `${DEMO_WORKSPACE_ID}:school:1`, title: "Wrong school", promptText: "This must not be inserted into personal data.",
+      schoolId: demoSchoolId(connection.db), title: "Wrong school", promptText: "This must not be inserted into personal data.",
       requirement: "required", status: "not-started", primaryFamilyId: personalFamily.id,
     })).toThrow("School not found");
     expect(() => createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
@@ -274,7 +350,15 @@ describe("local persistence foundation", () => {
 
   it("deletes only the scoped prompt and cascades its relationships", () => {
     resetDemoWorkspace(connection.db);
-    const promptId = `${DEMO_WORKSPACE_ID}:prompt:1`;
+    // An assigned prompt, so the cascade has a family link, an assignment, and
+    // matches to remove.
+    const promptId = connection.db.select({ promptId: assignedEssayResponses.promptId }).from(assignedEssayResponses)
+      .where(eq(assignedEssayResponses.workspaceId, DEMO_WORKSPACE_ID)).all()[0]?.promptId;
+    if (!promptId) throw new Error("Expected the demo workspace to assign at least one prompt.");
+    const before = connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all().length;
+    expect(connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).all().length).toBeGreaterThan(0);
+    expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.promptId, promptId)).all().length).toBeGreaterThan(0);
+
     expect(() => deletePrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId)).toThrow();
     expect(connection.db.select().from(prompts).where(eq(prompts.id, promptId)).get()).toBeDefined();
 
@@ -283,7 +367,7 @@ describe("local persistence foundation", () => {
     expect(connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId)).all()).toHaveLength(0);
     expect(connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.promptId, promptId)).all()).toHaveLength(0);
     expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.promptId, promptId)).all()).toHaveLength(0);
-    expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(9);
+    expect(connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(before - 1);
   });
 
   it("creates an essay with an immutable initial version and workspace-scoped family assignment", () => {
@@ -391,9 +475,11 @@ describe("local persistence foundation", () => {
     recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
     expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL_WORKSPACE_ID)).all()).toHaveLength(1);
 
-    // Demo's hand-curated matches are untouched by a personal-workspace recompute.
-    resetDemoWorkspace(connection.db);
-    expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(3);
+    // A personal-workspace recompute must leave the demo's matches alone.
+    const demoMatches = resetDemoWorkspace(connection.db).matches;
+    expect(demoMatches).toBeGreaterThan(0);
+    recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
+    expect(connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID)).all()).toHaveLength(demoMatches);
   });
 
   it("imports and auto-classifies a verified school's prompts, idempotently", () => {

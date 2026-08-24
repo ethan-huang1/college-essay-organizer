@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DEMO_SCHOOLS } from "@/lib/db/demo-workspace";
 import { reuseOpportunities, summarizePrompts } from "@/lib/progress";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { assignEssayAction } from "./assignment-actions";
@@ -45,8 +46,9 @@ export default async function Overview() {
         <div className="overview-empty">
           <AddCollegeForm />
           <p className="detail-note">
-            Prefer to look around first? Load the fictional demo from the workspace panel in the sidebar — it contains
-            clearly labeled synthetic schools, essays, and reuse examples, and never touches your personal work.
+            Prefer to look around first? Open the <strong>Example workspace</strong> from the workspace panel in the
+            sidebar: a fully populated list of {DEMO_SCHOOLS.length} colleges with real prompts and clearly labelled
+            sample essays. It is kept entirely separate from your own work.
           </p>
         </div>
       </div>
@@ -89,7 +91,10 @@ export default async function Overview() {
         <section className="overview-panel">
           <div className="panel-head">
             <h2>Progress by school</h2>
-            <Link className="text-link" href="/schools">All prompts <span aria-hidden="true">→</span></Link>
+            <span className="panel-head-links">
+              <Link className="text-link" href="/schools#add-college">Add college</Link>
+              <Link className="text-link" href="/schools">All prompts <span aria-hidden="true">→</span></Link>
+            </span>
           </div>
           <ul className="progress-rows">
             {bySchool.map(({ school, progress }) => (

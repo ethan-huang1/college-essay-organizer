@@ -64,7 +64,7 @@ describe("summarizePrompts", () => {
 describe("reuseOpportunities", () => {
   const essays = [{ id: "essay-1", title: "The Metronome", wordCount: 620, status: "ready" }];
 
-  function match(promptId: string, recommendedAction: string, score = 85): ReuseMatch {
+  function match(promptId: string, recommendedAction: string, score = 85, schoolSpecificityRisk = "low"): ReuseMatch {
     return {
       id: `match-${promptId}`,
       essayId: "essay-1",
@@ -74,7 +74,7 @@ describe("reuseOpportunities", () => {
       explanation: "Shares Personal Statement / Core Story.",
       promptTitle: `Prompt ${promptId}`,
       schoolName: "Brown University",
-      schoolSpecificityRisk: "low",
+      schoolSpecificityRisk,
       missingRequirements: [],
     };
   }
@@ -93,6 +93,51 @@ describe("reuseOpportunities", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].inUse.map((row) => row.promptId)).toEqual(["p1"]);
     expect(groups[0].open.map((row) => row.promptId)).toEqual(["p2"]);
+    expect(groups[0].risky).toEqual([]);
+  });
+
+  it("counts a weak-scoring assignment as in use", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "new-response", 20)],
+      [{ id: "p1", assignedEssay: { id: "essay-1" } }],
+    );
+
+    expect(groups[0].inUse.map((row) => row.promptId)).toEqual(["p1"]);
+    expect(groups[0].open).toEqual([]);
+  });
+
+  it("keeps an institution-specific risk visible even though it is not reusable", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "major-adaptation", 30, "high"), match("p2", "ready-to-reuse")],
+      [{ id: "p1", assignedEssay: null }, { id: "p2", assignedEssay: null }],
+    );
+
+    expect(groups[0].risky.map((row) => row.promptId)).toEqual(["p1"]);
+    expect(groups[0].open.map((row) => row.promptId)).toEqual(["p2"]);
+  });
+
+  it("surfaces an essay whose only match is a risky one", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "major-adaptation", 30, "high")],
+      [{ id: "p1", assignedEssay: null }],
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].open).toEqual([]);
+    expect(groups[0].risky).toHaveLength(1);
+  });
+
+  it("does not flag a risk on a prompt another essay already answers", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "major-adaptation", 30, "high")],
+      [{ id: "p1", assignedEssay: { id: "essay-9" } }],
+    );
+
+    expect(groups).toEqual([]);
   });
 
   it("leaves out prompts another essay already answers", () => {

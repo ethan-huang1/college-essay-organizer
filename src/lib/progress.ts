@@ -78,9 +78,15 @@ export type ReuseMatch = {
 
 /**
  * Groups the deterministic matches into "this one essay is already answering
- * these prompts, and could also answer these others" - the reuse story the
- * product is built around. Prompts that already have a different essay
- * assigned are left out: they are not an opportunity, they are settled work.
+ * these prompts, could also answer these others, and must not be reused for
+ * these" - the reuse story the product is built around. Prompts that already
+ * have a different essay assigned are left out: they are not an opportunity,
+ * they are settled work.
+ *
+ * The third bucket matters as much as the second: MVP_SPEC section 4 requires
+ * institution-specific reuse risk to stay visible, so an essay naming one
+ * school has to be shown as unsafe for another school's "why us" prompt
+ * rather than quietly omitted for scoring below the reuse threshold.
  */
 export function reuseOpportunities(
   essays: readonly { id: string; title: string; wordCount: number; status: string }[],
@@ -90,16 +96,21 @@ export function reuseOpportunities(
   const assignedEssayIdByPrompt = new Map(prompts.map((prompt) => [prompt.id, prompt.assignedEssay?.id ?? null]));
   return essays
     .map((essay) => {
-      const relevant = matches
-        .filter((match) => match.essayId === essay.id && REUSABLE_ACTIONS.has(match.recommendedAction))
-        .filter((match) => assignedEssayIdByPrompt.has(match.promptId))
+      const own = matches
+        .filter((match) => match.essayId === essay.id && assignedEssayIdByPrompt.has(match.promptId))
         .sort((a, b) => b.score - a.score);
+      const reusable = own.filter((match) => REUSABLE_ACTIONS.has(match.recommendedAction));
       return {
         essay,
-        inUse: relevant.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === essay.id),
-        open: relevant.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === null),
+        // Not filtered by match strength: an essay assigned to a prompt is
+        // answering it whatever the matcher thinks of the pairing.
+        inUse: own.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === essay.id),
+        open: reusable.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === null),
+        risky: own.filter(
+          (match) => match.schoolSpecificityRisk === "high" && assignedEssayIdByPrompt.get(match.promptId) === null,
+        ),
       };
     })
-    .filter((group) => group.inUse.length + group.open.length > 0)
+    .filter((group) => group.inUse.length + group.open.length + group.risky.length > 0)
     .sort((a, b) => b.open.length + b.inUse.length - (a.open.length + a.inUse.length));
 }

@@ -4,7 +4,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getAppDatabase } from "@/lib/db/server";
-import { DEMO_WORKSPACE_ID, PERSONAL_WORKSPACE_ID, resetDemoWorkspace } from "@/lib/db/seed";
+import { resetDemoWorkspace } from "@/lib/db/demo-workspace";
+import { DEMO_WORKSPACE_ID, PERSONAL_WORKSPACE_ID } from "@/lib/db/seed";
 import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace-session";
 
 async function selectWorkspace(workspaceId: string) {
