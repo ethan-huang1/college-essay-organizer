@@ -3,7 +3,15 @@ import { harvard } from "./sources/harvard";
 import { mit } from "./sources/mit";
 import { princeton } from "./sources/princeton";
 import { stanford } from "./sources/stanford";
-import { universityOfCaliforniaBerkeley, universityOfCaliforniaLosAngeles } from "./sources/university-of-california";
+import {
+  universityOfCaliforniaBerkeley,
+  universityOfCaliforniaDavis,
+  universityOfCaliforniaIrvine,
+  universityOfCaliforniaLosAngeles,
+  universityOfCaliforniaSanDiego,
+  universityOfCaliforniaSantaBarbara,
+  universityOfCaliforniaSantaCruz,
+} from "./sources/university-of-california";
 import { yale } from "./sources/yale";
 import { validateRecord } from "./normalize";
 import type { SchoolSourceRecord } from "./types";
@@ -17,6 +25,11 @@ const SOURCES: SchoolSourceRecord[] = [
   yale,
   universityOfCaliforniaBerkeley,
   universityOfCaliforniaLosAngeles,
+  universityOfCaliforniaDavis,
+  universityOfCaliforniaIrvine,
+  universityOfCaliforniaSanDiego,
+  universityOfCaliforniaSantaBarbara,
+  universityOfCaliforniaSantaCruz,
 ];
 
 // Fail loudly at import time if a data file is malformed, rather than

@@ -34,3 +34,8 @@ function ucCampusRecord(schoolName: string): SchoolSourceRecord {
 
 export const universityOfCaliforniaBerkeley = ucCampusRecord("University of California, Berkeley");
 export const universityOfCaliforniaLosAngeles = ucCampusRecord("University of California, Los Angeles");
+export const universityOfCaliforniaDavis = ucCampusRecord("University of California, Davis");
+export const universityOfCaliforniaIrvine = ucCampusRecord("University of California, Irvine");
+export const universityOfCaliforniaSanDiego = ucCampusRecord("University of California, San Diego");
+export const universityOfCaliforniaSantaBarbara = ucCampusRecord("University of California, Santa Barbara");
+export const universityOfCaliforniaSantaCruz = ucCampusRecord("University of California, Santa Cruz");
