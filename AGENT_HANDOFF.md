@@ -1,207 +1,140 @@
 # Agent Handoff
 
-This file is the live source of truth for **context, discoveries, blockers,
-verification status, and next steps** during an overnight run. It is a
-continuously maintained document, not a log to append to or overwrite blindly
-— edit each section in place so it always reflects current reality.
+Live source of truth for **current state, decisions, blockers, and next
+steps**. Git holds history and rollback points — don't repeat commit-by-
+commit detail here; `git log --oneline` and the commit bodies already have
+it. Keep this file to roughly current-state-and-what's-next, not a diary.
 
-- **Git** is the source of truth for code state and rollback points.
-- **This file** is the source of truth for what's going on and what's next.
+Update in place after each meaningful milestone, and always before stopping
+or handing off. `HUMAN-REQUIRED:` under Blockers halts the automated
+pipeline (OVERNIGHT_TASK.md rule 7). Record failed approaches under Failed
+Approaches (rule 9) instead of silently retrying.
 
-Update the relevant section(s) after any meaningful milestone, discovery,
-blocker, verification result, or decision — and always right before a
-session ends or control passes to another agent (Codex ↔ Claude). If you hit
-something that needs a human decision, add a line starting with exactly
-`HUMAN-REQUIRED:` under Blockers instead of guessing (see OVERNIGHT_TASK.md
-rule 7) — the automated pipeline halts when it sees that marker. If you
-attempt something and it fails, record it under Failed Approaches (rule 9)
-rather than silently retrying.
-
-See [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) for the rules and
-[MVP_SPEC.md](MVP_SPEC.md) for the product spec.
+See [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) for rules, [MVP_SPEC.md](MVP_SPEC.md)
+for the product spec.
 
 ## Current Status
 
-The core product loop works end-to-end and is verified: **add a college
-(from a top-100 picker or manual entry) → its real, sourced 2026–27 prompts
-are retrieved and imported → each prompt is auto-classified into the
-taxonomy → matching essays are suggested → a response is assigned → the
-Families page shows the cross-school picture.** This session picked up
-directly from Codex's verified prompt-CRUD checkpoint (`52add43`) as an
-interactive Claude session (the automated pipeline's Claude phase was
-blocked on a stale CLI login at the time; that auth has since been
-reconfirmed working — see Blockers).
+The core loop works end-to-end and is real, not scaffolded: **add a college
+(top-100 picker or manual) → its real 2026–27 prompts import from an
+official, cited source → each prompt is auto-classified → matching essays
+are suggested → a response is assigned → the Families page shows the
+cross-school picture.** P0 Phases 1–3 are substantially done; Phase 4 has
+versions/restore/filtering but not the accept/reject editing-suggestion
+workflow; Phase 5 (JSON export/import, Playwright) hasn't started.
 
-P0 Phase 2 (Core Organization) and Phase 3 (Matching and Reuse) are now
-substantially complete. Phase 4 (Editing and Versions) has immutable
-versions, save/restore, and filtering, but not yet the deterministic
-accept/reject editing-suggestion workflow. Phase 5 (Portability and
-Verification) has none of its JSON export/import or Playwright work yet.
+This session (continuing from Codex's `52add43`) rebuilt prompt retrieval
+from a flat 3-school curated object into a proper adapter pipeline: typed
+per-school data files, shared validation/normalization, externalRef-keyed
+deduplication, and real change detection with a history log. 8 schools are
+now covered (see Coverage below), each researched today against its own
+official source.
 
-## Completed
+## Coverage (prompt retrieval)
 
-**Layers 1–3 (handoff protocol, unchanged this session):** repo-based
-handoff protocol; `scripts/overnight_handoff.sh` (Codex → Claude,
-fail-closed subscription auth preflight, safe-continuation on a degraded
-Codex phase, `--permission-mode auto`); `scripts/test_overnight_handoff.sh`
-(80 deterministic assertions, zero real CLI calls). See git history
-`ae586f2`..`df42c8a` for full detail — not repeated here.
+`src/lib/retrieval/sources/`, registered in `registry.ts`:
 
-**P0 Phase 1 (Foundation) — Codex, commits `1a34260`..`4ec6c6d`:** recovered
-Next.js 16 / React 19 / TypeScript strict / Tailwind 4 scaffold; local
-SQLite via Drizzle with 14 core tables and repo-local migrations; seeded
-ten-family taxonomy and 21 tags; demo-data system (3 schools, prompts across
-all 10 families, 6 essays, versions, reuse examples incl. a dangerous
-school-specific one); server-only DB lifecycle boundary; personal/demo
-workspace selection via an HTTP-only cookie; base design system, nav, and
-the four section pages wired to real workspace-scoped data; `run_tests.sh`
-as the canonical verification command.
+- **officially-verified** (imported): Stanford, MIT, Princeton, Yale,
+  Georgetown (core 3 essays only — see below), UC Berkeley, UC Berkeley's
+  UCLA counterpart (shared canonical 8 Personal Insight Questions).
+- **needs-review** (imported, flagged): Georgetown's 7 school-specific
+  essay variants — only retrievable as summaries, not exact quotes, so each
+  is conditional + needs-review rather than presented as verbatim.
+- **previous-cycle** (refused, zero prompts imported): Harvard — official
+  page only confirmed 2025-26 content; will re-check once Harvard publishes
+  its 2026-27 supplement.
+- **Not yet researched**: the other ~92 schools on the top-100 list. Adding
+  one is: research via WebFetch against the official source, write a
+  `SchoolSourceRecord` in a new `sources/<school>.ts` file (see any existing
+  one for the shape), register it, done — the pipeline (validation, import,
+  dedup, classification, change detection) needs no changes per school.
 
-**P0 Phase 2 (Core Organization) — Codex, commits `122f138`, `52add43`:**
-workspace-scoped school CRUD and prompt CRUD (one primary + multiple
-secondary families, manual-override provenance, cross-workspace rejection,
-cascading deletes).
+## Key decisions this session
 
-**This session (Claude, interactive, commits `a06e9d0`, `199f8ba`,
-`76855f3`):**
-- `a06e9d0` — Essay CRUD (`src/lib/essays.ts`): create/update/delete,
-  content changes always land as a new immutable `essayVersions` row
-  (never edited in place), non-destructive restore. Deterministic
-  keyword-based classifier (`src/lib/classification.ts`) against the
-  ten-family taxonomy — no model calls. Deterministic essay↔prompt match
-  scorer (`src/lib/matching.ts`) — family overlap, word-count fit, and
-  school-specificity risk scored/penalized independently, never category
-  equality alone; a why-school prompt is capped below ready-to-reuse unless
-  the essay's own school-specific phrases name that exact school.
-  `src/lib/reuse.ts` recomputes every essay×prompt match for a workspace
-  from scratch, wired into the essay/prompt actions — personal-workspace
-  matches are now real (previously only demo's hand-seeded ones existed).
-  Essay CRUD UI with status/family/text filtering, version history with
-  word-count deltas and restore.
-- `199f8ba` — **Add College**: `src/lib/top-universities.ts` (a curated,
-  static 100-school list; `canonicalizeUniversityName()` resolves any
-  differently-cased typed variant to the list's exact canonical spelling so
-  duplicates aren't created and the retrieval lookup still hits).
-  `src/lib/prompt-retrieval.ts`: a `PromptRetrievalProvider` interface (same
-  deterministic-provider pattern as classification/matching) over a
-  **hand-researched, real, cited dataset** — not live scraping (the running
-  app has no paid search API and none was added, per
-  OVERNIGHT_TASK.md rule 10). Currently covers Stanford and MIT (both
-  confirmed "verified-2026-27" against their own official admissions pages,
-  fetched today) and Harvard (explicitly "previous-cycle" — its official
-  page only confirmed 2025-26 content, so the actual prompt text was
-  deliberately **not** imported rather than presenting a stale cycle as
-  current). `src/lib/college-import.ts` ties it together: creates/reuses
-  the school and a 2026–27 cycle, imports+classifies any found prompts with
-  full provenance (new `prompts.verificationStatus`/`sourceUrl`/
-  `retrievedAt` columns, migration `0001_pretty_frightful_four`), is
-  idempotent, and always returns a clear status including "not yet
-  verified" for schools outside the curated set — never guessed. UI: a
-  native `<datalist>` search/autocomplete picker (no client JS) with free
-  manual entry, and a linked verification badge per prompt.
-- `76855f3` — `src/lib/assignments.ts` (`assignEssayToPrompt`/
-  `unassignPrompt`, one response per prompt, schema-enforced). Each prompt
-  card now shows its assigned response or its top 3 ranked suggested
-  essays with one-click "Use this essay". Families page now lists actual
-  prompts (school + word limit) under each family — the cross-school "Why
-  Major: Stanford, Cornell, ..." view MVP_SPEC.md §4 asks for, not just
-  counts.
-
-All three commits verified via the full canonical checkpoint (see
-Tests/Verification Performed) plus manual runtime smoke tests against the
-built production server through real HTTP requests (not just unit tests).
-
-## In Progress
-
-None. All work below is genuinely unstarted, not partially done.
-
-## Next Steps
-
-Priority order, per MVP_SPEC.md's phases:
-
-1. **Finish Phase 4**: the deterministic editing-suggestion workflow in the
-   essay editor (prompt fit / clarity / concision / word-limit reduction),
-   individually accept (→ new version) or reject (→ unchanged), never
-   silently overwrite. Nothing exists for this yet.
-2. **Expand the curated retrieval dataset** (`src/lib/prompt-retrieval.ts`)
-   beyond Stanford/MIT/Harvard toward the rest of the top-100 list, each
-   entry researched the same way (official source, cited, dated) — this is
-   explicitly incremental, safe to do a few schools at a time.
-3. **Phase 5**: JSON export/import preserving relationships; at least one
-   Playwright workflow (none of the testing stack for this exists yet —
-   Playwright isn't installed); README/architecture docs.
-4. Smaller polish noticed but not required for P0: the Reuse Map page
-   (`/reuse`) still shows a flat global list rather than being organized
-   per-school/per-prompt; short (~50-word) imported prompts sometimes get
-   no classification at all (expected for a keyword classifier on very
-   short text, but worth a UX note e.g. "needs a manual category").
+- **Common App's "Writing Requirements by College" resource cannot be used
+  as a bulk source.** Investigated directly: it lives behind Common App's
+  authenticated Dashboard/Solutions Center (student or counselor login),
+  and Common App's own public college pages explicitly redirect to each
+  school's official site for prompt text rather than hosting it themselves.
+  Automating that login was explicitly out of scope. The compliant
+  architecture is therefore: **one adapter type (official college source),
+  not a separate Common App adapter** — `applicationPlatform` is stored as
+  metadata on each prompt, not a different code path.
+- **Retrieval is a curated dataset, not live scraping.** The running app
+  has no paid search/AI API (OVERNIGHT_TASK.md rule 10) and none was added.
+  "Automatic retrieval" means: a human/agent researches a school once via
+  WebFetch against its official site, writes a structured, cited record,
+  and the app imports from that instantly at click-time. Refreshable later
+  behind the same `PromptRetrievalProvider`-shaped interface if a real
+  search integration is ever authorized.
+- **Verification status can be per-prompt, not just per-school.**
+  Georgetown proved this necessary: 3 essays verbatim-confirmed, 7 variants
+  only summarized. `RawPromptRecord.verificationStatus` overrides the
+  school record's default when present.
+- **externalRef, not title/text, is the dedup key.** A school's prompt can
+  be reworded by the college without becoming "a new prompt" — matching on
+  a stable per-school slug (assigned by whoever writes the data file) is
+  what makes change detection possible instead of just duplicate-avoidance.
+- **UC campuses share one canonical prompt set** (the 8 PIQs are identical
+  university-wide) rather than being re-researched per campus — one shared
+  array, two `SchoolSourceRecord`s.
 
 ## Failed Approaches
 
-Carried over from Codex's phases (see git history for full detail, not
-reproduced here): an offline npm registry lookup (`ENOTCACHED`) and a
-stalled registry-backed install were both environment limitations, not
-retry-allowance-consuming failures; a Turbopack production build failed on
-a sandboxed PostCSS port bind (`EPERM`) — resolved by pinning the canonical
-build script to `next build --webpack`; an unquoted `src/app/[section]`
-glob was rejected by zsh before Git ran — fixed by quoting, no state
-changed; a synthetic demo fixture had two cross-school assignments
-pointing at the same school — corrected. This session (Claude) hit no
-failed approaches — every change landed on the first attempt and passed
-verification.
+- A drizzle-kit-generated migration (`0002_curved_yellow_claw.sql`) had a
+  real bug: its `INSERT INTO __new_prompts ... SELECT ... FROM prompts`
+  listed 5 brand-new columns in the SELECT-FROM-old-table clause, but the
+  pre-migration table didn't have them (`no such column: min_char_count`).
+  This is a drizzle-kit table-rebuild-strategy defect, not a mistake in the
+  schema definition. Fixed by hand: removed the new columns from both the
+  target and source column lists so they take their declared defaults for
+  pre-existing rows. Verified against both `:memory:` (vitest) and a real
+  file-backed DB (`npm run db:migrate`) after the fix. **If a future schema
+  migration needs a SQLite full-table-rebuild (new CHECK constraints,
+  etc.), read the generated SQL before trusting it — don't assume
+  drizzle-kit's INSERT/SELECT column lists are correct.**
+- No other failed approaches this session — Yale/Princeton/Georgetown/UC
+  research and every code change landed and verified on the first attempt.
 
 ## Blockers
 
-None currently active. **Resolved this session**: the previous
-`HUMAN-REQUIRED` blocker (automated pipeline's `claude auth status --json`
-returning `loggedIn: false`) no longer reproduces — `env -u
-ANTHROPIC_API_KEY -u OPENAI_API_KEY claude auth status --json` now reports
-`loggedIn: true, authMethod: "claude.ai", subscriptionType: "pro"`. This
-session proceeded as an interactive Claude session rather than re-running
-the non-interactive pipeline, so the pipeline's own preflight was not
-re-exercised live; if a future automated run hits the same failure, treat
-it as the account's CLI session having been logged out again, not a repeat
-of a previously-diagnosed issue.
+None active. (Last session's Claude-CLI-auth blocker was resolved and
+confirmed working; not re-blocked this session — this was an interactive
+session, not the automated pipeline.)
 
 ## Tests/Verification Performed
 
-Each of this session's three commits was verified independently before
-committing (not just once at the end):
+Every commit this session was verified independently before committing:
+lint, strict typecheck, full vitest suite, production build (`next build
+--webpack`), and the 80-assertion overnight-orchestration suite — all green
+at `898399e`. Plus real runtime smoke tests against the built production
+server (not just unit tests): imported Princeton/Yale/Georgetown via actual
+HTTP POSTs (reverse-engineered Next.js's Server Action multipart encoding
+for this, since a naive curl POST silently no-ops), confirmed conditional
+notes and character limits render, confirmed DB verification-status counts
+match expectations per school, and manually rewrote an already-imported
+prompt's text in the database to prove change detection fires end-to-end
+(flagged needs-review, prior text preserved in `promptChangeLog`, no
+duplicate row). Every spawned dev/prod server was confirmed killed after
+each test round (`lsof`/`ps`).
 
-- `a06e9d0` (essay CRUD/classification/matching/reuse): `./run_tests.sh`
-  green (lint, strict typecheck, 24/24 vitest, webpack production build,
-  80/80 overnight assertions); manual runtime smoke test against the built
-  production server via real HTTP POSTs (correct multipart Server Action
-  encoding, confirmed empirically) — essay creation, family assignment,
-  prompt creation, and a real deterministic match (score 70) appearing on
-  `/reuse`, zero server errors.
-- `199f8ba` (Add College): `./run_tests.sh` green (27/27 vitest incl. 3 new
-  tests: verified-import + idempotency, unlisted-school fallback,
-  previous-cycle refusal-to-guess); runtime smoke test added "stanford
-  university" (lowercase) via real HTTP, confirmed canonicalization to
-  "Stanford University", all 8 real prompts imported with verification
-  badges and partial auto-classification, re-adding produced zero
-  duplicates.
-- `76855f3` (assignment/suggestions): `./run_tests.sh` green (28/28 vitest
-  incl. assign/replace/unassign against the snapshot); runtime smoke test
-  confirmed the suggested-matches UI renders correctly with real
-  promptId/essayId/score/recommendation against actual imported Stanford
-  prompts and a real essay.
-- Every server smoke test was run against a freshly migrated, empty
-  `data/college-essay-organizer.sqlite` (gitignored, not committed), and
-  every spawned `next start` process was confirmed killed afterward
-  (verified via `lsof`/`ps` — an earlier round in this session found and
-  cleaned up several stray leftover server processes from prior testing).
-- Real CLI auth facts reconfirmed read-only this session: `claude auth
-  status --json` (see Blockers). No real Claude/Codex pipeline invocation
-  and no real model/API calls of any kind were made this session beyond
-  normal interactive tool use — the retrieval research used `WebSearch`/
-  `WebFetch` only (read-only, cited, see Completed).
+## Next Steps
+
+1. Expand retrieval coverage toward top-25/top-100, a few schools at a
+   time, same method: WebFetch the official source, write a
+   `SchoolSourceRecord`, register it. Good next candidates: Columbia, UPenn,
+   Duke, Cornell, Brown, Chicago, Dartmouth, UC Los Angeles's PIQ file is
+   already done — verify the remaining UC campuses if added, same shared set.
+2. Essay editor's deterministic accept/reject suggestion workflow (Phase 4)
+   — explicitly deferred this session, not started.
+3. Phase 5: JSON export/import preserving relationships; at least one
+   Playwright workflow (not installed yet); README/architecture docs.
+4. Minor: `/reuse` is still a flat global list, not organized per-school;
+   short (~50-word) prompts sometimes get no deterministic classification
+   at all (expected for a keyword classifier on very short text).
 
 ## Last Verified Commit
 
-`76855f3` — "Surface suggested essays and essay-to-prompt assignment on
-prompt cards". Working tree is clean at this commit; `./run_tests.sh`
-(lint, strict typecheck, 28/28 vitest, production build, 80/80 overnight
-orchestration assertions) passed immediately before it, plus the manual
-runtime smoke tests described above.
+`898399e` — "Build a real prompt-retrieval pipeline: adapters, versioning,
+dedup, change detection". Working tree clean; full canonical verification
+(above) passed immediately before it.
