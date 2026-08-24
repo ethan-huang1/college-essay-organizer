@@ -161,7 +161,9 @@ filtering, and search remain unfinished.
 
 P0 Phase 2 (Core Organization). School and prompt CRUD are complete. Essay CRUD
 with immutable content versions is the highest-priority unfinished slice,
-followed by filtering, search, and browser workflow coverage.
+followed by filtering, search, and browser workflow coverage. The repository is
+clean and ready for Claude Code to continue from the verified prompt CRUD
+checkpoint without repeating completed work.
 
 ## Next Steps
 
@@ -266,6 +268,10 @@ None.
   route type generation plus strict `tsc --noEmit`, all 10 integration tests,
   a successful optimized Next.js webpack production build, and 80/80 overnight
   orchestration assertions.
+- Pre-Claude transfer verification: `./run_tests.sh` passed again from the clean
+  prompt CRUD checkpoint with the same ESLint/typecheck/build results, 10/10
+  integration tests, and 80/80 overnight assertions. No regressions or code
+  changes were required.
 - Browser automation does not exist yet and remains P0 verification work.
 
 ## Last Verified Commit
