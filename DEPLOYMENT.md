@@ -297,3 +297,37 @@ in distinct classified owners. Restore from step 1.
 - The 54 unencoded conditional prompts (uncertainty 5).
 - The responsive and density polish deliberately left undone, listed in
   `AGENT_HANDOFF.md`.
+
+---
+
+## Post-release note: the retired-concept tag links
+
+The seven-category migration was supposed to preserve the four retired concepts
+as internal tags. In production it wrote **zero**, because
+`migrateWorkspaceTaxonomy` read `prompt_tags` before `seedTaxonomy` created the
+four new tag names — so in any workspace seeded by an earlier release every
+lookup missed. Fixed forward in `e08247c`, with a regression test that
+reproduces the real shape by deleting those tag rows first.
+
+**No production repair was performed, deliberately.** Two findings:
+
+1. **The intended links are not recoverable.** The migration deleted
+   `prompt_family_links` and reinserted them with new `family_id`s, so which of
+   the four retired concepts a prompt was filed under is simply gone. 73 links
+   now point at `Other`, and since `LEGACY_FAMILY_SLUG_MAP` sends only those
+   four slugs there, we know each came from one of them — but not which. No
+   audit table, change log, or other verified source records it. Reconstructing
+   it from prompt text would be a different derivation presented as a recovery,
+   which is a guess.
+2. **The links are functionally inert today.** Nothing reads
+   `prompt_tag_links` or `essay_tag_links` — verified by grep across `src/`.
+   Not matching, not reuse, not the workspace snapshot. `prompt_tag_links` was
+   also 0 before this release, so nothing regressed; the enhancement simply did
+   not land for pre-existing workspaces.
+
+A write to production with no functional effect, based on a reconstruction from
+insufficient information, is not worth the risk. **When the matching layer
+actually starts consuming tags** — see `docs/adaptation-workflow.md` — regenerate
+them for every prompt from its text with the deterministic classifier, which is
+what the import path already does for new prompts. That is verifiable and
+forward-looking, rather than pretending to recover a lost value.
