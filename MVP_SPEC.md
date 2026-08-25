@@ -32,7 +32,7 @@ prompts, essay families, essay versions, and reuse opportunities. Do not
 allow the application to become merely a generic text editor or CRUD
 database.
 
-Use approximately ten broad prompt families, optional secondary tags, and
+Use the seven prompt categories in section 2, optional secondary tags, and
 many-to-many relationships. Prompts and essays may belong to multiple
 families, with one optional primary family for organization.
 
@@ -134,7 +134,7 @@ school's name. Do not implement live prompt scraping — manual entry and
 structured import are sufficient.
 
 ### Prompt Family Explorer
-Support: grouping prompts by the ten families; primary and secondary
+Support: grouping prompts by the seven categories; primary and secondary
 classifications; filtering by school, status, family, word count, and
 deadline; manual reclassification; a transparent explanation of
 deterministic classifications; viewing related prompts across schools.
@@ -208,7 +208,9 @@ Demo data must be clearly labeled and removable. Never imply that
 synthetic essays belong to the user.
 
 The demo workspace should contain: at least three fictional schools;
-prompts representing all ten families; at least six synthetic essays;
+prompts representing every category that the catalogue can reach (see
+section 2 on why Other is excluded from that requirement); at least six
+synthetic essays;
 multiple versions of at least two essays; examples of strong reuse;
 examples requiring substantial adaptation; an example of dangerous
 institution-specific reuse.
@@ -332,7 +334,7 @@ pass (see OVERNIGHT_TASK.md rule 4).
 The overnight MVP is successful when: the application can be installed and
 started from documented instructions; a user can choose an empty workspace
 or clearly labeled demo workspace; schools, prompts, and essays can be
-created, viewed, edited, and removed; the ten-family taxonomy supports
+created, viewed, edited, and removed; the seven-category taxonomy supports
 primary and secondary relationships; users can override deterministic
 classifications; essays can match prompts across multiple schools; the
 Reuse Map displays scores, explanations, missing requirements, and
