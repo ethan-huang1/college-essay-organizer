@@ -81,6 +81,49 @@ function needsCapital(distinctive: string) {
 }
 
 /**
+ * Single-word school names that are also ordinary English words.
+ *
+ * For these the capital proves nothing by itself, because the first word of a
+ * sentence or a title is capitalised whatever it means: "Brown paper covered
+ * the table." and an essay titled "Rice and Identity" were both being read as
+ * naming a school. Since reuse.ts feeds in `${title} ${content}`, the title's
+ * first word is always in that position.
+ *
+ * Every entry is the distinctive name of a real school in the catalogue, so the
+ * list is closed rather than open-ended: Brown, Rice, Smith, Reed, Duke,
+ * Williams, Trinity, Wake.
+ */
+const AMBIGUOUS_SINGLE_WORDS = new Set([
+  "brown", "rice", "smith", "reed", "duke", "williams", "trinity", "wake", "hope", "union",
+]);
+
+/** Every index at which `needle` appears as a whole word. */
+function occurrences(text: string, needle: string) {
+  const pattern = new RegExp(`\\b${escapeForRegExp(needle)}\\b`, "g");
+  const found: number[] = [];
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) found.push(match.index);
+  return found;
+}
+
+/** True when this occurrence opens the text or a new sentence. */
+function opensSentence(text: string, index: number) {
+  const before = text.slice(0, index).replace(/[\s"'“‘(\[]+$/u, "");
+  return before.length === 0 || /[.!?:;—–\n\r]$/.test(before);
+}
+
+/**
+ * An ambiguous name counts only where its capital carries information: not at
+ * the start of a sentence or title, or else followed by a possessive, since an
+ * ordinary noun does not open a sentence as "Brown's".
+ */
+function mentionsAmbiguousName(text: string, needle: string) {
+  return occurrences(text, needle).some((index) => {
+    if (!opensSentence(text, index)) return true;
+    return /^['’]s\b/.test(text.slice(index + needle.length));
+  });
+}
+
+/**
  * Every school from `schoolNames` that `text` appears to name, plus any
  * unambiguous short form it uses.
  *
@@ -97,7 +140,12 @@ export function detectSchoolMentions(text: string, schoolNames: readonly string[
       continue;
     }
     const distinctive = distinctiveName(schoolName);
-    if (distinctive && mentions(text, distinctive, needsCapital(distinctive))) found.add(schoolName);
+    if (!distinctive) continue;
+    const ambiguous = needsCapital(distinctive) && AMBIGUOUS_SINGLE_WORDS.has(distinctive.toLowerCase());
+    const hit = ambiguous
+      ? mentionsAmbiguousName(text, distinctive)
+      : mentions(text, distinctive, needsCapital(distinctive));
+    if (hit) found.add(schoolName);
   }
 
   // Short forms are checked against the caller's school list too: flagging

@@ -56,4 +56,38 @@ describe("detectSchoolMentions", () => {
       .toEqual(["Brown University", "Stanford University"]);
     expect(detectSchoolMentions("   ", SCHOOLS)).toEqual([]);
   });
+  // Requiring a capital is not enough on its own: the first word of a sentence
+  // or a title is capitalised whatever it means. These all used to be read as
+  // mentions of a real school, which makes scoreMatch return "high" risk and
+  // tells the student to rewrite an essay that never named that school.
+  describe("capitalisation from sentence or title position", () => {
+    it("does not treat a sentence-opening ordinary word as a school", () => {
+      expect(detectSchoolMentions("Brown paper covered the table.", SCHOOLS)).toEqual([]);
+      expect(detectSchoolMentions("Rice and beans were dinner every Sunday.", SCHOOLS)).toEqual([]);
+    });
+
+    it("does not treat a title-opening ordinary word as a school", () => {
+      // reuse.ts feeds `${essay.title} ${essay.currentContent}` in, so the
+      // title's first word is always capitalised.
+      expect(detectSchoolMentions("Rice and Identity — my grandmother's kitchen", SCHOOLS)).toEqual([]);
+    });
+
+    it("does not treat a word after a full stop as a school", () => {
+      expect(detectSchoolMentions("We cleared the table. Brown paper lined the drawer.", SCHOOLS)).toEqual([]);
+    });
+
+    // The signal that survives: mid-sentence capitalisation, or a possessive,
+    // neither of which happens to an ordinary noun.
+    it("still detects the school when the capital actually means something", () => {
+      expect(detectSchoolMentions("I applied to Brown last year.", SCHOOLS)).toEqual(["Brown University"]);
+      expect(detectSchoolMentions("Brown's open curriculum is the reason.", SCHOOLS)).toEqual(["Brown University"]);
+      expect(detectSchoolMentions("What draws me to Rice is the residential college system.", SCHOOLS)).toEqual(["Rice University"]);
+    });
+
+    // An unambiguous name is not an English word, so sentence position tells us
+    // nothing and must not suppress it.
+    it("does not suppress an unambiguous name at the start of a sentence", () => {
+      expect(detectSchoolMentions("Stanford is where I want to study.", SCHOOLS)).toEqual(["Stanford University"]);
+    });
+  });
 });
