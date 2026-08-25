@@ -35,7 +35,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required for applicants selecting Penn Nursing as their single-degree school.",
+      conditionalNote: "Required for applicants selecting Penn Nursing as their single-degree school.", programKey: "nursing", programLabel: "Penn Nursing"
     },
     {
       externalRef: "school-arts-sciences",
@@ -44,7 +44,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required for applicants selecting the College of Arts and Sciences as their single-degree school.",
+      conditionalNote: "Required for applicants selecting the College of Arts and Sciences as their single-degree school.", programKey: "arts-sciences", programLabel: "College of Arts and Sciences"
     },
     {
       externalRef: "school-wharton",
@@ -53,7 +53,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required for applicants selecting the Wharton School as their single-degree school.",
+      conditionalNote: "Required for applicants selecting the Wharton School as their single-degree school.", programKey: "wharton", programLabel: "The Wharton School"
     },
     {
       externalRef: "school-engineering",
@@ -62,7 +62,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required for applicants selecting the School of Engineering and Applied Science as their single-degree school.",
+      conditionalNote: "Required for applicants selecting the School of Engineering and Applied Science as their single-degree school.", programKey: "engineering", programLabel: "School of Engineering and Applied Science"
     },
     {
       externalRef: "huntsman-language-experience",
@@ -71,7 +71,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Huntsman Program in International Studies and Business, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Huntsman Program in International Studies and Business, in addition to Penn's common prompts.", programKey: "huntsman", programLabel: "Huntsman Program in International Studies and Business"
     },
     {
       externalRef: "huntsman-global-issue",
@@ -80,7 +80,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 400,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Huntsman Program in International Studies and Business, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Huntsman Program in International Studies and Business, in addition to Penn's common prompts.", programKey: "huntsman", programLabel: "Huntsman Program in International Studies and Business"
     },
     {
       externalRef: "lsm-integration",
@@ -89,7 +89,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 400,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Roy and Diana Vagelos Program in Life Sciences and Management, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Roy and Diana Vagelos Program in Life Sciences and Management, in addition to Penn's common prompts.", programKey: "lsm", programLabel: "Vagelos Program in Life Sciences and Management"
     },
     {
       externalRef: "mt-engineering-business",
@@ -98,7 +98,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 400,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Jerome Fisher Program in Management and Technology, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Jerome Fisher Program in Management and Technology, in addition to Penn's common prompts.", programKey: "m-and-t", programLabel: "Jerome Fisher Program in Management and Technology"
     },
     {
       externalRef: "mt-created-built",
@@ -107,7 +107,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Jerome Fisher Program in Management and Technology, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Jerome Fisher Program in Management and Technology, in addition to Penn's common prompts.", programKey: "m-and-t", programLabel: "Jerome Fisher Program in Management and Technology"
     },
     {
       externalRef: "nhcm-interest",
@@ -116,7 +116,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 400,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Nursing and Healthcare Management coordinated dual-degree program, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Nursing and Healthcare Management coordinated dual-degree program, in addition to Penn's common prompts.", programKey: "nhcm", programLabel: "Nursing and Healthcare Management"
     },
     {
       externalRef: "viper-major-combination",
@@ -125,7 +125,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 200,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Roy and Diana Vagelos Integrated Program in Energy Research, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Roy and Diana Vagelos Integrated Program in Energy Research, in addition to Penn's common prompts.", programKey: "viper", programLabel: "Vagelos Integrated Program in Energy Research"
     },
     {
       externalRef: "viper-energy-interest",
@@ -134,7 +134,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 50,
       maxWordCount: 400,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the Roy and Diana Vagelos Integrated Program in Energy Research, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the Roy and Diana Vagelos Integrated Program in Energy Research, in addition to Penn's common prompts.", programKey: "viper", programLabel: "Vagelos Integrated Program in Energy Research"
     },
     {
       externalRef: "vic-alignment",
@@ -143,7 +143,7 @@ export const universityOfPennsylvania: SchoolSourceRecord = {
       minWordCount: 400,
       maxWordCount: 650,
       requirement: "conditional",
-      conditionalNote: "Required only for applicants to the BSE in Visual and Interactive Computing, in addition to Penn's common prompts.",
+      conditionalNote: "Required only for applicants to the BSE in Visual and Interactive Computing, in addition to Penn's common prompts.", programKey: "vic", programLabel: "BSE in Visual and Interactive Computing"
     },
   ],
 };

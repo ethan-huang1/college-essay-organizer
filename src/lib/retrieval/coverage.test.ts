@@ -93,4 +93,75 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
     console.log("Coverage breakdown:", counts);
     expect(Object.values(counts).reduce((sum, n) => sum + n, 0)).toBe(100);
   });
+  // Encoding the catalogue's group and program metadata is incremental: these
+  // schools are done, and the list grows as more are encoded. Naming them
+  // explicitly is what stops a half-finished file from passing quietly.
+  const GROUPS_ENCODED = [
+    "University of California, Berkeley",
+    "University of California, Los Angeles",
+    "University of California, Davis",
+    "University of California, Irvine",
+    "University of California, San Diego",
+    "University of California, Santa Barbara",
+    "University of California, Santa Cruz",
+    "Yale University",
+    "California Institute of Technology",
+    "Dartmouth College",
+    "Washington and Lee University",
+  ];
+
+  const PROGRAMS_ENCODED = [
+    "University of Pennsylvania",
+    "Georgetown University",
+    "Washington and Lee University",
+  ];
+
+  it("declares a choose-N group for every school whose set has been encoded", () => {
+    for (const name of GROUPS_ENCODED) {
+      const record = lookupSchoolSource(name);
+      expect(record, `${name} should be in the registry`).toBeTruthy();
+      const groups = record?.promptGroups ?? [];
+      expect(groups.length, `${name}: expected at least one prompt group`).toBeGreaterThan(0);
+      for (const group of groups) {
+        const size = record!.prompts.filter((prompt) => prompt.groupKey === group.key).length;
+        expect(size, `${name}: group "${group.key}" has no prompts`).toBeGreaterThan(0);
+        expect(group.requiredCount, `${name}: group "${group.key}" asks for more than it holds`).toBeLessThanOrEqual(size);
+        expect(group.requiredCount, `${name}: group "${group.key}" must ask for at least one`).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  // A conditional prompt with no programKey cannot be resolved for or against a
+  // student, so it is shown as unresolved rather than counted. That is the
+  // correct behaviour for a file nobody has encoded yet, but it must not
+  // silently appear in one that is supposed to be done.
+  it("gives every conditional prompt a programKey in the schools already encoded", () => {
+    for (const name of PROGRAMS_ENCODED) {
+      const record = lookupSchoolSource(name);
+      expect(record, `${name} should be in the registry`).toBeTruthy();
+      for (const prompt of record?.prompts ?? []) {
+        if (prompt.requirement !== "conditional") continue;
+        expect(prompt.programKey, `${name}: conditional prompt "${prompt.externalRef}" has no programKey`).toBeTruthy();
+      }
+    }
+  });
+
+  it("reports how much of the catalogue still needs group or program metadata (informational)", () => {
+    let unresolvedConditionals = 0;
+    const pending: string[] = [];
+    for (const name of listCoveredSchoolNames()) {
+      const record = lookupSchoolSource(name);
+      const missing = (record?.prompts ?? []).filter(
+        (prompt) => prompt.requirement === "conditional" && !prompt.programKey,
+      ).length;
+      if (missing > 0) {
+        unresolvedConditionals += missing;
+        pending.push(`${name} (${missing})`);
+      }
+    }
+    console.log(`Conditional prompts still unencoded: ${unresolvedConditionals} across ${pending.length} schools`);
+    console.log(pending.join(", "));
+    // Informational, but it must never grow silently past what is on file.
+    expect(unresolvedConditionals).toBeLessThanOrEqual(60);
+  });
 });

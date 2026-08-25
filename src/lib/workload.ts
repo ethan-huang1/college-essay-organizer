@@ -173,7 +173,19 @@ export function summarizeWorkload(
   const countable: WorkloadPrompt[] = [];
 
   for (const prompt of scoped) {
-    switch (conditionalState(prompt, schoolById.get(prompt.schoolId))) {
+    // A prompt in a choose-N set is resolved by its group rather than by a
+    // program: "choose exactly one of these two" is a condition on the
+    // applicant's own choice. Without this such a prompt would be dropped as
+    // unresolved and its whole group would vanish from the count.
+    //
+    // A prompt with both still has to clear its program gate first - W&L's
+    // Johnson Scholarship prompts are choose-one-of-five *and* only apply to
+    // Johnson applicants, and treating the group as resolution would require
+    // them of everybody.
+    const state = prompt.groupKey && !prompt.programKey
+      ? "active"
+      : conditionalState(prompt, schoolById.get(prompt.schoolId));
+    switch (state) {
       case "unresolved":
         unresolvedConditional += 1;
         if (prompt.programKey) {
