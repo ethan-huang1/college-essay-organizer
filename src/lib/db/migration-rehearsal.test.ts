@@ -10,6 +10,7 @@ import {
   applicationCycles,
   assignedEssayResponses,
   essayFamilyLinks,
+  essayTagLinks,
   essays,
   essayVersions,
   promptFamilies,
@@ -400,12 +401,8 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
 
   it("[point 3] backfills a correct, editable-name-independent slug for every family, including a non-conventional id", async () => {
     const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, WS_A));
-    // At this point in the sequence WS_A has already been remapped to seven;
-    // resolve the fallback-backfill claim on WS_B instead, which still holds
-    // its raw ten-category backfill untouched by migrateWorkspaceTaxonomy...
-    // actually both workspaces were migrated in beforeAll, so assert the
-    // shape of the *surviving* seven and separately prove the backfill by id
-    // directly against the tracking table state captured via SQL.
+    // Every surviving family (the seven the workspace was just remapped to)
+    // has a populated, unique slug - the NOT NULL + unique index 0003 adds.
     expect(families.every((family) => Boolean(family.slug))).toBe(true);
     expect(new Set(families.map((family) => family.slug)).size).toBe(families.length);
 
@@ -474,10 +471,17 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
     const essayLink = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayBridgeId)).then((r) => r[0]);
     expect(essayLink).toMatchObject({ familyId: personalStatementFamilyIdA, isPrimary: true, source: "manual" });
 
-    // The four retired categories collapsed away as internal tags rather than
-    // silently vanishing.
+    // The retired categories collapsed away as internal tags rather than
+    // silently vanishing: one tag per (owner, retired concept) pair - the
+    // dedicated challenge-growth/intellectual-curiosity/activities-impact/
+    // values-meaning prompts (4) plus core-story's two collapsed secondaries,
+    // which are two DIFFERENT retired concepts on the SAME owner (2) = 6.
     const tagLinks = await connection.db.select().from(promptTagLinks).where(eq(promptTagLinks.workspaceId, WS_A));
-    expect(tagLinks.length).toBeGreaterThan(0);
+    expect(tagLinks).toHaveLength(6);
+    expect(tagLinks.filter((link) => link.promptId === coreStoryPromptId)).toHaveLength(2);
+    // A link to a category that was NOT retired (personal-statement) produces no tag.
+    const essayTags = await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.workspaceId, WS_A));
+    expect(essayTags).toHaveLength(0);
   });
 
   it("[point 5] running the taxonomy migration a second time is a no-op", async () => {
@@ -597,7 +601,8 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
         { schoolId: `${WS_A}:school:${PROGRAM_COLLEGE}`, schoolName: "Program College", programKey: "nursing", programLabel: "Nursing" },
       ]);
 
-      // Setting the program answer at Meridian does not retroactively resolve it either way but proves the API used to gate it works end to end.
+      // Answering "yes, applying to Wharton" flips the same prompt from
+      // unselected to active, proving the gate is live, not just absent.
       await setSchoolPrograms(connection.db, WS_A, `${WS_A}:school:${MERIDIAN}`, ["nursing", "wharton"]);
       const resolvedSnapshot = await getWorkspaceSnapshot(connection.db, WS_A);
       const whartonNowSelected = resolvedSnapshot!.prompts.find((prompt) => prompt.id === `${WS_A}:prompt:meridian-wharton`)!;
