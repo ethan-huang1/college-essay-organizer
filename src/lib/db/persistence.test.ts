@@ -409,6 +409,40 @@ describe("local persistence foundation", () => {
     expect(versions[0]).toMatchObject({ versionNumber: 1, reason: "Initial version" });
     expect(links.find((link) => link.isPrimary)?.familyId).toBe(families[5].id);
 
+    // The essay form no longer offers a secondary-category picker, so a
+    // metadata save omits the key entirely. That must keep the secondaries the
+    // importer derived - only an explicit [] clears them.
+    await updateEssayMetadata(connection.db, PERSONAL, essayId, {
+      title: "Why Computer Science",
+      status: "draft",
+      designation: "canonical",
+      primaryFamilyId: families[6].id,
+    });
+    const preserved = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
+    expect(preserved.find((link) => link.isPrimary)?.familyId).toBe(families[6].id);
+    expect(preserved.filter((link) => !link.isPrimary).map((link) => link.familyId)).toEqual([families[4].id]);
+
+    // Promoting a preserved secondary to primary must not trip
+    // essay_family_pair_unique.
+    await updateEssayMetadata(connection.db, PERSONAL, essayId, {
+      title: "Why Computer Science",
+      status: "draft",
+      designation: "canonical",
+      primaryFamilyId: families[4].id,
+    });
+    const promoted = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
+    expect(promoted).toHaveLength(1);
+    expect(promoted[0]).toMatchObject({ familyId: families[4].id, isPrimary: true });
+
+    await updateEssayMetadata(connection.db, PERSONAL, essayId, {
+      title: "Why Computer Science",
+      status: "draft",
+      designation: "canonical",
+      primaryFamilyId: families[6].id,
+      secondaryFamilyIds: [],
+    });
+    expect(await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId))).toHaveLength(1);
+
     await expect(createEssay(connection.db, PERSONAL, {
       title: "Wrong family",
       status: "idea",

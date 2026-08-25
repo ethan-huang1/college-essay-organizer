@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { getAppDatabase } from "@/lib/db/server";
 import {
@@ -40,7 +41,11 @@ function essayMetadataInput(formData: FormData): EssayMetadataInput {
       .map((phrase) => phrase.trim())
       .filter(Boolean),
     primaryFamilyId: field(formData, "primaryFamilyId") || null,
-    secondaryFamilyIds: formData.getAll("secondaryFamilyIds").filter((value): value is string => typeof value === "string"),
+    // The essay form no longer offers a secondary-category picker, so omitting
+    // the key tells updateEssayMetadata to keep the importer's links.
+    secondaryFamilyIds: formData.has("secondaryFamilyIds")
+      ? formData.getAll("secondaryFamilyIds").filter((value): value is string => typeof value === "string")
+      : undefined,
   };
 }
 
@@ -55,12 +60,15 @@ function revalidateEssayPaths() {
 export async function createEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const db = getAppDatabase().db;
-  await createEssay(db, snapshot.workspace.id, {
+  const essayId = await createEssay(db, snapshot.workspace.id, {
     ...essayMetadataInput(formData),
     content: field(formData, "content"),
   });
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateEssayPaths();
+  // Navigating away is what closes and resets the <details> form, and the hash
+  // scrolls the new card into view - both without any client-side state.
+  redirect(`/essays#essay-${essayId}`);
 }
 
 export async function updateEssayMetadataAction(formData: FormData) {

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 
 import type { AppDatabase } from "./db/client";
 import { essayFamilyLinks, essays, essayVersions, promptFamilies } from "./db/schema";
@@ -32,14 +32,19 @@ export function wordCount(content: string) {
   return content.trim() ? content.trim().split(/\s+/).length : 0;
 }
 
+// Omitting secondaryFamilyIds is meaningfully different from passing []: the
+// secondary-category picker was removed from the UI, so a metadata save carries
+// no secondaries and must leave the importer's links alone rather than clear
+// them. Passing [] still means "no secondaries".
 function normalizeFamilies(input: { primaryFamilyId?: string | null; secondaryFamilyIds?: string[] }) {
   const primaryFamilyId = input.primaryFamilyId || null;
-  const secondaryFamilyIds = [...new Set(input.secondaryFamilyIds ?? [])]
-    .filter((familyId) => familyId && familyId !== primaryFamilyId);
+  const secondaryFamilyIds = input.secondaryFamilyIds
+    ? [...new Set(input.secondaryFamilyIds)].filter((familyId) => familyId && familyId !== primaryFamilyId)
+    : undefined;
   return { primaryFamilyId, secondaryFamilyIds };
 }
 
-async function validateFamilies(db: AppDatabase, workspaceId: string, primaryFamilyId: string | null, secondaryFamilyIds: string[]) {
+async function validateFamilies(db: AppDatabase, workspaceId: string, primaryFamilyId: string | null, secondaryFamilyIds: string[] = []) {
   const familyIds = [primaryFamilyId, ...secondaryFamilyIds].filter((id): id is string => Boolean(id));
   if (familyIds.length === 0) return;
   const valid = await db.select({ id: promptFamilies.id })
@@ -53,12 +58,24 @@ async function replaceFamilyAssignments(
   workspaceId: string,
   essayId: string,
   primaryFamilyId: string | null,
-  secondaryFamilyIds: string[],
+  secondaryFamilyIds: string[] | undefined,
 ) {
-  await db.delete(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
+  // With secondaries omitted only the primary is replaced. A secondary row for
+  // the incoming primary still has to go, or essay_family_pair_unique rejects
+  // the insert below.
+  await db.delete(essayFamilyLinks).where(
+    secondaryFamilyIds
+      ? eq(essayFamilyLinks.essayId, essayId)
+      : and(
+          eq(essayFamilyLinks.essayId, essayId),
+          primaryFamilyId
+            ? or(eq(essayFamilyLinks.isPrimary, true), eq(essayFamilyLinks.familyId, primaryFamilyId))
+            : eq(essayFamilyLinks.isPrimary, true),
+        ),
+  );
   const assignments = [
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
-    ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
+    ...(secondaryFamilyIds ?? []).map((familyId) => ({ familyId, isPrimary: false })),
   ];
   if (assignments.length > 0) {
     await db.insert(essayFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({

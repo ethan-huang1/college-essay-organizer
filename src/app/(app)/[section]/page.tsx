@@ -389,11 +389,10 @@ type WorkspaceEssay = WorkspaceSnapshot["essays"][number];
 
 const ESSAY_STATUSES = ["idea", "outline", "draft", "revising", "ready", "submitted"] as const;
 
-function EssayFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?: WorkspaceEssay }) {
-  const secondaryIds = new Set(essay?.secondaryFamilies.map((family) => family.id));
+function EssayFields({ snapshot, essay, omitTitle }: { snapshot: WorkspaceSnapshot; essay?: WorkspaceEssay; omitTitle?: boolean }) {
   return (
     <div className="prompt-fields">
-      <label>Title<input name="title" required minLength={2} maxLength={160} defaultValue={essay?.title} placeholder="Why Computer Science" /></label>
+      {omitTitle ? null : <label>Title<input name="title" required minLength={2} maxLength={160} defaultValue={essay?.title} placeholder="Why Computer Science" /></label>}
       <label>Target words<input name="targetWordCount" type="number" min={0} step={1} defaultValue={essay?.targetWordCount ?? ""} /></label>
       <label>Status<select name="status" defaultValue={essay?.status ?? "idea"}>
         {ESSAY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
@@ -403,12 +402,6 @@ function EssayFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?:
         <option value="school-adaptation">School-specific adaptation</option>
       </select></label>
       <label>Primary category<select name="primaryFamilyId" defaultValue={essay?.primaryFamily?.id ?? ""}><option value="">No primary category</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
-      <fieldset className="family-picker field-wide">
-        <legend>Secondary categories <span>choose any that also apply</span></legend>
-        <div>{snapshot.families.map((family) => (
-          <label key={family.id}><input type="checkbox" name="secondaryFamilyIds" value={family.id} defaultChecked={secondaryIds.has(family.id)} /><span>{family.name}</span></label>
-        ))}</div>
-      </fieldset>
       <label className="field-wide">School-specific phrases <span>comma-separated, e.g. school names to flag</span>
         <input name="schoolSpecificPhrases" defaultValue={essay?.schoolSpecificPhrases.join(", ") ?? ""} placeholder="Stanford, the Farm" />
       </label>
@@ -463,8 +456,12 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
         <details className="add-panel">
           <summary>Add an essay</summary>
           <form action={createEssayAction} className="prompt-form">
-            <EssayFields snapshot={snapshot} />
-            <label className="field-wide">Starting content<textarea name="content" maxLength={20000} placeholder="Draft the first version here, or leave blank and write later" /></label>
+            <label className="field-wide">Title<input name="title" required minLength={2} maxLength={160} placeholder="Why Computer Science" /></label>
+            <label className="field-wide">Starting content<textarea name="content" maxLength={20000} placeholder="Draft the first version here, or paste one you already have" /></label>
+            <details className="field-group">
+              <summary>Details (optional)</summary>
+              <EssayFields snapshot={snapshot} omitTitle />
+            </details>
             <button type="submit">Add essay</button>
           </form>
         </details>
@@ -530,28 +527,33 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
                 </ul>
               ) : null}
               {essay.schoolSpecificPhrases.length > 0 ? <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p> : null}
-              <details className="record-actions">
-                <summary>Write, edit, or remove</summary>
-                <form action={saveEssayVersionAction} className="prompt-form">
-                  <input name="essayId" type="hidden" value={essay.id} />
-                  <label className="field-wide">New content <span>saving creates a new version; the essay is never edited in place</span>
-                    <textarea name="content" maxLength={20000} defaultValue={essay.currentContent} />
-                  </label>
-                  <label className="field-wide">Reason for this version<input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
-                  <button type="submit">Save as new version</button>
-                </form>
-                <form action={updateEssayMetadataAction} className="prompt-form">
-                  <input name="essayId" type="hidden" value={essay.id} />
-                  <EssayFields snapshot={snapshot} essay={essay} />
-                  <button type="submit">Save essay details</button>
-                </form>
-                <EssayVersionHistory essay={essay} />
-                <form action={deleteEssayAction} className="delete-form">
-                  <input name="essayId" type="hidden" value={essay.id} />
-                  <span>Deleting removes every version and match for this essay.</span>
-                  <button type="submit">Delete essay</button>
-                </form>
-              </details>
+              <div className="record-actions">
+                <details>
+                  <summary>Write</summary>
+                  <form action={saveEssayVersionAction} className="prompt-form">
+                    <input name="essayId" type="hidden" value={essay.id} />
+                    <label className="field-wide">Content <span>saving creates a new version; the essay is never edited in place</span>
+                      <textarea name="content" maxLength={20000} defaultValue={essay.currentContent} />
+                    </label>
+                    <label className="field-wide field-secondary">Reason for this version <span>optional</span><input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
+                    <button type="submit">Save as new version</button>
+                  </form>
+                </details>
+                <details>
+                  <summary>Details &amp; history</summary>
+                  <form action={updateEssayMetadataAction} className="prompt-form">
+                    <input name="essayId" type="hidden" value={essay.id} />
+                    <EssayFields snapshot={snapshot} essay={essay} />
+                    <button type="submit">Save essay details</button>
+                  </form>
+                  <EssayVersionHistory essay={essay} />
+                  <form action={deleteEssayAction} className="delete-form">
+                    <input name="essayId" type="hidden" value={essay.id} />
+                    <span>Deleting removes every version and match for this essay.</span>
+                    <button type="submit">Delete essay</button>
+                  </form>
+                </details>
+              </div>
             </article>
           ))}
         </div>
