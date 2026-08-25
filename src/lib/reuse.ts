@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { AppDatabase } from "./db/client";
 import { essayFamilyLinks, essayPromptMatches, essays, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 import { scoreMatch } from "./matching";
-import { detectSchoolMentions } from "./school-mentions";
+import { detectSchoolMentionsIn } from "./school-mentions";
 import { wordCount } from "./essays";
 
 type FamilyLink = { familyId: string; isPrimary: boolean };
@@ -48,9 +48,13 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
       // names Stanford is school-specific whether or not the student
       // remembered to say so, and that field is empty by default - which is
       // why every essay used to read as low risk.
+      // Title and body are analysed as separate fields, never concatenated: a
+      // field boundary is a sentence boundary, and joining them with a space
+      // made a body opening "Brown paper covered the table." look like a
+      // mid-sentence proper noun.
       const schoolSpecificPhrases = [...new Set([
         ...essay.schoolSpecificPhrases,
-        ...detectSchoolMentions(`${essay.title} ${essay.currentContent}`, schoolNames),
+        ...detectSchoolMentionsIn({ title: essay.title, body: essay.currentContent }, schoolNames),
       ])];
 
       return workspacePrompts.map((prompt) => {

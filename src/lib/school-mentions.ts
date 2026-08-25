@@ -158,3 +158,28 @@ export function detectSchoolMentions(text: string, schoolNames: readonly string[
 
   return [...found];
 }
+
+/**
+ * The schools named across an essay's separate fields.
+ *
+ * Each field is analysed independently and the results unioned, because a
+ * field boundary IS a sentence boundary. Concatenating title and body with a
+ * space was what defeated the ambiguous-word guard in production: an essay
+ * titled "Brown paper and the kitchen table" whose body opened "Brown paper
+ * covered the table." put that second "Brown" mid-sentence, so it read as a
+ * proper noun and the essay was reported as naming Brown University.
+ *
+ * Analysing fields separately is structural rather than a separator trick, so
+ * it cannot be defeated by whatever punctuation a title happens to end with.
+ */
+export function detectSchoolMentionsIn(
+  fields: { title?: string; body?: string },
+  schoolNames: readonly string[],
+): string[] {
+  const parts = [fields.title ?? "", fields.body ?? ""];
+  const found = new Set<string>();
+  for (const part of parts) {
+    for (const name of detectSchoolMentions(part, schoolNames)) found.add(name);
+  }
+  return [...found];
+}

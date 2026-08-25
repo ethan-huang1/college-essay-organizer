@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectSchoolMentions } from "./school-mentions";
+import { detectSchoolMentions, detectSchoolMentionsIn } from "./school-mentions";
 
 const SCHOOLS = [
   "Stanford University",
@@ -88,6 +88,56 @@ describe("detectSchoolMentions", () => {
     // nothing and must not suppress it.
     it("does not suppress an unambiguous name at the start of a sentence", () => {
       expect(detectSchoolMentions("Stanford is where I want to study.", SCHOOLS)).toEqual(["Stanford University"]);
+    });
+  });
+  // The production false positive. The caller analyses title and body together,
+  // and joining them with a space put the body's opening word mid-"sentence",
+  // which defeated the ambiguous-word guard entirely. An essay titled "Brown
+  // paper and the kitchen table" was reported as naming Brown University.
+  describe("title and body analysed as separate fields", () => {
+    const TITLE = "Brown paper and the kitchen table";
+    const BODY = "Brown paper covered the table. Rice and beans were dinner every Sunday. Smith was my chemistry teacher.";
+
+    it("finds nothing in the title alone", () => {
+      expect(detectSchoolMentionsIn({ title: TITLE, body: "" }, SCHOOLS)).toEqual([]);
+    });
+
+    it("finds nothing in a body that opens with an ordinary word", () => {
+      expect(detectSchoolMentionsIn({ title: "", body: BODY }, SCHOOLS)).toEqual([]);
+    });
+
+    it("finds nothing when title and body are analysed together", () => {
+      expect(detectSchoolMentionsIn({ title: TITLE, body: BODY }, SCHOOLS)).toEqual([]);
+    });
+
+    it("ignores lowercase ordinary usage", () => {
+      expect(detectSchoolMentionsIn({ title: "A quiet Sunday", body: "I wrapped it in brown paper and ate rice." }, SCHOOLS)).toEqual([]);
+    });
+
+    it("ignores other sentence-opening ambiguous words", () => {
+      expect(detectSchoolMentionsIn({ title: "Rice and Identity", body: "Smith taught me algebra. Reed thickets lined the bank. Wake was the name of our dog." }, SCHOOLS)).toEqual([]);
+    });
+
+    it("still finds a genuine reference in the body", () => {
+      expect(detectSchoolMentionsIn({ title: "Why I applied", body: "At Brown, I hope to build my own concentration." }, SCHOOLS))
+        .toEqual(["Brown University"]);
+    });
+
+    it("still finds an explicit full-name reference", () => {
+      expect(detectSchoolMentionsIn({ title: "My plan", body: "Brown University's open curriculum is the reason." }, SCHOOLS))
+        .toEqual(["Brown University"]);
+    });
+
+    it("finds a genuine reference in either field", () => {
+      expect(detectSchoolMentionsIn({ title: "What draws me to Stanford", body: "Nothing else here." }, SCHOOLS))
+        .toEqual(["Stanford University"]);
+      expect(detectSchoolMentionsIn({ title: "My plan", body: "I want to study at Stanford next year." }, SCHOOLS))
+        .toEqual(["Stanford University"]);
+    });
+
+    it("unions detections across the two fields without duplicating", () => {
+      const found = detectSchoolMentionsIn({ title: "Why Stanford", body: "At Brown, I would do the same." }, SCHOOLS);
+      expect([...found].sort()).toEqual(["Brown University", "Stanford University"]);
     });
   });
 });
