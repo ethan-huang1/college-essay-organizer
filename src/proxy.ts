@@ -23,14 +23,14 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/sign-in?error=unconfigured", request.url));
   }
 
-  const signedIn = Boolean(sessionUserId(request.cookies.get(SESSION_COOKIE)?.value, secret, Date.now()));
-
-  if (signedIn) {
-    // Bounce an already-signed-in visitor off the sign-in and sign-up pages.
-    return isPublic ? NextResponse.redirect(new URL("/", request.url)) : NextResponse.next();
-  }
-
+  // The auth pages are always reachable. Bouncing a "signed-in" visitor away
+  // from them would trap anyone whose cookie is validly signed but whose
+  // account no longer exists - the pages themselves send a genuinely
+  // signed-in visitor home instead, because only they can check that.
   if (isPublic) return NextResponse.next();
+
+  const signedIn = Boolean(sessionUserId(request.cookies.get(SESSION_COOKIE)?.value, secret, Date.now()));
+  if (signedIn) return NextResponse.next();
 
   const signIn = new URL("/sign-in", request.url);
   signIn.searchParams.set("next", `${pathname}${search}`);

@@ -24,7 +24,7 @@ import {
   resetDemoWorkspace,
 } from "./demo-workspace";
 import { DEMO_WORKSPACE_ID } from "./seed";
-import { ensurePersonalWorkspace, personalWorkspaceId } from "../users";
+import { ensurePersonalWorkspace } from "../users";
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
 import { createPrompt, deletePrompt, updatePrompt } from "../prompts";

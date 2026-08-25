@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { SESSION_COOKIE, sessionUserId } from "./auth";
 import { getAppDatabase } from "./db/server";
@@ -7,13 +8,6 @@ import { ensurePersonalWorkspace, findUserById, personalWorkspaceId } from "./us
 import { getWorkspaceSnapshot } from "./workspaces";
 
 export const ACTIVE_WORKSPACE_COOKIE = "college-essay-workspace";
-
-export class NotSignedInError extends Error {
-  constructor() {
-    super("Not signed in.");
-    this.name = "NotSignedInError";
-  }
-}
 
 /** The signed-in user, or null. Verifying the cookie needs no database read. */
 export async function getSignedInUser() {
@@ -24,9 +18,15 @@ export async function getSignedInUser() {
   return findUserById(getAppDatabase().db, userId);
 }
 
+/**
+ * The signed-in user, or a redirect to sign-in. Redirecting rather than throwing
+ * matters for the case where the cookie is validly signed but its account has
+ * since been deleted (a restored backup, a switched database, a removed
+ * account): that used to surface as a 500 on every route.
+ */
 export async function requireSignedInUser() {
   const user = await getSignedInUser();
-  if (!user) throw new NotSignedInError();
+  if (!user) redirect("/sign-in?error=expired");
   return user;
 }
 
