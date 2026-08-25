@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "./client";
 import { essayFamilyLinks, essayTagLinks, promptFamilies, promptFamilyLinks, promptTagLinks, promptTags } from "./schema";
@@ -21,23 +21,33 @@ import { seedTaxonomy } from "./seed";
  * Idempotent: a workspace already on the seven returns immediately.
  */
 export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: string) {
-  const existing = await db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
-  if (existing.length === 0) return { migrated: false as const, reason: "no taxonomy" };
+  // Everything - reads included - runs inside one transaction, because the
+  // writes below delete this workspace's link rows wholesale and reinsert them
+  // from what was read. Reading outside the transaction left a window in which
+  // a link committed by the running app after the read would be deleted and
+  // never reinserted, silently losing a classification a student had just made.
+  // The advisory lock is held for the transaction and keyed to the workspace, so
+  // two concurrent runs cannot interleave on the same one either.
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`taxonomy:${workspaceId}`}))`);
 
-  const targetSlugs = new Set(PROMPT_FAMILIES.map(([slug]) => slug));
-  const legacyRows = existing.filter((family) => !targetSlugs.has(family.slug as never));
-  if (legacyRows.length === 0) return { migrated: false as const, reason: "already migrated" };
+    const existing = await tx.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
+    if (existing.length === 0) return { migrated: false as const, reason: "no taxonomy" };
 
-  const newFamilyId = (slug: string) => `${workspaceId}:family:${slug}`;
+    const targetSlugs = new Set(PROMPT_FAMILIES.map(([slug]) => slug));
+    const legacyRows = existing.filter((family) => !targetSlugs.has(family.slug as never));
+    if (legacyRows.length === 0) return { migrated: false as const, reason: "already migrated" };
 
-  const [promptLinks, essayLinks, tags] = await Promise.all([
-    db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)),
-    db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)),
-    db.select().from(promptTags).where(eq(promptTags.workspaceId, workspaceId)),
-  ]);
-  const tagIdByName = new Map(tags.map((tag) => [tag.name, tag.id]));
+    const newFamilyId = (slug: string) => `${workspaceId}:family:${slug}`;
 
-  const slugById = new Map(existing.map((family) => [family.id, family.slug]));
+    const [promptLinks, essayLinks, tags] = await Promise.all([
+      tx.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).execute(),
+      tx.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).execute(),
+      tx.select().from(promptTags).where(eq(promptTags.workspaceId, workspaceId)).execute(),
+    ]);
+    const tagIdByName = new Map(tags.map((tag) => [tag.name, tag.id]));
+
+    const slugById = new Map(existing.map((family) => [family.id, family.slug]));
 
   /**
    * Repoints one side's links, deduping as it goes.
@@ -68,12 +78,19 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
       let primaryTaken = false;
       // Primaries first, so the surviving primary is a real one rather than
       // whichever row happened to come first.
+      // If any of the collapsing rows was hand-classified, the survivor has to
+      // stay 'manual'. Choosing purely by isPrimary let a manual secondary and
+      // a deterministic primary retire onto the same family and kept the
+      // deterministic one, so a student's own classification silently started
+      // reading as auto-generated.
+      const manualFamilies = new Set(rows.filter((row) => row.source === "manual").map((row) => row.familyId));
       for (const row of [...rows].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))) {
         if (seen.has(row.familyId)) continue;
         seen.add(row.familyId);
         const isPrimary = row.isPrimary && !primaryTaken;
         if (isPrimary) primaryTaken = true;
-        resolved.push({ owner, familyId: row.familyId, isPrimary, source: row.source });
+        const source = manualFamilies.has(row.familyId) ? ("manual" as T["source"]) : row.source;
+        resolved.push({ owner, familyId: row.familyId, isPrimary, source });
       }
     }
     return resolved;
@@ -103,7 +120,6 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
   const newPromptTags = retiredTags(promptLinks, (link) => (link as typeof promptLinks[number]).promptId);
   const newEssayTags = retiredTags(essayLinks, (link) => (link as typeof essayLinks[number]).essayId);
 
-  await db.transaction(async (tx) => {
     // Links go first: they reference the family rows about to be deleted.
     await tx.delete(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId));
     await tx.delete(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId));
@@ -148,14 +164,14 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
         .values(newEssayTags.map((row) => ({ id: crypto.randomUUID(), workspaceId, essayId: row.owner, tagId: row.tagId })))
         .onConflictDoNothing();
     }
-  });
 
-  return {
-    migrated: true as const,
-    promptLinks: newPromptLinks.length,
-    essayLinks: newEssayLinks.length,
-    tags: newPromptTags.length + newEssayTags.length,
-  };
+    return {
+      migrated: true as const,
+      promptLinks: newPromptLinks.length,
+      essayLinks: newEssayLinks.length,
+      tags: newPromptTags.length + newEssayTags.length,
+    };
+  });
 }
 
 // The seeded tag rows use display names; the taxonomy's retired concepts are
