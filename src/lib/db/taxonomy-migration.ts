@@ -40,12 +40,15 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
 
     const newFamilyId = (slug: string) => `${workspaceId}:family:${slug}`;
 
-    const [promptLinks, essayLinks, tags] = await Promise.all([
+    const [promptLinks, essayLinks] = await Promise.all([
       tx.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).execute(),
       tx.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).execute(),
-      tx.select().from(promptTags).where(eq(promptTags.workspaceId, workspaceId)).execute(),
     ]);
-    const tagIdByName = new Map(tags.map((tag) => [tag.name, tag.id]));
+    // prompt_tags is read AFTER seedTaxonomy below, not here. Reading it first
+    // meant that in any workspace seeded by an earlier release - which is every
+    // pre-existing one - the four retired-concept tag names did not exist yet,
+    // every lookup missed, and the migration silently wrote zero tags while
+    // reporting success.
 
     const slugById = new Map(existing.map((family) => [family.id, family.slug]));
 
@@ -100,7 +103,11 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
   const newEssayLinks = remap(essayLinks, (link) => link.essayId);
 
   /** The retired concept each owner used to be filed under, as internal tags. */
-  function retiredTags(links: { familyId: string }[], ownerOf: (link: { familyId: string }) => string) {
+  function retiredTags(
+    links: { familyId: string }[],
+    tagIdByName: Map<string, string>,
+    ownerOf: (link: { familyId: string }) => string,
+  ) {
     const rows: { owner: string; tagId: string }[] = [];
     const seen = new Set<string>();
     for (const link of links) {
@@ -117,8 +124,6 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
     return rows;
   }
 
-  const newPromptTags = retiredTags(promptLinks, (link) => (link as typeof promptLinks[number]).promptId);
-  const newEssayTags = retiredTags(essayLinks, (link) => (link as typeof essayLinks[number]).essayId);
 
     // Links go first: they reference the family rows about to be deleted.
     await tx.delete(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId));
@@ -133,6 +138,13 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
     await tx.delete(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
 
     await seedTaxonomy(tx, workspaceId);
+
+    // Now that seedTaxonomy has guaranteed the retired-concept tag rows exist,
+    // resolve them and build the links.
+    const tags = await tx.select().from(promptTags).where(eq(promptTags.workspaceId, workspaceId)).execute();
+    const tagIdByName = new Map(tags.map((tag) => [tag.name, tag.id]));
+    const newPromptTags = retiredTags(promptLinks, tagIdByName, (link) => (link as typeof promptLinks[number]).promptId);
+    const newEssayTags = retiredTags(essayLinks, tagIdByName, (link) => (link as typeof essayLinks[number]).essayId);
 
     if (newPromptLinks.length > 0) {
       await tx.insert(promptFamilyLinks).values(newPromptLinks.map((row) => ({

@@ -13,6 +13,7 @@ import {
   promptFamilies,
   promptFamilyLinks,
   promptTagLinks,
+  promptTags,
   essayTagLinks,
   prompts,
   schools,
@@ -1012,6 +1013,41 @@ describe("local persistence foundation", () => {
       const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
       expect(links).toHaveLength(1);
       expect(links[0]).toMatchObject({ familyId: `${PERSONAL}:family:other`, isPrimary: true, source: "manual" });
+    });
+
+    // The ordering defect found in production. migrateWorkspaceTaxonomy read
+    // prompt_tags into its lookup map BEFORE seedTaxonomy created the four
+    // retired-concept tag names, so in any workspace seeded by an older release
+    // every lookup missed and zero tags were written. The rehearsal missed it
+    // because its fixture workspaces were seeded by the new code.
+    it("writes retired-concept tags even when the tag rows predate this release", async () => {
+      await seedLegacyTaxonomy(PERSONAL);
+      // Reproduce a pre-release workspace: the four new tag names do not exist.
+      await connection.db.delete(promptTags).where(and(
+        eq(promptTags.workspaceId, PERSONAL),
+        inArray(promptTags.name, ["intellectual curiosity", "challenge & growth", "activities & impact", "values & meaning"]),
+      ));
+      expect(await connection.db.select().from(promptTags)
+        .where(and(eq(promptTags.workspaceId, PERSONAL), eq(promptTags.name, "challenge & growth")))).toHaveLength(0);
+
+      const school = await createSchool(connection.db, PERSONAL, { name: "Ordering University" });
+      if (!school) throw new Error("Expected the school to be created.");
+      const promptId = await createPrompt(connection.db, PERSONAL, {
+        schoolId: school.id,
+        title: "A setback",
+        promptText: "Describe a significant challenge you faced and how you overcame it.",
+        requirement: "required",
+        status: "not-started",
+        primaryFamilyId: `${PERSONAL}:family:challenge-growth`,
+      });
+
+      await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
+
+      const tagLinks = await connection.db.select().from(promptTagLinks).where(eq(promptTagLinks.promptId, promptId));
+      expect(tagLinks).toHaveLength(1);
+      const tag = await connection.db.select().from(promptTags)
+        .where(eq(promptTags.id, tagLinks[0].tagId)).then((rows) => rows[0]);
+      expect(tag?.name).toBe("challenge & growth");
     });
 
     it("is idempotent and leaves an already-migrated workspace alone", async () => {
