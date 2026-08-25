@@ -4,14 +4,11 @@ import { classifyText } from "./classification";
 import { CURRENT_CYCLE_LABEL } from "./cycle";
 import type { AppDatabase } from "./db/client";
 import { applicationCycles, assignedEssayResponses, promptChangeLog, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
-import { PROMPT_FAMILIES } from "./db/taxonomy";
 import { promptContentChanged } from "./retrieval/normalize";
 import { lookupSchoolSource } from "./retrieval/registry";
 import type { ApplicationPlatform, PromptGroup, RawPromptRecord, SchoolSourceRecord, VerificationStatus } from "./retrieval/types";
 import type { CatalogueStatus } from "./schools";
 import { canonicalizeUniversityName } from "./top-universities";
-
-const FAMILY_NAME_BY_SLUG = new Map<string, string>(PROMPT_FAMILIES.map(([slug, name]) => [slug, name]));
 
 // Parses a "20XX–YY" label into (startYear, startYear+1) - every cycle here
 // spans one admissions year to the next, so the end year is never stored
@@ -53,14 +50,18 @@ async function getOrCreateSchool(db: AppDatabase, workspaceId: string, name: str
   return created;
 }
 
-// The ten categories are read once per import and passed down, rather than
+// The categories are read once per import and passed down, rather than
 // re-queried for every category of every prompt. On a network database that is
 // the difference between one round-trip and several hundred.
+//
+// Keyed by slug, not display name: names are user-editable, so a renamed
+// category used to stop matching the classifier's output entirely and every
+// prompt in that category imported unclassified.
 async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: string) {
-  const rows = await db.select({ id: promptFamilies.id, name: promptFamilies.name })
+  const rows = await db.select({ id: promptFamilies.id, slug: promptFamilies.slug })
     .from(promptFamilies)
     .where(eq(promptFamilies.workspaceId, workspaceId));
-  return new Map(rows.map((row) => [row.name, row.id]));
+  return new Map(rows.map((row) => [row.slug, row.id]));
 }
 
 // Pure: turns a prompt's text into the category-link rows it should get. No
@@ -68,7 +69,7 @@ async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: strin
 // inserted in one statement.
 function familyLinkRows(workspaceId: string, promptId: string, promptText: string, familyIds: Map<string, string>) {
   const classification = classifyText(promptText);
-  const familyIdFor = (slug: string) => familyIds.get(FAMILY_NAME_BY_SLUG.get(slug) ?? "") ?? null;
+  const familyIdFor = (slug: string) => familyIds.get(slug) ?? null;
   const primaryFamilyId = classification.primarySlug ? familyIdFor(classification.primarySlug) : null;
   const secondaryFamilyIds = classification.secondarySlugs
     .map(familyIdFor)

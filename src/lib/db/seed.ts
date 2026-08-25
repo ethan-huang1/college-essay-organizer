@@ -18,6 +18,7 @@ export async function seedTaxonomy(db: InsertDatabase, workspaceId: string) {
       PROMPT_FAMILIES.map(([slug, name, description, color], index) => ({
         id: familyId(workspaceId, slug),
         workspaceId,
+        slug,
         name,
         description,
         color,

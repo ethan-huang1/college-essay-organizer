@@ -781,4 +781,27 @@ describe("local persistence foundation", () => {
       expect(snapshot?.essays.map((essay) => essay.id)).toContain(essayId);
     });
   });
+  // Categories are user-renameable, and matching used to resolve them by
+  // display name - so renaming one silently unmapped every family and collapsed
+  // every score in the workspace to the baseline. The slug is the identity now.
+  it("keeps matching intact after a student renames a category", async () => {
+    await resetDemoWorkspace(connection.db);
+    const before = await connection.db.select().from(essayPromptMatches)
+      .where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID));
+    const strongBefore = before.filter((match) => match.score >= 55).length;
+    expect(strongBefore).toBeGreaterThan(0);
+
+    await connection.db.update(promptFamilies)
+      .set({ name: "My own name for this" })
+      .where(eq(promptFamilies.id, `${DEMO_WORKSPACE_ID}:family:community-contribution`));
+
+    await recomputeWorkspaceMatches(connection.db, DEMO_WORKSPACE_ID);
+
+    const after = await connection.db.select().from(essayPromptMatches)
+      .where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID));
+    expect(after.filter((match) => match.score >= 55).length).toBe(strongBefore);
+    // And the scores are identical, not merely similar.
+    const scoreOf = (rows: typeof after) => new Map(rows.map((row) => [`${row.essayId}:${row.promptId}`, row.score]));
+    expect([...scoreOf(after)].sort()).toEqual([...scoreOf(before)].sort());
+  });
 });

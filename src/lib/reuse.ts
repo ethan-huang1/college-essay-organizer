@@ -1,20 +1,20 @@
 import { eq } from "drizzle-orm";
 
 import type { AppDatabase } from "./db/client";
-import { PROMPT_FAMILIES } from "./db/taxonomy";
 import { essayFamilyLinks, essayPromptMatches, essays, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 import { scoreMatch } from "./matching";
 import { detectSchoolMentions } from "./school-mentions";
 import { wordCount } from "./essays";
 
-const SLUG_BY_NAME = new Map<string, string>(PROMPT_FAMILIES.map(([slug, name]) => [name, slug]));
-
 type FamilyLink = { familyId: string; isPrimary: boolean };
 
-function resolveFamilySlugs(links: FamilyLink[], nameById: Map<string, string>) {
+// Resolved through the family's own slug column. This used to go via the
+// display name, so a student renaming a category silently unmapped every
+// family and collapsed every match in the workspace to the baseline score.
+function resolveFamilySlugs(links: FamilyLink[], slugById: Map<string, string>) {
   const primaryId = links.find((link) => link.isPrimary)?.familyId ?? null;
   const secondaryIds = links.filter((link) => !link.isPrimary).map((link) => link.familyId);
-  const toSlug = (id: string | null) => (id ? (SLUG_BY_NAME.get(nameById.get(id) ?? "") ?? null) : null);
+  const toSlug = (id: string | null) => (id ? slugById.get(id) ?? null : null);
   return {
     primary: toSlug(primaryId),
     secondary: secondaryIds.map(toSlug).filter((slug): slug is string => Boolean(slug)),
@@ -35,14 +35,14 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
       db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.workspaceId, workspaceId)).execute(),
       db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).execute(),
     ]);
-  const nameById = new Map(workspaceFamilies.map((family) => [family.id, family.name]));
+  const slugById = new Map(workspaceFamilies.map((family) => [family.id, family.slug]));
   const schoolNames = workspaceSchools.map((school) => school.name);
 
   await db.transaction(async (tx) => {
     await tx.delete(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId));
 
     const rows = workspaceEssays.flatMap((essay) => {
-      const essayFamilySlugs = resolveFamilySlugs(essayLinks.filter((link) => link.essayId === essay.id), nameById);
+      const essayFamilySlugs = resolveFamilySlugs(essayLinks.filter((link) => link.essayId === essay.id), slugById);
       const essayContentWordCount = wordCount(essay.currentContent);
       // The manual field is an override, not the only source: an essay that
       // names Stanford is school-specific whether or not the student
@@ -54,7 +54,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
       ])];
 
       return workspacePrompts.map((prompt) => {
-        const promptFamilySlugs = resolveFamilySlugs(promptLinks.filter((link) => link.promptId === prompt.id), nameById);
+        const promptFamilySlugs = resolveFamilySlugs(promptLinks.filter((link) => link.promptId === prompt.id), slugById);
         const school = workspaceSchools.find((candidate) => candidate.id === prompt.schoolId);
         const result = scoreMatch({
           essayWordCount: essayContentWordCount,

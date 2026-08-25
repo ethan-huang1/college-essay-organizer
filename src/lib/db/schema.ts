@@ -105,6 +105,11 @@ export const promptFamilies = pgTable(
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    // The stable identity. Categories are user-renameable (isEditable defaults
+    // to true), and matching used to resolve them by display name - so
+    // renaming one silently broke every score in the workspace. Everything
+    // machine-facing keys on the slug; `name` is only ever displayed.
+    slug: text("slug").notNull(),
     name: text("name").notNull(),
     description: text("description").notNull(),
     color: text("color").notNull(),
@@ -113,6 +118,7 @@ export const promptFamilies = pgTable(
     createdAt: stamp("created_at"),
   },
   (table) => [
+    uniqueIndex("families_workspace_slug_unique").on(table.workspaceId, table.slug),
     uniqueIndex("families_workspace_name_unique").on(table.workspaceId, table.name),
     uniqueIndex("families_workspace_order_unique").on(table.workspaceId, table.sortOrder),
   ],
