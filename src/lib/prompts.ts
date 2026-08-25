@@ -154,6 +154,12 @@ export async function updatePrompt(db: AppDatabase, workspaceId: string, promptI
     .then((rows) => rows[0]);
   if (!existing) throw new Error("Prompt not found in the active workspace.");
   const validated = await validateInput(db, workspaceId, input);
+  // Status is response state rather than content, so it has to move with the
+  // question the way setPromptStatus does: the edit form carries a Status
+  // select, and without this a student marking a shared prompt complete at one
+  // campus leaves its siblings "not started" and the aggregate count wrong.
+  // The rest of the edit stays local to the row it was made on.
+  const siblingIds = await canonicalSiblingIds(db, workspaceId, promptId);
 
   await db.transaction(async (tx) => {
     await tx.update(prompts).set({
@@ -173,6 +179,11 @@ export async function updatePrompt(db: AppDatabase, workspaceId: string, promptI
       classificationConfidence: 0,
       updatedAt: new Date(),
     }).where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)));
+    if (siblingIds.length > 1) {
+      await tx.update(prompts)
+        .set({ status: input.status, updatedAt: new Date() })
+        .where(and(inArray(prompts.id, siblingIds), eq(prompts.workspaceId, workspaceId)));
+    }
     await replaceFamilyAssignments(tx, workspaceId, promptId, validated.primaryFamilyId, validated.secondaryFamilyIds);
   });
 }
