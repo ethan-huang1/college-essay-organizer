@@ -417,7 +417,11 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
   // The prompts themselves are filed under whichever cycle the source
   // record actually represents (may differ from the school's own "current"
   // cycle for a previous-cycle record).
-  const promptCycleId = await getOrCreateCycle(db, workspaceId, source.cycleLabel);
+  // Almost every record is current-cycle, and that row was just created or
+  // found above - so re-resolving it costs a round-trip per school for nothing.
+  const promptCycleId = source.cycleLabel === CURRENT_CYCLE_LABEL
+    ? currentCycleId
+    : await getOrCreateCycle(db, workspaceId, source.cycleLabel);
   const [familyIds, tagIds] = await Promise.all([loadFamilyIds(db, workspaceId), loadTagIds(db, workspaceId)]);
   const counts = await upsertPrompts(db, workspaceId, school.id, promptCycleId, school.name, source.prompts, {
     status: source.verificationStatus,

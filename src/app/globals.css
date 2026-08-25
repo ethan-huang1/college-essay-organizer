@@ -2261,3 +2261,11 @@ a.verification-badge:hover {
 .reuse-weaker[open] > summary {
   margin-bottom: 8px;
 }
+
+/* A slow action's button says what it is doing and refuses a second click,
+   rather than looking untouched for ten seconds. */
+button[aria-busy="true"],
+button:disabled {
+  opacity: 0.62;
+  cursor: progress;
+}

@@ -6,6 +6,7 @@ import type { WorkloadSummary } from "@/lib/workload";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
 import { assignEssayAction, draftEssayForPromptAction, unassignEssayAction } from "./assignment-actions";
 import { addCollegeAction } from "./college-actions";
+import { PendingButton } from "./pending-button";
 import { deletePromptAction, setPromptStatusAction, updatePromptAction } from "./prompt-actions";
 
 export type WorkspacePrompt = WorkspaceSnapshot["prompts"][number];
@@ -37,7 +38,7 @@ export function AddCollegeForm() {
           {TOP_UNIVERSITIES.map((name) => <option key={name} value={name} />)}
         </datalist>
       </div>
-      <button type="submit">Add college</button>
+      <PendingButton pendingLabel="Adding…">Add college</PendingButton>
       <p className="classification-help field-wide">
         A school we have verified 2026–27 prompts for imports and classifies them automatically. Any other name still
         adds the school — you can add its prompts by hand.

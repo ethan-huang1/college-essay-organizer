@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MIN_PASSWORD_LENGTH, safeNextPath } from "@/lib/auth";
+import { PendingButton } from "./pending-button";
 import { signInAction, signUpAction } from "./auth-actions";
 
 // One card for both pages: the only differences are the copy, the action, and
@@ -58,7 +59,9 @@ export function AuthCard({
             />
             {signingUp ? <span className="field-hint">At least {MIN_PASSWORD_LENGTH} characters.</span> : null}
           </label>
-          <button type="submit">{signingUp ? "Create account" : "Sign in"}</button>
+          <PendingButton pendingLabel={signingUp ? "Creating account…" : "Signing in…"}>
+            {signingUp ? "Create account" : "Sign in"}
+          </PendingButton>
         </form>
 
         <p className="sign-in-note">

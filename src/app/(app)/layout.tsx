@@ -5,6 +5,7 @@ import { reuseOpportunities } from "@/lib/progress";
 import { workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { NavLink } from "../nav-link";
+import { PendingButton } from "../pending-button";
 import { signOutAction } from "../auth-actions";
 import { loadDemoWorkspace, openPersonalWorkspace } from "../workspace-actions";
 
@@ -105,10 +106,12 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           <span className="signed-in-as" title={snapshot.user.email}>{snapshot.user.email}</span>
           <div className="workspace-switch-actions">
             <form action={openPersonalWorkspace}>
-              <button type="submit" aria-current={isDemo ? undefined : "true"}>My workspace</button>
+              <PendingButton pendingLabel="Opening…" ariaCurrent={isDemo ? undefined : "true"}>My workspace</PendingButton>
             </form>
             <form action={loadDemoWorkspace}>
-              <button type="submit">{isDemo ? "Reset example" : "Example workspace"}</button>
+              <PendingButton pendingLabel={isDemo ? "Rebuilding…" : "Loading…"}>
+                {isDemo ? "Reset example" : "Example workspace"}
+              </PendingButton>
             </form>
           </div>
           <form action={signOutAction} className="sign-out-form">
