@@ -37,7 +37,13 @@ export async function assignEssayToPrompt(db: AppDatabase, workspaceId: string, 
 }
 
 export async function unassignPrompt(db: AppDatabase, workspaceId: string, promptId: string) {
-  const promptIds = await canonicalSiblingIds(db, workspaceId, promptId);
+  // Delete-shaped, so a prompt that is already gone is success, not an error.
+  // Routing through canonicalSiblingIds made this throw where it used to be a
+  // tolerant no-op, which turned an ordinary race - the prompt or its school
+  // deleted in another tab, or a double-submitted form - into a Server Action
+  // crash.
+  const promptIds = await canonicalSiblingIds(db, workspaceId, promptId, { missingIsEmpty: true });
+  if (promptIds.length === 0) return;
   await db.delete(assignedEssayResponses)
     .where(and(
       inArray(assignedEssayResponses.promptId, promptIds),

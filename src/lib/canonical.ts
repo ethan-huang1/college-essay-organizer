@@ -19,17 +19,23 @@ import { prompts } from "./db/schema";
  *
  * Throws when the prompt is not in the workspace, so callers get the same
  * workspace-scoping guarantee they had when they scoped the write themselves.
+ * `missingIsEmpty` opts out for delete-shaped callers, where a prompt that is
+ * already gone is success rather than an error.
  */
 export async function canonicalSiblingIds(
   db: Pick<AppDatabase, "select">,
   workspaceId: string,
   promptId: string,
+  options: { missingIsEmpty?: boolean } = {},
 ): Promise<string[]> {
   const prompt = await db.select({ id: prompts.id, canonicalKey: prompts.canonicalKey })
     .from(prompts)
     .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))
     .then((rows) => rows[0]);
-  if (!prompt) throw new Error("Prompt not found in the active workspace.");
+  if (!prompt) {
+    if (options.missingIsEmpty) return [];
+    throw new Error("Prompt not found in the active workspace.");
+  }
   if (!prompt.canonicalKey) return [prompt.id];
 
   const siblings = await db.select({ id: prompts.id })

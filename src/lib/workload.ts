@@ -245,6 +245,11 @@ export function summarizeWorkload(
       groups.set(key, group);
     }
     group.size += 1;
+    // Deterministic if rows in one group ever disagree - possible only after a
+    // catalogue change reaches some of a shared application's schools before
+    // the others. Whichever row iterated first used to win, which made the
+    // total depend on ordering; the maximum is stable and never under-counts.
+    group.requiredCount = Math.max(group.requiredCount, prompt.groupRequiredCount ?? 1);
     if (done) group.completed += 1;
     for (const school of asking) {
       if (!group.schools.some((candidate) => candidate.id === school.id)) group.schools.push(school);
