@@ -4,6 +4,7 @@ import type { AppDatabase } from "./db/client";
 import { PROMPT_FAMILIES } from "./db/taxonomy";
 import { essayFamilyLinks, essayPromptMatches, essays, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 import { scoreMatch } from "./matching";
+import { detectSchoolMentions } from "./school-mentions";
 import { wordCount } from "./essays";
 
 const SLUG_BY_NAME = new Map<string, string>(PROMPT_FAMILIES.map(([slug, name]) => [name, slug]));
@@ -35,6 +36,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
       db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, workspaceId)).execute(),
     ]);
   const nameById = new Map(workspaceFamilies.map((family) => [family.id, family.name]));
+  const schoolNames = workspaceSchools.map((school) => school.name);
 
   await db.transaction(async (tx) => {
     await tx.delete(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId));
@@ -42,6 +44,14 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
     const rows = workspaceEssays.flatMap((essay) => {
       const essayFamilySlugs = resolveFamilySlugs(essayLinks.filter((link) => link.essayId === essay.id), nameById);
       const essayContentWordCount = wordCount(essay.currentContent);
+      // The manual field is an override, not the only source: an essay that
+      // names Stanford is school-specific whether or not the student
+      // remembered to say so, and that field is empty by default - which is
+      // why every essay used to read as low risk.
+      const schoolSpecificPhrases = [...new Set([
+        ...essay.schoolSpecificPhrases,
+        ...detectSchoolMentions(`${essay.title} ${essay.currentContent}`, schoolNames),
+      ])];
 
       return workspacePrompts.map((prompt) => {
         const promptFamilySlugs = resolveFamilySlugs(promptLinks.filter((link) => link.promptId === prompt.id), nameById);
@@ -50,7 +60,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
           essayWordCount: essayContentWordCount,
           essayPrimaryFamilySlug: essayFamilySlugs.primary,
           essaySecondaryFamilySlugs: essayFamilySlugs.secondary,
-          essaySchoolSpecificPhrases: essay.schoolSpecificPhrases,
+          essaySchoolSpecificPhrases: schoolSpecificPhrases,
           promptSchoolName: school?.name ?? "",
           promptPrimaryFamilySlug: promptFamilySlugs.primary,
           promptSecondaryFamilySlugs: promptFamilySlugs.secondary,

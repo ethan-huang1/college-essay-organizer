@@ -40,10 +40,31 @@ function wordCountPenalty(essayWordCount: number, min: number | null, max: numbe
   if (max === null) return { points: 0, difference: 0 };
   const difference = essayWordCount - max;
   const lowerBound = min ?? 0;
-  if (essayWordCount >= lowerBound && essayWordCount <= max) return { points: 0, difference };
-  const overBy = essayWordCount > max ? essayWordCount - max : lowerBound - essayWordCount;
-  const ratio = overBy / Math.max(max, 1);
-  return { points: ratio > 0.35 ? -25 : -10, difference };
+
+  if (essayWordCount > max) {
+    const ratio = (essayWordCount - max) / Math.max(max, 1);
+    return { points: ratio > 0.35 ? -25 : -10, difference };
+  }
+
+  if (essayWordCount < lowerBound) {
+    const ratio = (lowerBound - essayWordCount) / Math.max(max, 1);
+    return { points: ratio > 0.35 ? -25 : -10, difference };
+  }
+
+  // A prompt with no stated minimum used to make any essay shorter than the
+  // maximum a perfect fit, so a 15-word note scored 80 against a 650-word
+  // prompt and was recommended as ready to reuse. There is no minimum to fail,
+  // but an essay a fraction of the length is plainly not an answer yet.
+  //
+  // Only applied when the prompt states no minimum: if it states one and the
+  // essay clears it, the school itself has said the length is acceptable.
+  if (min === null) {
+    const fill = essayWordCount / Math.max(max, 1);
+    if (fill < 0.25) return { points: -40, difference };
+    if (fill < 0.6) return { points: -20, difference };
+  }
+
+  return { points: 0, difference };
 }
 
 function schoolSpecificityRisk(promptPrimarySlug: string | null, promptSchoolName: string, essaySchoolSpecificPhrases: string[]) {

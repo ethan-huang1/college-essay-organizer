@@ -67,7 +67,8 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
       previousCyclePrompts: workspacePrompts.filter((prompt) => !isCurrentCyclePrompt(prompt)).length,
       essays: workspaceEssays.length,
       assignments: assignments.length,
-      strongMatches: matches.filter((match) => match.score >= 75).length,
+      // 80 is the ready-to-reuse cutoff in matching.ts; 75 matched no tier at all.
+      strongMatches: matches.filter((match) => match.score >= 80).length,
     },
     schools: workspaceSchools.map((school) => {
       const schoolPrompts = workspacePrompts
@@ -91,7 +92,10 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
       const suggestedMatches = matches
         .filter((match) => match.promptId === prompt.id && match.essayId !== assignment?.essayId)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
+        // Capped before reuseCandidate sees it, so three strong-but-unusable
+        // matches used to hide a genuinely reusable fourth. Eight is still a
+        // short list and the UI shows far fewer.
+        .slice(0, 8)
         .map((match) => ({
           essayId: match.essayId,
           essayTitle: workspaceEssays.find((essay) => essay.id === match.essayId)?.title ?? "Unknown essay",
@@ -156,15 +160,21 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
         prompts: familyPrompts,
       };
     }),
-    matches: matches.map((match) => ({
-      ...match,
-      essayTitle: workspaceEssays.find((essay) => essay.id === match.essayId)?.title ?? "Unknown essay",
-      promptTitle: workspacePrompts.find((prompt) => prompt.id === match.promptId)?.title ?? "Unknown prompt",
-      schoolName:
-        workspaceSchools.find(
-          (school) => school.id === workspacePrompts.find((prompt) => prompt.id === match.promptId)?.schoolId,
-        )?.name ?? "Unknown school",
-    })),
+    matches: matches.map((match) => {
+      const prompt = workspacePrompts.find((candidate) => candidate.id === match.promptId);
+      const essay = workspaceEssays.find((candidate) => candidate.id === match.essayId);
+      return {
+        ...match,
+        essayTitle: essay?.title ?? "Unknown essay",
+        promptTitle: prompt?.title ?? "Unknown prompt",
+        schoolName: workspaceSchools.find((school) => school.id === prompt?.schoolId)?.name ?? "Unknown school",
+        // Carried so the UI can say "248 words -> cut to 150" rather than only
+        // "needs adaptation". Derived at read time rather than stored on the
+        // match row, so it cannot go stale against an edited essay.
+        promptMaxWordCount: prompt?.maxWordCount ?? null,
+        essayWordCount: essay ? wordCount(essay.currentContent) : 0,
+      };
+    }),
   };
 }
 

@@ -766,6 +766,61 @@ function canonicalMatches(snapshot: WorkspaceSnapshot, matches: readonly ReuseMa
   return rows;
 }
 
+/**
+ * Turns a match into the concrete edits reusing it would take.
+ *
+ * "Needs minor adaptation" does not tell a student what to do; "248 words ->
+ * cut to 150" and "mentions Stanford - replace school-specific language" do.
+ * All of it is derived from numbers already in the snapshot, so nothing can go
+ * stale against an edited essay.
+ */
+function matchAdjustments(match: ReuseMatch): string[] {
+  const notes: string[] = [];
+  const max = match.promptMaxWordCount;
+  if (max !== null && match.essayWordCount > 0) {
+    if (match.essayWordCount > max) {
+      notes.push(`${match.essayWordCount} words → cut to ${max}`);
+    } else if (match.essayWordCount / max < 0.6) {
+      notes.push(`${match.essayWordCount} of ${max} words → needs substantial expansion`);
+    }
+  }
+  if (match.schoolSpecificityRisk === "high") notes.push("names another school → replace school-specific language");
+  else if (match.schoolSpecificityRisk === "medium") notes.push("check for another school's language before reusing");
+  for (const gap of match.missingRequirements) notes.push(gap);
+  return notes;
+}
+
+function MatchRow({
+  match,
+  schoolLabel: label,
+  essayId,
+}: {
+  match: ReuseMatch;
+  schoolLabel: string;
+  essayId: string;
+}) {
+  const adjustments = matchAdjustments(match);
+  return (
+    <li>
+      <span className="match-score">{match.score}</span>
+      <span className="reuse-prompt">
+        <span className="cell-school">{label}</span>
+        <span>{match.promptTitle}</span>
+      </span>
+      <span className="reuse-action">{match.recommendedAction.replaceAll("-", " ")}</span>
+      <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
+      <form action={assignEssayAction}>
+        <input name="promptId" type="hidden" value={match.promptId} />
+        <input name="essayId" type="hidden" value={essayId} />
+        <button className="text-link" type="submit">Use here</button>
+      </form>
+      <span className="reuse-explanation">
+        {adjustments.length > 0 ? adjustments.join(" · ") : match.explanation}
+      </span>
+    </li>
+  );
+}
+
 function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts)
     .map((group) => ({
@@ -773,6 +828,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
       open: canonicalMatches(snapshot, group.open),
       inUse: canonicalMatches(snapshot, group.inUse),
       risky: canonicalMatches(snapshot, group.risky),
+      possible: canonicalMatches(snapshot, group.possible),
     }));
   const openTotal = groups.reduce((total, group) => total + group.open.length, 0);
   const riskyTotal = groups.reduce((total, group) => total + group.risky.length, 0);
@@ -801,7 +857,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
       </p>
 
       <div className="reuse-list">
-        {groups.map(({ essay, inUse, open, risky }) => (
+        {groups.map(({ essay, inUse, open, risky, possible }) => (
           <article className="reuse-group" key={essay.id}>
             <div className="reuse-group-head">
               <div>
@@ -817,26 +873,27 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             {open.length > 0 ? (
               <ul className="reuse-rows">
                 {open.map(({ match, schoolLabel: label }) => (
-                  <li key={match.id}>
-                    <span className="match-score">{match.score}</span>
-                    <span className="reuse-prompt">
-                      <span className="cell-school">{label}</span>
-                      <span>{match.promptTitle}</span>
-                    </span>
-                    <span className="reuse-action">{match.recommendedAction.replaceAll("-", " ")}</span>
-                    <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
-                    <form action={assignEssayAction}>
-                      <input name="promptId" type="hidden" value={match.promptId} />
-                      <input name="essayId" type="hidden" value={essay.id} />
-                      <button className="text-link" type="submit">Use here</button>
-                    </form>
-                    <span className="reuse-explanation">{match.explanation}</span>
-                  </li>
+                  <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
                 ))}
               </ul>
-            ) : (
+            ) : possible.length === 0 ? (
               <p className="detail-note">No further prompts match this essay closely enough to reuse yet.</p>
-            )}
+            ) : null}
+
+            {/* Saying "nothing matches closely enough" while a dozen weaker but
+                real candidates existed read as an empty page. They are offered
+                as weaker options instead, behind disclosure so they do not
+                compete with the strong ones. */}
+            {possible.length > 0 ? (
+              <details className="reuse-weaker">
+                <summary>{possible.length} weaker {possible.length === 1 ? "option" : "options"} — would need real rewriting</summary>
+                <ul className="reuse-rows">
+                  {possible.map(({ match, schoolLabel: label }) => (
+                    <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
+                  ))}
+                </ul>
+              </details>
+            ) : null}
 
             {inUse.length > 0 ? (
               <p className="reuse-inuse">

@@ -76,6 +76,10 @@ describe("reuseOpportunities", () => {
       schoolName: "Brown University",
       schoolSpecificityRisk,
       missingRequirements: [],
+    matchedThemes: ["Community & Contribution"],
+    wordCountDifference: 0,
+    promptMaxWordCount: 350,
+    essayWordCount: 300,
     };
   }
 
@@ -84,9 +88,9 @@ describe("reuseOpportunities", () => {
       essays,
       [match("p1", "ready-to-reuse"), match("p2", "minor-adaptation", 60), match("p3", "new-response", 20)],
       [
-        { id: "p1", assignedEssay: { id: "essay-1" } },
-        { id: "p2", assignedEssay: null },
-        { id: "p3", assignedEssay: null },
+        { id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-1" } },
+        { id: "p2", isCurrentCycle: true, assignedEssay: null },
+        { id: "p3", isCurrentCycle: true, assignedEssay: null },
       ],
     );
 
@@ -100,7 +104,7 @@ describe("reuseOpportunities", () => {
     const groups = reuseOpportunities(
       essays,
       [match("p1", "new-response", 20)],
-      [{ id: "p1", assignedEssay: { id: "essay-1" } }],
+      [{ id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-1" } }],
     );
 
     expect(groups[0].inUse.map((row) => row.promptId)).toEqual(["p1"]);
@@ -111,7 +115,7 @@ describe("reuseOpportunities", () => {
     const groups = reuseOpportunities(
       essays,
       [match("p1", "major-adaptation", 30, "high"), match("p2", "ready-to-reuse")],
-      [{ id: "p1", assignedEssay: null }, { id: "p2", assignedEssay: null }],
+      [{ id: "p1", isCurrentCycle: true, assignedEssay: null }, { id: "p2", isCurrentCycle: true, assignedEssay: null }],
     );
 
     expect(groups[0].risky.map((row) => row.promptId)).toEqual(["p1"]);
@@ -122,7 +126,7 @@ describe("reuseOpportunities", () => {
     const groups = reuseOpportunities(
       essays,
       [match("p1", "major-adaptation", 30, "high")],
-      [{ id: "p1", assignedEssay: null }],
+      [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
     );
 
     expect(groups).toHaveLength(1);
@@ -134,18 +138,70 @@ describe("reuseOpportunities", () => {
     const groups = reuseOpportunities(
       essays,
       [match("p1", "major-adaptation", 30, "high")],
-      [{ id: "p1", assignedEssay: { id: "essay-9" } }],
+      [{ id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-9" } }],
     );
 
     expect(groups).toEqual([]);
   });
 
   it("leaves out prompts another essay already answers", () => {
-    const groups = reuseOpportunities(essays, [match("p1", "ready-to-reuse")], [{ id: "p1", assignedEssay: { id: "essay-9" } }]);
+    const groups = reuseOpportunities(essays, [match("p1", "ready-to-reuse")], [{ id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-9" } }]);
     expect(groups).toHaveLength(0);
   });
 
+  // "No reuse story" now means no shared theme either: a weak match that does
+  // share one is a real (if distant) option, so the fixture has to have nothing
+  // in common for this to still test what it means to test.
   it("drops essays with no reuse story at all", () => {
-    expect(reuseOpportunities(essays, [match("p1", "new-response")], [{ id: "p1", assignedEssay: null }])).toEqual([]);
+    const unrelated = { ...match("p1", "new-response"), matchedThemes: [] as string[] };
+    expect(reuseOpportunities(essays, [unrelated], [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])).toEqual([]);
+  });
+
+  // The page used to say "nothing matches closely enough" whenever the strong
+  // bucket was empty, hiding every weaker candidate and reading as an empty
+  // page. These are offered separately instead - and deliberately not counted
+  // as reusable, so the "reusable now" tile does not inflate.
+  it("surfaces a weak match that still shares a theme, without calling it reusable", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "major-adaptation", 40)],
+      [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].open).toEqual([]);
+    expect(groups[0].possible.map((row) => row.promptId)).toEqual(["p1"]);
+  });
+
+  it("keeps a high-risk match out of the weaker-options list", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "major-adaptation", 40, "high")],
+      [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
+    );
+    expect(groups[0].risky.map((row) => row.promptId)).toEqual(["p1"]);
+    expect(groups[0].possible).toEqual([]);
+  });
+  // reuseOpportunities had no cycle filter while summarizePrompts did, so a
+  // previous-cycle prompt could be offered as live reuse work while being
+  // excluded from every count. That is why the reuse tallies never reconciled
+  // with the prompt list.
+  it("never offers a previous-cycle prompt as a reuse opportunity", () => {
+    const groups = reuseOpportunities(
+      essays,
+      [match("p1", "ready-to-reuse"), match("p2", "ready-to-reuse")],
+      [
+        { id: "p1", isCurrentCycle: false, assignedEssay: null },
+        { id: "p2", isCurrentCycle: true, assignedEssay: null },
+      ],
+    );
+    expect(groups[0].open.map((row) => row.promptId)).toEqual(["p2"]);
+  });
+
+  it("drops an essay whose only opportunity was a previous-cycle prompt", () => {
+    expect(reuseOpportunities(
+      essays,
+      [match("p1", "ready-to-reuse")],
+      [{ id: "p1", isCurrentCycle: false, assignedEssay: null }],
+    )).toEqual([]);
   });
 });

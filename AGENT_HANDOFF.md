@@ -416,15 +416,18 @@ none of this fixture data was committed):
 - Current objective: make the MVP trustworthy for student testing, per the
   approved plan (essay editor → zero-prompt colleges → workload engine →
   minimum catalogue encoding → reuse → taxonomy → loading states → polish)
-- Completed phases: **0** baseline verified at `48bc303` (tag `pre-trust-run`);
-  **1** essay editor usable (`a6d8ed3`); **2** zero-prompt colleges truthful
-- Current task: Phase 3, the workload engine (`src/lib/workload.ts`) — required
-  vs optional vs conditional counting, choose-N prompt groups, and canonical
-  shared prompts
-- Next recommended task: after Phase 3, Phase 4 encodes the minimum catalogue
-  set (UC, Yale, Duke, Penn, Georgetown, Dartmouth, Washington and Lee). Phase 3
-  changes no observable behaviour until that lands, so both are inside the P0
-  boundary.
+- Completed phases: **0** baseline at `48bc303` (tag `pre-trust-run`); **1**
+  essay editor (`a6d8ed3`); **2** zero-prompt colleges (`c18a796`); **3**
+  workload engine (`4f3e1c7`); **4** minimum catalogue encoding (`0c3872f`)
+- Measured effect: whole catalogue reads 255 raw prompt rows -> 207 canonical
+  rows -> **94 required essays**. Seven UC campuses: 56 rows -> 8 rendered rows
+  -> 4 required, each row naming all seven campuses.
+- Current task: Phase 5, reuse correctness - the last phase inside tonight's P0
+  boundary
+- Next recommended task: after Phase 5, Phase 6 (seven-category taxonomy) is
+  in tonight's target only if there is runway to finish it - it is atomic and a
+  half-migrated taxonomy is worse than none. Then Phase 7 (loading states) and
+  Phase 8 (responsive polish) as stretch.
 - Important decisions this run:
   - **Canonical siblings share response state.** Prompts sharing a
     `canonical_key` are kept in lockstep at write time (fan-out inside
@@ -458,7 +461,7 @@ none of this fixture data was committed):
      deliberately left in place rather than issuing another production write.
      Delete it at will — cascade delete is covered by tests.
 - Test/build status: full canonical gate green — lint, strict typecheck,
-  **101 Vitest tests** (was 95), production build, 103 orchestration assertions
+  **136 Vitest tests** (was 95), production build, 103 orchestration assertions
 - Last agent: Claude
 - Stop reason: n/a, run in progress
 

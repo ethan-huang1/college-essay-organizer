@@ -74,6 +74,10 @@ export type ReuseMatch = {
   schoolName: string;
   schoolSpecificityRisk: string;
   missingRequirements: readonly string[];
+  matchedThemes: readonly string[];
+  wordCountDifference: number;
+  promptMaxWordCount: number | null;
+  essayWordCount: number;
 };
 
 /**
@@ -91,26 +95,43 @@ export type ReuseMatch = {
 export function reuseOpportunities(
   essays: readonly { id: string; title: string; wordCount: number; status: string }[],
   matches: readonly ReuseMatch[],
-  prompts: readonly { id: string; assignedEssay: { id: string } | null }[],
+  prompts: readonly { id: string; isCurrentCycle: boolean; assignedEssay: { id: string } | null }[],
 ) {
-  const assignedEssayIdByPrompt = new Map(prompts.map((prompt) => [prompt.id, prompt.assignedEssay?.id ?? null]));
+  // Current-cycle prompts only, matching summarizePrompts. Without this a
+  // previous-cycle prompt could be offered as live reuse work while being
+  // excluded from every count - which is why the tallies never reconciled.
+  const assignedEssayIdByPrompt = new Map(
+    prompts.filter((prompt) => prompt.isCurrentCycle).map((prompt) => [prompt.id, prompt.assignedEssay?.id ?? null]),
+  );
   return essays
     .map((essay) => {
       const own = matches
         .filter((match) => match.essayId === essay.id && assignedEssayIdByPrompt.has(match.promptId))
         .sort((a, b) => b.score - a.score);
       const reusable = own.filter((match) => REUSABLE_ACTIONS.has(match.recommendedAction));
+      const unanswered = (match: ReuseMatch) => assignedEssayIdByPrompt.get(match.promptId) === null;
       return {
         essay,
         // Not filtered by match strength: an essay assigned to a prompt is
         // answering it whatever the matcher thinks of the pairing.
         inUse: own.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === essay.id),
-        open: reusable.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === null),
-        risky: own.filter(
-          (match) => match.schoolSpecificityRisk === "high" && assignedEssayIdByPrompt.get(match.promptId) === null,
+        open: reusable.filter(unanswered),
+        risky: own.filter((match) => match.schoolSpecificityRisk === "high" && unanswered(match)),
+        // Everything else that shares a theme. The page used to say "no
+        // further prompts match this essay closely enough" whenever `open` was
+        // empty, which read as "nothing here" even with a dozen weaker but
+        // real candidates - so they are offered as weaker options rather than
+        // silently dropped. Deliberately not part of `reusable`, so the
+        // "reusable now" count does not inflate.
+        possible: own.filter(
+          (match) =>
+            unanswered(match)
+            && !REUSABLE_ACTIONS.has(match.recommendedAction)
+            && match.schoolSpecificityRisk !== "high"
+            && match.matchedThemes.length > 0,
         ),
       };
     })
-    .filter((group) => group.inUse.length + group.open.length + group.risky.length > 0)
+    .filter((group) => group.inUse.length + group.open.length + group.risky.length + group.possible.length > 0)
     .sort((a, b) => b.open.length + b.inUse.length - (a.open.length + a.inUse.length));
 }
