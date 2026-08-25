@@ -9,7 +9,10 @@
  * data, and an identical re-import is still a no-op.
  *
  * Also backfills schools.catalogue_status, which is NULL for any school added
- * before that column existed.
+ * before that column existed, and migrates any workspace still on the
+ * ten-category taxonomy to the seven. The taxonomy has to move first: the
+ * import classifies against the new slugs, so re-importing into a workspace
+ * that still holds the old families would leave every prompt unclassified.
  *
  * This is a deliberate, human-run operation against whatever DATABASE_URL
  * points at. It is not wired into the app, the build, or the test suite.
@@ -22,6 +25,7 @@ import { eq } from "drizzle-orm";
 import { openDatabase } from "../src/lib/db/client.ts";
 import { schools, workspaces } from "../src/lib/db/schema.ts";
 import { importCollege } from "../src/lib/college-import.ts";
+import { migrateWorkspaceTaxonomy } from "../src/lib/db/taxonomy-migration.ts";
 
 const dryRun = process.argv.includes("--dry-run");
 
@@ -39,6 +43,13 @@ try {
   const totals = { schools: 0, created: 0, updated: 0, unchanged: 0, flagged: 0, failed: 0 };
 
   for (const workspace of allWorkspaces) {
+    if (!dryRun) {
+      const taxonomy = await migrateWorkspaceTaxonomy(db, workspace.id);
+      if (taxonomy.migrated) {
+        console.log(`  ${workspace.name}: taxonomy migrated (${taxonomy.promptLinks} prompt links, ${taxonomy.essayLinks} essay links, ${taxonomy.tags} tags)`);
+      }
+    }
+
     const workspaceSchools = await db.select({ id: schools.id, name: schools.name })
       .from(schools)
       .where(eq(schools.workspaceId, workspace.id));

@@ -464,8 +464,17 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
   const unclassified = focused ? [] : snapshot.prompts.filter((prompt) => !prompt.primaryFamily);
   const unclassifiedRows = canonicalRows(snapshot, unclassified);
 
-  const used = groups.filter((group) => group.prompts.length > 0);
-  const unused = groups.filter((group) => group.prompts.length === 0);
+  // Other sorts last wherever categories are listed: it is a real seventh
+  // category, not a to-do list, so it neither leads the page nor gets styled as
+  // a problem. Whether a classification needs a human look is a separate
+  // question, answered by classificationConfidence.
+  const byCount = (a: { family: { slug: string }; prompts: unknown[] }, b: typeof a) => {
+    if (a.family.slug === "other") return 1;
+    if (b.family.slug === "other") return -1;
+    return b.prompts.length - a.prompts.length;
+  };
+  const used = groups.filter((group) => group.prompts.length > 0).sort(byCount);
+  const unused = groups.filter((group) => group.prompts.length === 0).sort(byCount);
 
   if (snapshot.prompts.length === 0) {
     return <EmptyWorkspace>Categories fill in as soon as you add a college — every imported prompt is classified automatically.</EmptyWorkspace>;

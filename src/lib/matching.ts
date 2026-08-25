@@ -26,10 +26,16 @@ export type MatchInput = {
   promptMaxWordCount: number | null;
 };
 
+// "Other" is a real category but not a shared theme: two prompts landing there
+// have nothing in common except that nothing else fitted, so scoring them as a
+// 60-point primary match would pair unrelated essays confidently.
+const NOT_A_SHARED_THEME = new Set(["other"]);
+
 function familyOverlapScore(essayPrimary: string | null, essaySecondary: string[], promptPrimary: string | null, promptSecondary: string[]) {
-  if (essayPrimary && promptPrimary && essayPrimary === promptPrimary) return { points: 60, themes: [essayPrimary] };
-  const essayAll = new Set([essayPrimary, ...essaySecondary].filter(Boolean));
-  const promptAll = new Set([promptPrimary, ...promptSecondary].filter(Boolean));
+  const meaningful = (slug: string | null) => Boolean(slug) && !NOT_A_SHARED_THEME.has(slug!);
+  if (meaningful(essayPrimary) && promptPrimary === essayPrimary) return { points: 60, themes: [essayPrimary!] };
+  const essayAll = new Set([essayPrimary, ...essaySecondary].filter(meaningful));
+  const promptAll = new Set([promptPrimary, ...promptSecondary].filter(meaningful));
   const overlap = [...essayAll].filter((slug) => promptAll.has(slug)) as string[];
   if (overlap.length === 0) return { points: 0, themes: [] };
   const primaryCrossesSecondary = (essayPrimary && promptSecondary.includes(essayPrimary)) || (promptPrimary && essaySecondary.includes(promptPrimary));
@@ -70,7 +76,9 @@ function wordCountPenalty(essayWordCount: number, min: number | null, max: numbe
 function schoolSpecificityRisk(promptPrimarySlug: string | null, promptSchoolName: string, essaySchoolSpecificPhrases: string[]) {
   if (essaySchoolSpecificPhrases.length === 0) return { risk: "low" as const, points: 0 };
   const referencesThisSchool = essaySchoolSpecificPhrases.some((phrase) => phrase.toLowerCase().includes(promptSchoolName.toLowerCase()));
-  if (promptPrimarySlug === "why-school") {
+  // A fit prompt is the one thing you must never reuse across schools, so an
+  // essay naming a different institution is a hard stop rather than a caution.
+  if (promptPrimarySlug === "why-us") {
     return referencesThisSchool ? { risk: "low" as const, points: 0 } : { risk: "high" as const, points: -40 };
   }
   return referencesThisSchool ? { risk: "low" as const, points: 0 } : { risk: "medium" as const, points: -15 };

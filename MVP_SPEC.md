@@ -38,34 +38,49 @@ families, with one optional primary family for organization.
 
 ## 2. Prompt-family taxonomy
 
-Seed these editable families:
+Seed these seven editable categories:
 
-1. **Personal Statement / Core Story** — Open-ended personal narrative,
-   defining experience, growth, or central story.
-2. **Identity & Background** — Culture, family, upbringing, identity,
-   diversity, lived experience, or formative environment.
-3. **Community & Contribution** — Belonging, service, collaboration,
+1. **Community & Contribution** — Belonging, service, collaboration,
    community impact, and intended contribution.
-4. **Challenge, Setback & Growth** — Obstacles, failure, conflict,
-   resilience, recovery, change, and lessons learned.
-5. **Intellectual Curiosity** — Ideas, questions, books, research,
-   creativity, learning experiences, and subjects explored beyond
-   requirements.
-6. **Why Major / Academic Interests** — Intended field, academic
-   development, interdisciplinary interests, and reasons for pursuing a
-   subject.
-7. **Why This School / Program** — Institutional fit, specific resources,
-   programs, culture, opportunities, and intended contribution. Treat this
-   family as highly school-specific and warn against careless reuse.
-8. **Activities, Leadership & Impact** — Extracurriculars, employment,
-   responsibilities, projects, leadership, initiative, and measurable
-   impact.
-9. **Values, Perspective & Meaning** — Beliefs, ethical questions,
-   disagreement, changed perspectives, motivations, priorities, and what
-   matters to the student.
-10. **Short Takes & Personality** — Joy, gratitude, roommate responses,
-    lists, favorite media, quirky questions, rapid answers, and other
-    short-form personality prompts.
+2. **Short Answers** — Roommate notes, lists, favourites, and other
+   short-form or character-limited responses.
+3. **Identity & Background** — Culture, family, upbringing, identity, lived
+   experience, and formative environment.
+4. **Why Major** — Academic interests, intended field of study, and reasons
+   for pursuing it.
+5. **Why Us** — Institutional fit: specific programs, resources, culture,
+   location, and intended contribution. Treat this category as highly
+   school-specific and warn against careless reuse.
+6. **Personal Statement** — Open-ended personal narrative: a defining
+   experience, growth, or the central story only you can tell.
+7. **Other** — Prompts that do not fit the six above.
+
+**`Other` is a real category, not a queue.** It is where a prompt belongs
+when none of the six fit, and it sorts last. Whether a classification needs
+a human look is a *separate* question, answered by
+`prompts.classificationConfidence`. No view may present `Other` as
+"needs categorising".
+
+### Why seven and not ten
+
+This section previously specified ten categories, including Challenge/Setback
+& Growth, Intellectual Curiosity, Activities/Leadership & Impact, and Values/
+Perspective & Meaning. Those four described **themes a reader might notice in
+an essay**, not **the way a student files their own work**: nobody sits down
+to write "my values essay", and a prompt about overcoming a setback is a
+personal statement that happens to be about a setback. Ten categories made
+every classification a judgement call between overlapping options, on both
+the app's side and the student's.
+
+The four are retired as user-facing categories but preserved as **internal
+matching tags** (`RETIRED_FAMILY_TAGS` in `src/lib/db/taxonomy.ts`), written
+by the import path into `prompt_tag_links` / `essay_tag_links` and read by
+`matching.ts` as a weak secondary signal. No UI exposes them, and the
+category control offers exactly seven options.
+
+Existing workspaces are migrated by `migrateWorkspaceTaxonomy`, which
+repoints every link row rather than deleting any, so a student who classified
+prompts by hand keeps every one of those classifications.
 
 Seed optional secondary tags including: family, culture, service,
 leadership, creativity, research, entrepreneurship, career goals, future

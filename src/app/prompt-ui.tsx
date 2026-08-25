@@ -133,7 +133,6 @@ export function ProgressLine({ progress, className }: { progress: WorkloadSummar
 }
 
 export function PromptFields({ snapshot, prompt }: { snapshot: WorkspaceSnapshot; prompt?: WorkspacePrompt }) {
-  const secondaryIds = new Set(prompt?.secondaryFamilies.map((family) => family.id));
   const deadline = prompt?.deadline ? prompt.deadline.toISOString().slice(0, 10) : "";
   return (
     <div className="prompt-fields">
@@ -152,13 +151,11 @@ export function PromptFields({ snapshot, prompt }: { snapshot: WorkspaceSnapshot
         {PROMPT_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
       <label>Deadline<input name="deadline" type="date" defaultValue={deadline} /></label>
-      <label>Primary category<select name="primaryFamilyId" defaultValue={prompt?.primaryFamily?.id ?? ""}><option value="">No primary category</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
-      <fieldset className="family-picker field-wide">
-        <legend>Secondary categories <span>choose any that also apply</span></legend>
-        <div>{snapshot.families.map((family) => (
-          <label key={family.id}><input type="checkbox" name="secondaryFamilyIds" value={family.id} defaultChecked={secondaryIds.has(family.id)} /><span>{family.name}</span></label>
-        ))}</div>
-      </fieldset>
+      {/* One category control, seven options. The secondary-category wall put
+          ten checkboxes in front of a decision nobody has to make; import-derived
+          secondary links are preserved and still scored, they are just no longer
+          hand-edited here. */}
+      <label>Category<select name="primaryFamilyId" defaultValue={prompt?.primaryFamily?.id ?? ""}><option value="">No category</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
       <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={prompt?.notes ?? ""} placeholder="Requirements, ideas, or context" /></label>
     </div>
   );

@@ -3,7 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { classifyText } from "./classification";
 import { CURRENT_CYCLE_LABEL } from "./cycle";
 import type { AppDatabase } from "./db/client";
-import { applicationCycles, assignedEssayResponses, promptChangeLog, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
+import { applicationCycles, assignedEssayResponses, promptChangeLog, promptFamilies, promptFamilyLinks, promptTagLinks, promptTags, prompts, schools } from "./db/schema";
+import { classificationOverride } from "./retrieval/classification-overrides";
 import { promptContentChanged } from "./retrieval/normalize";
 import { lookupSchoolSource } from "./retrieval/registry";
 import type { ApplicationPlatform, PromptGroup, RawPromptRecord, SchoolSourceRecord, VerificationStatus } from "./retrieval/types";
@@ -64,19 +65,53 @@ async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: strin
   return new Map(rows.map((row) => [row.slug, row.id]));
 }
 
-// Pure: turns a prompt's text into the category-link rows it should get. No
+/**
+ * Turns a prompt into its category links, its internal tags, and a confidence.
+ *
+ * Three stages, all offline: a hand-reviewed override for the prompts the rules
+ * cannot reach, then the keyword rules, then Other. Nothing here calls a model
+ * or a network.
+ *
+ * `Other` at confidence 0 is deliberately distinct from `Other` at a real
+ * confidence: the first means "nothing recognised this", which is what the
+ * needs-review surface is built on, and the second means the prompt genuinely
+ * belongs in Other. Other is a real category either way, never a to-do list.
+ */
+function classifyPrompt(
+  schoolName: string,
+  raw: RawPromptRecord,
+): { primarySlug: string; secondarySlugs: string[]; tags: string[]; confidence: number } {
+  const override = classificationOverride(schoolName, raw.externalRef);
+  const classification = classifyText(`${raw.title} ${raw.promptText}`);
+  if (override) {
+    // Reviewed by hand, so it outranks the rules and carries full confidence.
+    return { primarySlug: override, secondarySlugs: [], tags: classification.tags, confidence: 100 };
+  }
+  return {
+    primarySlug: classification.primarySlug ?? "other",
+    secondarySlugs: classification.secondarySlugs,
+    tags: classification.tags,
+    confidence: classification.confidence,
+  };
+}
+
+// Pure: turns a classification into the category-link rows it should get. No
 // database access, so a whole school's links can be built in memory and
 // inserted in one statement.
-function familyLinkRows(workspaceId: string, promptId: string, promptText: string, familyIds: Map<string, string>) {
-  const classification = classifyText(promptText);
+function familyLinkRows(
+  workspaceId: string,
+  promptId: string,
+  classification: { primarySlug: string; secondarySlugs: string[] },
+  familyIds: Map<string, string>,
+) {
   const familyIdFor = (slug: string) => familyIds.get(slug) ?? null;
-  const primaryFamilyId = classification.primarySlug ? familyIdFor(classification.primarySlug) : null;
+  const primaryFamilyId = familyIdFor(classification.primarySlug);
   const secondaryFamilyIds = classification.secondarySlugs
     .map(familyIdFor)
     .filter((id): id is string => Boolean(id));
   const assignments = [
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
-    ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
+    ...secondaryFamilyIds.filter((id) => id !== primaryFamilyId).map((familyId) => ({ familyId, isPrimary: false })),
   ];
   return assignments.map(({ familyId, isPrimary }) => ({
     id: crypto.randomUUID(),
@@ -86,6 +121,32 @@ function familyLinkRows(workspaceId: string, promptId: string, promptText: strin
     isPrimary,
     source: "deterministic" as const,
   }));
+}
+
+// The retired taxonomy concepts, as internal matching signal. Nothing in the UI
+// shows these; they exist so collapsing ten categories into seven does not
+// throw away the reuse signal the extra four carried.
+function tagLinkRows(workspaceId: string, promptId: string, tags: readonly string[], tagIds: Map<string, string>) {
+  return tags
+    .map((tag) => tagIds.get(RETIRED_TAG_NAMES[tag] ?? ""))
+    .filter((tagId): tagId is string => Boolean(tagId))
+    .map((tagId) => ({ id: crypto.randomUUID(), workspaceId, promptId, tagId }));
+}
+
+// The tag rows seeded in taxonomy.ts use display names; the classifier emits
+// slugs.
+const RETIRED_TAG_NAMES: Record<string, string> = {
+  "intellectual-curiosity": "intellectual curiosity",
+  "challenge-growth": "challenge & growth",
+  "activities-impact": "activities & impact",
+  "values-meaning": "values & meaning",
+};
+
+async function loadTagIds(db: Pick<AppDatabase, "select">, workspaceId: string) {
+  const rows = await db.select({ id: promptTags.id, name: promptTags.name })
+    .from(promptTags)
+    .where(eq(promptTags.workspaceId, workspaceId));
+  return new Map(rows.map((row) => [row.name, row.id]));
 }
 
 type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number };
@@ -160,6 +221,7 @@ async function upsertPrompts(
   workspaceId: string,
   schoolId: string,
   cycleId: string,
+  schoolName: string,
   rawPrompts: readonly RawPromptRecord[],
   recordDefaults: {
     status: VerificationStatus;
@@ -170,6 +232,7 @@ async function upsertPrompts(
     promptGroups?: readonly PromptGroup[];
   },
   familyIds: Map<string, string>,
+  tagIds: Map<string, string>,
 ) {
   const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
   const externalRefs = rawPrompts.map((raw) => raw.externalRef);
@@ -187,6 +250,7 @@ async function upsertPrompts(
 
   const newPrompts: (typeof prompts.$inferInsert)[] = [];
   const newLinks: (typeof promptFamilyLinks.$inferInsert)[] = [];
+  const newTagLinks: (typeof promptTagLinks.$inferInsert)[] = [];
   const changed: { existing: (typeof existingRows)[number]; raw: RawPromptRecord }[] = [];
 
   for (const raw of rawPrompts) {
@@ -195,6 +259,7 @@ async function upsertPrompts(
 
     if (!existing) {
       const promptId = crypto.randomUUID();
+      const classification = classifyPrompt(schoolName, raw);
       newPrompts.push({
         id: promptId,
         workspaceId,
@@ -217,12 +282,17 @@ async function upsertPrompts(
         programKey: raw.programKey ?? null,
         programLabel: raw.programLabel ?? null,
         classificationSource: "deterministic",
+        // Previously computed and discarded, so every imported prompt sat at 0
+        // and there was no way to tell a confident classification from a
+        // guess. This is what the needs-review surface reads.
+        classificationConfidence: classification.confidence,
         verificationStatus: raw.verificationStatus ?? recordDefaults.status,
         applicationPlatform: recordDefaults.platform,
         sourceUrl: recordDefaults.sourceUrl,
         retrievedAt: recordDefaults.retrievedAt,
       });
-      newLinks.push(...familyLinkRows(workspaceId, promptId, `${raw.title} ${raw.promptText}`, familyIds));
+      newLinks.push(...familyLinkRows(workspaceId, promptId, classification, familyIds));
+      newTagLinks.push(...tagLinkRows(workspaceId, promptId, classification.tags, tagIds));
       counts.created += 1;
       continue;
     }
@@ -248,6 +318,7 @@ async function upsertPrompts(
   await db.transaction(async (tx) => {
     if (newPrompts.length > 0) await tx.insert(prompts).values(newPrompts);
     if (newLinks.length > 0) await tx.insert(promptFamilyLinks).values(newLinks);
+    if (newTagLinks.length > 0) await tx.insert(promptTagLinks).values(newTagLinks);
     if (inherited.length > 0) await tx.insert(assignedEssayResponses).values(inherited);
 
     if (changed.length > 0) {
@@ -347,15 +418,15 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
   // record actually represents (may differ from the school's own "current"
   // cycle for a previous-cycle record).
   const promptCycleId = await getOrCreateCycle(db, workspaceId, source.cycleLabel);
-  const familyIds = await loadFamilyIds(db, workspaceId);
-  const counts = await upsertPrompts(db, workspaceId, school.id, promptCycleId, source.prompts, {
+  const [familyIds, tagIds] = await Promise.all([loadFamilyIds(db, workspaceId), loadTagIds(db, workspaceId)]);
+  const counts = await upsertPrompts(db, workspaceId, school.id, promptCycleId, school.name, source.prompts, {
     status: source.verificationStatus,
     sourceUrl: source.sourceUrl,
     platform: source.applicationPlatform,
     retrievedAt: new Date(source.retrievedAt),
     sharedApplicationKey: source.sharedApplicationKey,
     promptGroups: source.promptGroups,
-  }, familyIds);
+  }, familyIds, tagIds);
   await db.update(schools).set({ catalogueStatus: catalogueStatusFor(source) }).where(eq(schools.id, school.id));
 
   return {

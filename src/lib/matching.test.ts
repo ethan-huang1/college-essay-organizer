@@ -4,11 +4,11 @@ import { scoreMatch } from "./matching";
 
 const base = {
   essayWordCount: 300,
-  essayPrimaryFamilySlug: "activities-impact",
-  essaySecondaryFamilySlugs: ["challenge-growth"],
+  essayPrimaryFamilySlug: "community",
+  essaySecondaryFamilySlugs: ["diversity"],
   essaySchoolSpecificPhrases: [] as string[],
   promptSchoolName: "Lakeview University",
-  promptPrimaryFamilySlug: "activities-impact",
+  promptPrimaryFamilySlug: "community",
   promptSecondaryFamilySlugs: [] as string[],
   promptMinWordCount: 200,
   promptMaxWordCount: 350,
@@ -19,7 +19,7 @@ describe("deterministic essay-prompt match scoring", () => {
     const result = scoreMatch(base);
     expect(result.score).toBeGreaterThanOrEqual(80);
     expect(result.recommendedAction).toBe("ready-to-reuse");
-    expect(result.matchedThemes).toContain("Activities, Leadership & Impact");
+    expect(result.matchedThemes).toContain("Community & Contribution");
     expect(result.schoolSpecificityRisk).toBe("low");
   });
 
@@ -30,10 +30,10 @@ describe("deterministic essay-prompt match scoring", () => {
     expect(tooLong.wordCountDifference).toBe(900 - base.promptMaxWordCount);
   });
 
-  it("caps the recommendation at major-adaptation for a why-school prompt when the essay targets a different school", () => {
+  it("caps the recommendation at major-adaptation for a why-us prompt when the essay targets a different school", () => {
     const result = scoreMatch({
       ...base,
-      promptPrimaryFamilySlug: "why-school",
+      promptPrimaryFamilySlug: "why-us",
       essaySchoolSpecificPhrases: ["Stanford", "the Farm"],
     });
     expect(result.schoolSpecificityRisk).toBe("high");
@@ -41,10 +41,10 @@ describe("deterministic essay-prompt match scoring", () => {
     expect(result.recommendedAction).not.toBe("minor-adaptation");
   });
 
-  it("does not penalize an essay already tailored to the same school as the why-school prompt", () => {
+  it("does not penalize an essay already tailored to the same school as the why-us prompt", () => {
     const result = scoreMatch({
       ...base,
-      promptPrimaryFamilySlug: "why-school",
+      promptPrimaryFamilySlug: "why-us",
       essaySchoolSpecificPhrases: ["Lakeview University", "Lakeview's Civic Lab"],
     });
     expect(result.schoolSpecificityRisk).toBe("low");
@@ -54,7 +54,7 @@ describe("deterministic essay-prompt match scoring", () => {
     const result = scoreMatch({
       ...base,
       promptPrimaryFamilySlug: "why-major",
-      promptSecondaryFamilySlugs: ["intellectual-curiosity"],
+      promptSecondaryFamilySlugs: ["personal-statement"],
     });
     expect(result.missingRequirements.length).toBeGreaterThan(0);
   });

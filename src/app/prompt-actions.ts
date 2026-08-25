@@ -44,7 +44,12 @@ function promptInput(formData: FormData): PromptInput {
     deadline: deadline ? new Date(`${deadline}T12:00:00`) : null,
     notes: field(formData, "notes"),
     primaryFamilyId: field(formData, "primaryFamilyId") || null,
-    secondaryFamilyIds: formData.getAll("secondaryFamilyIds").filter((value): value is string => typeof value === "string"),
+    // The prompt form no longer offers a secondary-category picker, so omitting
+    // the key tells updatePrompt to keep the importer's links rather than clear
+    // them.
+    secondaryFamilyIds: formData.has("secondaryFamilyIds")
+      ? formData.getAll("secondaryFamilyIds").filter((value): value is string => typeof value === "string")
+      : undefined,
   };
 }
 

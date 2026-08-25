@@ -51,7 +51,7 @@ export const DEMO_SCHOOLS = [
   "Yale University",
 ] as const;
 
-// The deterministic classifier keys "Why This School / Program" off
+// The deterministic classifier keys "Why Us" off
 // organizer-side phrasing ("why us", "our campus"), which real supplements
 // never use - they say "Why are you applying to Nursing" or "what aspects of
 // our location". So these two genuinely institution-fit prompts are corrected
@@ -70,8 +70,8 @@ const DEMO_SCHOOL_SPECIFIC_ASSIGNMENT = {
 } as const;
 
 const DEMO_RECLASSIFIED: readonly { school: string; promptTitle: string; family: string }[] = [
-  { school: "Northwestern University", promptTitle: "Northwestern's location", family: "Why This School / Program" },
-  { school: "University of Pennsylvania", promptTitle: "School-specific: Nursing", family: "Why This School / Program" },
+  { school: "Northwestern University", promptTitle: "Northwestern's location", family: "Why Us" },
+  { school: "University of Pennsylvania", promptTitle: "School-specific: Nursing", family: "Why Us" },
 ];
 
 type DemoEssay = {
@@ -88,7 +88,7 @@ type DemoEssay = {
 export const DEMO_ESSAYS: readonly DemoEssay[] = [
   {
     title: "The Metronome",
-    family: "Personal Statement / Core Story",
+    family: "Personal Statement",
     status: "ready",
     targetWordCount: 650,
     designation: "canonical",
@@ -102,7 +102,7 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
   },
   {
     title: "Why I Study Systems",
-    family: "Why Major / Academic Interests",
+    family: "Why Major",
     status: "revising",
     targetWordCount: 340,
     designation: "canonical",
@@ -125,7 +125,7 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
   },
   {
     title: "The Argument I Lost",
-    family: "Challenge, Setback & Growth",
+    family: "Other",
     status: "draft",
     targetWordCount: 260,
     designation: "canonical",
@@ -134,7 +134,7 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
   },
   {
     title: "A Question About Rivers",
-    family: "Intellectual Curiosity",
+    family: "Other",
     status: "outline",
     targetWordCount: 180,
     designation: "canonical",
@@ -142,8 +142,17 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
       "Why do rivers meander? The textbook answer is erosion on the outside bank, deposition on the inside, and that answer is correct and completely unsatisfying, because it explains how a bend deepens without explaining why a straight channel bends at all. I have spent a year reading about this — helical flow, instability thresholds, the way a perturbation the size of a stone can select a wavelength for a hundred miles of water. I do not have the mathematics yet. That is most of why I want it.",
   },
   {
+    title: "The Kitchen Table Ledger",
+    family: "Identity & Background",
+    status: "draft",
+    targetWordCount: 300,
+    designation: "canonical",
+    content:
+      "My mother kept the household accounts in a spiral notebook on the kitchen table, in a mix of Tagalog and arithmetic I could read before I could read English properly. Nobody explained it to me. I learned what a remittance was the way you learn weather — from watching what it did to the room. Some months the number at the bottom of the page meant my cousin in Cavite started school on time. Some months it meant we ate rice and eggs for a week and my father said nothing about it at dinner. I used to be embarrassed by that notebook, by how visible it made us. What I understand now is that it was the most honest document in our house: a running record of what we owed each other across nine thousand miles, kept in pencil so it could be revised. I have my own notebook now. It is mostly bus arrival times and half-finished proofs, and it is kept in pencil for the same reason.",
+  },
+  {
     title: "What I Would Bring to a Hall",
-    family: "Short Takes & Personality",
+    family: "Short Answers",
     status: "ready",
     targetWordCount: 120,
     designation: "canonical",
@@ -156,7 +165,7 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
   // dangerous-reuse case, and this is the essay that produces it.
   {
     title: "Why Brown, and the Open Curriculum",
-    family: "Why This School / Program",
+    family: "Why Us",
     status: "draft",
     targetWordCount: 250,
     designation: "school-adaptation",
@@ -286,8 +295,8 @@ export async function resetDemoWorkspace(db: AppDatabase): Promise<DemoWorkspace
   }
 
   const assignmentPlan: [string, string, number][] = [
-    ["What I Would Bring to a Hall", "Short Takes & Personality", 2],
-    ["The Metronome", "Personal Statement / Core Story", 2],
+    ["What I Would Bring to a Hall", "Short Answers", 2],
+    ["The Metronome", "Personal Statement", 2],
     ["Fixing the Free Library", "Community & Contribution", 2],
   ];
   // assignEssayToPrompt replaces whatever a prompt already had, so the seed

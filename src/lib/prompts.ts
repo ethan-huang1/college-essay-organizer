@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { canonicalSiblingIds } from "./canonical";
 import type { AppDatabase } from "./db/client";
@@ -28,10 +28,15 @@ function cleanText(value: string, field: string, min: number, max: number, colla
   return cleaned;
 }
 
+// Omitting secondaryFamilyIds is meaningfully different from passing []: the
+// secondary-category picker was removed from the UI, so a prompt save carries
+// no secondaries and must leave the importer's links alone rather than clear
+// them. Passing [] still means "no secondaries".
 function normalizeFamilies(input: PromptInput) {
   const primaryFamilyId = input.primaryFamilyId || null;
-  const secondaryFamilyIds = [...new Set(input.secondaryFamilyIds ?? [])]
-    .filter((familyId) => familyId && familyId !== primaryFamilyId);
+  const secondaryFamilyIds = input.secondaryFamilyIds
+    ? [...new Set(input.secondaryFamilyIds)].filter((familyId) => familyId && familyId !== primaryFamilyId)
+    : undefined;
   return { primaryFamilyId, secondaryFamilyIds };
 }
 
@@ -59,7 +64,7 @@ async function validateInput(db: AppDatabase, workspaceId: string, input: Prompt
   if (input.notes && input.notes.trim().length > 2000) throw new Error("Notes must be 2,000 characters or fewer.");
 
   const families = normalizeFamilies(input);
-  const familyIds = [families.primaryFamilyId, ...families.secondaryFamilyIds].filter((id): id is string => Boolean(id));
+  const familyIds = [families.primaryFamilyId, ...(families.secondaryFamilyIds ?? [])].filter((id): id is string => Boolean(id));
   if (familyIds.length > 0) {
     const validFamilies = await db.select({ id: promptFamilies.id })
       .from(promptFamilies)
@@ -85,12 +90,24 @@ async function replaceFamilyAssignments(
   workspaceId: string,
   promptId: string,
   primaryFamilyId: string | null,
-  secondaryFamilyIds: string[],
+  secondaryFamilyIds: string[] | undefined,
 ) {
-  await db.delete(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
+  // With secondaries omitted only the primary is replaced. A secondary row for
+  // the incoming primary still has to go, or prompt_family_pair_unique rejects
+  // the insert below.
+  await db.delete(promptFamilyLinks).where(
+    secondaryFamilyIds
+      ? eq(promptFamilyLinks.promptId, promptId)
+      : and(
+          eq(promptFamilyLinks.promptId, promptId),
+          primaryFamilyId
+            ? or(eq(promptFamilyLinks.isPrimary, true), eq(promptFamilyLinks.familyId, primaryFamilyId))
+            : eq(promptFamilyLinks.isPrimary, true),
+        ),
+  );
   const assignments = [
     ...(primaryFamilyId ? [{ familyId: primaryFamilyId, isPrimary: true }] : []),
-    ...secondaryFamilyIds.map((familyId) => ({ familyId, isPrimary: false })),
+    ...(secondaryFamilyIds ?? []).map((familyId) => ({ familyId, isPrimary: false })),
   ];
   if (assignments.length > 0) {
     await db.insert(promptFamilyLinks).values(assignments.map(({ familyId, isPrimary }) => ({

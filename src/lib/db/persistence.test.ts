@@ -12,6 +12,8 @@ import {
   promptChangeLog,
   promptFamilies,
   promptFamilyLinks,
+  promptTagLinks,
+  essayTagLinks,
   prompts,
   schools,
   users,
@@ -32,6 +34,7 @@ import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, update
 import { recomputeWorkspaceMatches } from "../reuse";
 import { importCollege } from "../college-import";
 import { assignEssayToPrompt, unassignPrompt } from "../assignments";
+import { migrateWorkspaceTaxonomy, workspacesNeedingTaxonomyMigration } from "./taxonomy-migration";
 
 // The demo workspace is built through the real import pipeline, so its rows
 // carry generated ids - these resolve the anchors the tests need by name.
@@ -106,16 +109,16 @@ describe("local persistence foundation", () => {
     ]));
   });
 
-  it("seeds an editable ten-family taxonomy idempotently", async () => {
+  it("seeds an editable seven-category taxonomy idempotently", async () => {
 
     const families = await connection.db
       .select()
       .from(promptFamilies)
       .where(eq(promptFamilies.workspaceId, PERSONAL));
 
-    expect(families).toHaveLength(10);
+    expect(families).toHaveLength(7);
     expect(families.every((family) => family.isEditable)).toBe(true);
-    expect(families.map((family) => family.sortOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(families.map((family) => family.sortOrder)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it("supports one primary and multiple secondary prompt families with manual override", async () => {
@@ -141,7 +144,7 @@ describe("local persistence foundation", () => {
       status: prompt.status,
       deadline: prompt.deadline,
       notes: prompt.notes ?? undefined,
-      primaryFamilyId: `${DEMO_WORKSPACE_ID}:family:core-story`,
+      primaryFamilyId: `${DEMO_WORKSPACE_ID}:family:personal-statement`,
       secondaryFamilyIds: secondaryFamilies.map((family) => family.id),
     });
 
@@ -162,7 +165,7 @@ describe("local persistence foundation", () => {
       id: `${DEMO_WORKSPACE_ID}:second-primary`,
       workspaceId: DEMO_WORKSPACE_ID,
       promptId,
-      familyId: `${DEMO_WORKSPACE_ID}:family:challenge-growth`,
+      familyId: `${DEMO_WORKSPACE_ID}:family:other`,
       isPrimary: true,
     })).rejects.toThrow();
   });
@@ -224,7 +227,24 @@ describe("local persistence foundation", () => {
       .innerJoin(promptFamilies, eq(promptFamilies.id, promptFamilyLinks.familyId))
       .where(and(eq(promptFamilyLinks.workspaceId, DEMO_WORKSPACE_ID), eq(promptFamilyLinks.isPrimary, true)));
     const demoFamilies = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID));
-    expect(new Set(classified.map((row) => row.familyName)).size).toBe(demoFamilies.length);
+    expect(demoFamilies).toHaveLength(7);
+
+    // Every content category has to be demonstrated. Other is excluded on
+    // purpose: it is where a prompt lands when nothing recognises it, and after
+    // the classifier rewrite that is only ~4% of the catalogue. Requiring the
+    // demo to contain one would mean contriving a prompt the app cannot
+    // classify, which makes the example worse, not better.
+    const populated = new Set(classified.map((row) => row.familyName));
+    const contentCategories = demoFamilies.filter((family) => family.slug !== "other");
+    expect(contentCategories).toHaveLength(6);
+    for (const family of contentCategories) {
+      expect(populated, `${family.name} has no demo prompt`).toContain(family.name);
+    }
+
+    // Other still has to exist, and sort last: it is a real seventh category,
+    // not a "needs attention" bucket.
+    const other = demoFamilies.find((family) => family.slug === "other");
+    expect(other?.sortOrder).toBe(7);
 
     // Strong reuse, substantial adaptation, and a dangerous institution-
     // specific reuse case all have to be demonstrable (MVP_SPEC section 6).
@@ -309,7 +329,7 @@ describe("local persistence foundation", () => {
       requirement: "required",
       status: "not-started",
       primaryFamilyId: families[2].id,
-      secondaryFamilyIds: [families[0].id, families[8].id, families[2].id],
+      secondaryFamilyIds: [families[0].id, families[5].id, families[2].id],
     });
 
     let links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
@@ -447,7 +467,7 @@ describe("local persistence foundation", () => {
       title: "Wrong family",
       status: "idea",
       designation: "canonical",
-      primaryFamilyId: `${DEMO_WORKSPACE_ID}:family:core-story`,
+      primaryFamilyId: `${DEMO_WORKSPACE_ID}:family:personal-statement`,
     })).rejects.toThrow();
   });
 
@@ -491,7 +511,7 @@ describe("local persistence foundation", () => {
     const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
     const school = await createSchool(connection.db, PERSONAL, { name: "Lakeview University" });
     if (!school) throw new Error("Expected the school to be created.");
-    const whyMajorFamily = families.find((family) => family.name === "Why Major / Academic Interests");
+    const whyMajorFamily = families.find((family) => family.name === "Why Major");
     if (!whyMajorFamily) throw new Error("Expected a Why Major family.");
 
     const promptId = await createPrompt(connection.db, PERSONAL, {
@@ -793,7 +813,7 @@ describe("local persistence foundation", () => {
 
     await connection.db.update(promptFamilies)
       .set({ name: "My own name for this" })
-      .where(eq(promptFamilies.id, `${DEMO_WORKSPACE_ID}:family:community-contribution`));
+      .where(eq(promptFamilies.id, `${DEMO_WORKSPACE_ID}:family:community`));
 
     await recomputeWorkspaceMatches(connection.db, DEMO_WORKSPACE_ID);
 
@@ -803,5 +823,105 @@ describe("local persistence foundation", () => {
     // And the scores are identical, not merely similar.
     const scoreOf = (rows: typeof after) => new Map(rows.map((row) => [`${row.essayId}:${row.promptId}`, row.score]));
     expect([...scoreOf(after)].sort()).toEqual([...scoreOf(before)].sort());
+  });
+  // The only phase that rewrites existing rows, so this is the one that has to
+  // prove nobody loses work: a student who classified prompts by hand under the
+  // ten-category taxonomy keeps every one of those classifications, remapped.
+  describe("seven-category taxonomy migration", () => {
+    const LEGACY = [
+      ["core-story", "Personal Statement / Core Story", 1],
+      ["identity-background", "Identity & Background", 2],
+      ["community-contribution", "Community & Contribution", 3],
+      ["challenge-growth", "Challenge, Setback & Growth", 4],
+      ["intellectual-curiosity", "Intellectual Curiosity", 5],
+      ["why-major", "Why Major / Academic Interests", 6],
+      ["why-school", "Why This School / Program", 7],
+      ["activities-impact", "Activities, Leadership & Impact", 8],
+      ["values-meaning", "Values, Perspective & Meaning", 9],
+      ["short-takes", "Short Takes & Personality", 10],
+    ] as const;
+
+    /** Rebuilds the pre-migration state this workspace would have had. */
+    async function seedLegacyTaxonomy(workspaceId: string) {
+      await connection.db.delete(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
+      await connection.db.insert(promptFamilies).values(LEGACY.map(([slug, name, sortOrder]) => ({
+        id: `${workspaceId}:family:${slug}`,
+        workspaceId,
+        slug,
+        name,
+        description: `${name} description`,
+        color: "#000000",
+        sortOrder,
+      })));
+    }
+
+    it("repoints every link, loses no classification, and records the retired concept as a tag", async () => {
+      await seedLegacyTaxonomy(PERSONAL);
+      const school = await createSchool(connection.db, PERSONAL, { name: "Legacy University" });
+      if (!school) throw new Error("Expected the school to be created.");
+
+      // One prompt per legacy category, each hand-classified.
+      const promptIds: string[] = [];
+      for (const [slug] of LEGACY) {
+        const promptId = await createPrompt(connection.db, PERSONAL, {
+          schoolId: school.id,
+          title: `Prompt for ${slug}`,
+          promptText: `A prompt filed under ${slug} by the student themselves.`,
+          requirement: "required",
+          status: "not-started",
+          primaryFamilyId: `${PERSONAL}:family:${slug}`,
+        });
+        promptIds.push(promptId);
+      }
+      const essayId = await createEssay(connection.db, PERSONAL, {
+        title: "Legacy essay",
+        content: "x",
+        status: "draft",
+        designation: "canonical",
+        primaryFamilyId: `${PERSONAL}:family:challenge-growth`,
+      });
+
+      const result = await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
+      expect(result.migrated).toBe(true);
+
+      const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
+      expect(families).toHaveLength(7);
+      expect(families.map((family) => family.sortOrder).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+
+      // Not one prompt lost its primary category.
+      const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, PERSONAL));
+      const primaryByPrompt = new Map(links.filter((link) => link.isPrimary).map((link) => [link.promptId, link.familyId]));
+      for (const promptId of promptIds) {
+        expect(primaryByPrompt.get(promptId), `prompt ${promptId} lost its category`).toBeTruthy();
+      }
+      // And no prompt ended up with two.
+      for (const promptId of promptIds) {
+        expect(links.filter((link) => link.promptId === promptId && link.isPrimary)).toHaveLength(1);
+      }
+
+      // The four retired categories collapse into Other...
+      const otherId = `${PERSONAL}:family:other`;
+      expect([...primaryByPrompt.values()].filter((id) => id === otherId)).toHaveLength(4);
+      // ...and each keeps its concept as an internal tag, so the reuse signal
+      // survives without becoming a user-facing category.
+      const tagLinks = await connection.db.select().from(promptTagLinks).where(eq(promptTagLinks.workspaceId, PERSONAL));
+      expect(tagLinks).toHaveLength(4);
+
+      const essayLinks = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
+      expect(essayLinks.find((link) => link.isPrimary)?.familyId).toBe(otherId);
+      expect(await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.essayId, essayId))).toHaveLength(1);
+    });
+
+    it("is idempotent and leaves an already-migrated workspace alone", async () => {
+      const first = await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
+      expect(first.migrated).toBe(false);
+      expect(await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL))).toHaveLength(7);
+    });
+
+    it("reports which workspaces still need migrating", async () => {
+      expect(await workspacesNeedingTaxonomyMigration(connection.db)).toEqual([]);
+      await seedLegacyTaxonomy(PERSONAL);
+      expect(await workspacesNeedingTaxonomyMigration(connection.db)).toEqual([PERSONAL]);
+    });
   });
 });

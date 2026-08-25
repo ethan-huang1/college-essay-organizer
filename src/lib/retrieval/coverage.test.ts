@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { CURRENT_CYCLE_LABEL } from "../cycle";
 import { TOP_UNIVERSITIES } from "../top-universities";
+import { classifyText } from "../classification";
+import { PROMPT_FAMILIES } from "../db/taxonomy";
+import { CLASSIFICATION_OVERRIDES, classificationOverride } from "./classification-overrides";
 import { listCoveredSchoolNames, lookupSchoolSource } from "./registry";
 
 // A secondary-source (admissions-consultant-blog) domain must never be the
@@ -163,5 +166,60 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
     console.log(pending.join(", "));
     // Informational, but it must never grow silently past what is on file.
     expect(unresolvedConditionals).toBeLessThanOrEqual(60);
+  });
+  // The old keyword set could not see a fit prompt: measured on this catalogue,
+  // zero of 255 prompts ever classified as why-school and 44% classified as
+  // nothing at all. Why Us is the one category you must NOT reuse across
+  // schools, so an empty Why Us made the reuse map quietly wrong.
+  describe("classification coverage", () => {
+    const classified = listCoveredSchoolNames().flatMap((name) => {
+      const record = lookupSchoolSource(name);
+      return (record?.prompts ?? []).map((prompt) => ({
+        school: name,
+        prompt,
+        result: classifyText(`${prompt.title} ${prompt.promptText}`),
+        override: classificationOverride(name, prompt.externalRef),
+      }));
+    });
+
+    it("classifies Why Us prompts instead of leaving the category empty", () => {
+      const whyUs = classified.filter((row) => (row.override ?? row.result.primarySlug) === "why-us");
+      expect(whyUs.length).toBeGreaterThan(20);
+    });
+
+    it("leaves under 10% of the catalogue needing review", () => {
+      const needsReview = classified.filter((row) => !row.override && !row.result.primarySlug);
+      const share = needsReview.length / classified.length;
+      console.log(`Needs review: ${needsReview.length}/${classified.length} (${Math.round(share * 100)}%)`);
+      expect(share).toBeLessThan(0.1);
+    });
+
+    it("never emits a category outside the seven", () => {
+      const slugs = new Set(PROMPT_FAMILIES.map(([slug]) => slug as string));
+      for (const row of classified) {
+        if (row.result.primarySlug) expect(slugs, `${row.school}: ${row.prompt.title}`).toContain(row.result.primarySlug);
+        if (row.override) expect(slugs, `${row.school}: ${row.prompt.title}`).toContain(row.override);
+      }
+    });
+
+    it("populates every category the catalogue can reach", () => {
+      const populated = new Set(classified.map((row) => row.override ?? row.result.primarySlug).filter(Boolean));
+      for (const slug of ["why-us", "why-major", "community", "diversity", "shorts", "personal-statement"]) {
+        expect(populated, slug).toContain(slug);
+      }
+    });
+
+    // A stale override would silently do nothing, so every entry has to still
+    // name a prompt that exists.
+    it("keeps every hand-classified override pointing at a real prompt", () => {
+      for (const [schoolName, externalRef] of CLASSIFICATION_OVERRIDES) {
+        const record = lookupSchoolSource(schoolName);
+        expect(record, `${schoolName} is not in the registry`).toBeTruthy();
+        expect(
+          record?.prompts.some((prompt) => prompt.externalRef === externalRef),
+          `${schoolName} has no prompt "${externalRef}"`,
+        ).toBe(true);
+      }
+    });
   });
 });
