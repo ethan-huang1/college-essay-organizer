@@ -96,8 +96,10 @@ describe("reuseOpportunities", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0].inUse.map((row) => row.promptId)).toEqual(["p1"]);
-    expect(groups[0].open.map((row) => row.promptId)).toEqual(["p2"]);
-    expect(groups[0].risky).toEqual([]);
+    // p2 is a minor-adaptation, which is now a "reusable with edits"
+    // recommendation rather than sitting in the ready bucket.
+    expect(groups[0].withEdits.map((row) => row.promptId)).toEqual(["p2"]);
+    expect(groups[0].open).toEqual([]);
   });
 
   it("counts a weak-scoring assignment as in use", () => {
@@ -111,27 +113,30 @@ describe("reuseOpportunities", () => {
     expect(groups[0].open).toEqual([]);
   });
 
-  it("keeps an institution-specific risk visible even though it is not reusable", () => {
+  // Deliberately inverted from its original form. This used to assert that an
+  // institution-specific match was "not reusable"; that was the product defect.
+  // It is reusable - with edits - and the two states stay distinct.
+  it("keeps an institution-specific match recommended, in the with-edits state", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 30, "high"), match("p2", "ready-to-reuse")],
+      [match("p1", "major-adaptation", 80, "high"), match("p2", "ready-to-reuse")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }, { id: "p2", isCurrentCycle: true, assignedEssay: null }],
     );
 
-    expect(groups[0].risky.map((row) => row.promptId)).toEqual(["p1"]);
+    expect(groups[0].withEdits.map((row) => row.promptId)).toEqual(["p1"]);
     expect(groups[0].open.map((row) => row.promptId)).toEqual(["p2"]);
   });
 
-  it("surfaces an essay whose only match is a risky one", () => {
+  it("surfaces an essay whose only match needs school-specific edits", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 30, "high")],
+      [match("p1", "major-adaptation", 80, "high")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
     );
 
     expect(groups).toHaveLength(1);
     expect(groups[0].open).toEqual([]);
-    expect(groups[0].risky).toHaveLength(1);
+    expect(groups[0].withEdits).toHaveLength(1);
   });
 
   it("does not flag a risk on a prompt another essay already answers", () => {
@@ -164,21 +169,23 @@ describe("reuseOpportunities", () => {
   it("surfaces a weak match that still shares a theme, without calling it reusable", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 40)],
+      // new-response: the content genuinely does not answer the prompt.
+      [match("p1", "new-response", 20)],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
     );
     expect(groups).toHaveLength(1);
     expect(groups[0].open).toEqual([]);
+    expect(groups[0].withEdits).toEqual([]);
     expect(groups[0].possible.map((row) => row.promptId)).toEqual(["p1"]);
   });
 
-  it("keeps a high-risk match out of the weaker-options list", () => {
+  it("keeps a school-specific match out of the weaker-options list", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 40, "high")],
+      [match("p1", "major-adaptation", 80, "high")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
     );
-    expect(groups[0].risky.map((row) => row.promptId)).toEqual(["p1"]);
+    expect(groups[0].withEdits.map((row) => row.promptId)).toEqual(["p1"]);
     expect(groups[0].possible).toEqual([]);
   });
   // reuseOpportunities had no cycle filter while summarizePrompts did, so a
@@ -203,5 +210,41 @@ describe("reuseOpportunities", () => {
       [match("p1", "ready-to-reuse")],
       [{ id: "p1", isCurrentCycle: false, assignedEssay: null }],
     )).toEqual([]);
+  });
+  // The three user-facing states must be disjoint and must mean what they say.
+  // A school-specific essay with strong content used to land in a "do not reuse
+  // here / write those fresh" bucket, which is "new response" by another name.
+  describe("three reuse states", () => {
+    const withRisk = (id: string, action: string, risk: string) =>
+      ({ ...match(id, action, 80, risk), adaptationRequired: risk !== "low" });
+
+    it("puts a clean strong match in ready, not with-edits", () => {
+      const g = reuseOpportunities(essays, [withRisk("p1", "ready-to-reuse", "low")],
+        [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
+      expect(g.open.map((r) => r.promptId)).toEqual(["p1"]);
+      expect(g.withEdits).toEqual([]);
+    });
+
+    it("puts a strong match that names another school in with-edits, and still recommends it", () => {
+      const g = reuseOpportunities(essays, [withRisk("p1", "major-adaptation", "high")],
+        [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
+      expect(g.withEdits.map((r) => r.promptId)).toEqual(["p1"]);
+      expect(g.open).toEqual([]);
+      expect(g.possible).toEqual([]);
+    });
+
+    it("counts with-edits as a genuine reuse opportunity", () => {
+      const g = reuseOpportunities(essays, [withRisk("p1", "minor-adaptation", "medium")],
+        [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
+      expect(g.withEdits.map((r) => r.promptId)).toEqual(["p1"]);
+    });
+
+    it("keeps a weak content match out of both recommendation buckets", () => {
+      const g = reuseOpportunities(essays, [withRisk("p1", "new-response", "high")],
+        [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
+      expect(g.open).toEqual([]);
+      expect(g.withEdits).toEqual([]);
+      expect(g.possible.map((r) => r.promptId)).toEqual(["p1"]);
+    });
   });
 });

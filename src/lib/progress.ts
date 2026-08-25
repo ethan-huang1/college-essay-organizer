@@ -14,6 +14,13 @@ const DONE_STATUSES = new Set(["complete", "submitted"]);
 // weaker is a "write something new" case and is not counted as reuse.
 const REUSABLE_ACTIONS = new Set(["ready-to-reuse", "minor-adaptation"]);
 
+// The three user-facing reuse states. Content fit decides whether an essay is
+// a recommendation at all; school-specific material decides which of the two
+// recommending states it lands in. "Adapt this" is a recommendation, not a
+// refusal - a strong Stanford fit essay is a real starting point for Duke.
+const READY_ACTION = "ready-to-reuse";
+const WITH_EDITS_ACTIONS = new Set(["minor-adaptation", "major-adaptation"]);
+
 export type ProgressPrompt = {
   status: string;
   isCurrentCycle: boolean;
@@ -73,6 +80,8 @@ export type ReuseMatch = {
   promptTitle: string;
   schoolName: string;
   schoolSpecificityRisk: string;
+  /** True when school-specific material must change before submitting. */
+  adaptationRequired?: boolean;
   missingRequirements: readonly string[];
   matchedThemes: readonly string[];
   wordCountDifference: number;
@@ -108,30 +117,37 @@ export function reuseOpportunities(
       const own = matches
         .filter((match) => match.essayId === essay.id && assignedEssayIdByPrompt.has(match.promptId))
         .sort((a, b) => b.score - a.score);
-      const reusable = own.filter((match) => REUSABLE_ACTIONS.has(match.recommendedAction));
       const unanswered = (match: ReuseMatch) => assignedEssayIdByPrompt.get(match.promptId) === null;
       return {
         essay,
         // Not filtered by match strength: an essay assigned to a prompt is
         // answering it whatever the matcher thinks of the pairing.
         inUse: own.filter((match) => assignedEssayIdByPrompt.get(match.promptId) === essay.id),
-        open: reusable.filter(unanswered),
-        risky: own.filter((match) => match.schoolSpecificityRisk === "high" && unanswered(match)),
+        // Ready: strong content fit AND nothing school-specific to change.
+        open: own.filter((match) => unanswered(match) && match.recommendedAction === READY_ACTION),
+        // Reusable with edits: the content answers the prompt, but institution-
+        // specific material has to be adapted first. This replaced a "do not
+        // reuse here" bucket that told students to write a fresh essay when they
+        // already had a strong one.
+        withEdits: own.filter((match) => unanswered(match) && WITH_EDITS_ACTIONS.has(match.recommendedAction)),
         // Everything else that shares a theme. The page used to say "no
         // further prompts match this essay closely enough" whenever `open` was
         // empty, which read as "nothing here" even with a dozen weaker but
         // real candidates - so they are offered as weaker options rather than
         // silently dropped. Deliberately not part of `reusable`, so the
         // "reusable now" count does not inflate.
+        // Weaker options: the content does not really answer the prompt, but it
+        // shares a theme, so it is worth offering rather than hiding.
         possible: own.filter(
           (match) =>
             unanswered(match)
-            && !REUSABLE_ACTIONS.has(match.recommendedAction)
-            && match.schoolSpecificityRisk !== "high"
+            && match.recommendedAction !== READY_ACTION
+            && !WITH_EDITS_ACTIONS.has(match.recommendedAction)
             && match.matchedThemes.length > 0,
         ),
       };
     })
-    .filter((group) => group.inUse.length + group.open.length + group.risky.length + group.possible.length > 0)
-    .sort((a, b) => b.open.length + b.inUse.length - (a.open.length + a.inUse.length));
+    .filter((group) => group.inUse.length + group.open.length + group.withEdits.length + group.possible.length > 0)
+    .sort((a, b) =>
+      b.open.length + b.withEdits.length + b.inUse.length - (a.open.length + a.withEdits.length + a.inUse.length));
 }

@@ -635,7 +635,7 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
 
       const groups = reuseOpportunities(snapshot!.essays, snapshot!.matches, snapshot!.prompts);
       const bridgeGroup = groups.find((group) => group.essay.id === essayBridgeId)!;
-      const allSurfacedPromptIds = [...bridgeGroup.inUse, ...bridgeGroup.open, ...bridgeGroup.risky, ...bridgeGroup.possible].map((match) => match.promptId);
+      const allSurfacedPromptIds = [...bridgeGroup.inUse, ...bridgeGroup.open, ...bridgeGroup.withEdits, ...bridgeGroup.possible].map((match) => match.promptId);
       expect(allSurfacedPromptIds).not.toContain(previousCyclePromptIdA);
     });
 

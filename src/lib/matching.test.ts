@@ -110,4 +110,66 @@ describe("deterministic essay-prompt match scoring", () => {
     expect(scoreMatch(base).score).toBe(80);
     expect(scoreMatch({ ...base, essayWordCount: 180, promptMinWordCount: 100, promptMaxWordCount: 300 }).score).toBe(80);
   });
+  // Content fit and adaptation are two independent questions. A school name
+  // used to do both jobs at once: it subtracted 40 points from the content
+  // score AND capped the action, so a perfect content match scored 40 and was
+  // filed under "do not reuse". A strong Stanford "Why Us" essay is a genuinely
+  // useful starting point for Duke - it just cannot be submitted unchanged.
+  describe("content fit is independent of adaptation required", () => {
+    const strongFitOtherSchool = {
+      ...base,
+      promptPrimaryFamilySlug: "why-us",
+      essayPrimaryFamilySlug: "why-us",
+      essaySchoolSpecificPhrases: ["Stanford University"],
+      promptSchoolName: "Duke University",
+    };
+
+    it("does not let a school reference reduce the content-fit score", () => {
+      const clean = scoreMatch({ ...strongFitOtherSchool, essaySchoolSpecificPhrases: [] });
+      const named = scoreMatch(strongFitOtherSchool);
+      expect(named.contentFitScore).toBe(clean.contentFitScore);
+      expect(named.score).toBe(clean.score);
+    });
+
+    it("keeps a strong content match reusable with edits rather than a new response", () => {
+      const r = scoreMatch(strongFitOtherSchool);
+      expect(r.recommendedAction).not.toBe("new-response");
+      expect(r.adaptationRequired).toBe(true);
+      expect(r.schoolSpecificityRisk).toBe("high");
+    });
+
+    it("flags the adaptation explicitly instead of hiding it in the score", () => {
+      const r = scoreMatch(strongFitOtherSchool);
+      expect(r.explanation.toLowerCase()).toContain("adapt");
+    });
+
+    it("marks an essay needing no school edits as ready to reuse", () => {
+      const r = scoreMatch({ ...strongFitOtherSchool, essaySchoolSpecificPhrases: [] });
+      expect(r.recommendedAction).toBe("ready-to-reuse");
+      expect(r.adaptationRequired).toBe(false);
+    });
+
+    it("keeps an essay already tailored to this school ready to reuse", () => {
+      const r = scoreMatch({ ...strongFitOtherSchool, essaySchoolSpecificPhrases: ["Duke University"] });
+      expect(r.schoolSpecificityRisk).toBe("low");
+      expect(r.recommendedAction).toBe("ready-to-reuse");
+    });
+
+    // The other half of the requirement: school detection must not rescue an
+    // essay whose substance does not answer the prompt.
+    it("still recommends a new response when the content does not fit, school name or not", () => {
+      const weak = {
+        ...base,
+        essayPrimaryFamilySlug: "shorts",
+        essaySecondaryFamilySlugs: [] as string[],
+        promptPrimaryFamilySlug: "why-major",
+        promptSecondaryFamilySlugs: [] as string[],
+        essayWordCount: 12,
+        promptMinWordCount: null,
+        promptMaxWordCount: 650,
+      };
+      expect(scoreMatch(weak).recommendedAction).toBe("new-response");
+      expect(scoreMatch({ ...weak, essaySchoolSpecificPhrases: ["Stanford University"] }).recommendedAction).toBe("new-response");
+    });
+  });
 });

@@ -836,12 +836,12 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
       ...group,
       open: canonicalMatches(snapshot, group.open),
       inUse: canonicalMatches(snapshot, group.inUse),
-      risky: canonicalMatches(snapshot, group.risky),
+      withEdits: canonicalMatches(snapshot, group.withEdits),
       possible: canonicalMatches(snapshot, group.possible),
     }));
   const openTotal = groups.reduce((total, group) => total + group.open.length, 0);
-  const riskyTotal = groups.reduce((total, group) => total + group.risky.length, 0);
-  const answerable = new Set(groups.flatMap((group) => group.open.map((row) => row.match.promptId)));
+  const withEditsTotal = groups.reduce((total, group) => total + group.withEdits.length, 0);
+  const answerable = new Set(groups.flatMap((group) => [...group.open, ...group.withEdits].map((row) => row.match.promptId)));
   const needsNew = canonicalPromptGroups(
     snapshot.prompts.filter((prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !answerable.has(prompt.id)),
     snapshot.schools,
@@ -860,13 +860,14 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   return (
     <>
       <p className="reuse-lede">
-        <strong>{openTotal}</strong> unanswered {openTotal === 1 ? "prompt" : "prompts"} can likely be served by an essay you already have.
+        <strong>{openTotal + withEditsTotal}</strong> unanswered {openTotal + withEditsTotal === 1 ? "prompt" : "prompts"} can
+        be served by an essay you already have
+        {withEditsTotal > 0 ? <> — {openTotal} ready as-is, {withEditsTotal} after adapting school-specific material</> : null}.
         {needsNew > 0 ? <> {needsNew} still need something new.</> : null}
-        {riskyTotal > 0 ? <> {riskyTotal} would be unsafe to reuse as-is.</> : null}
       </p>
 
       <div className="reuse-list">
-        {groups.map(({ essay, inUse, open, risky, possible }) => (
+        {groups.map(({ essay, inUse, open, withEdits, possible }) => (
           <article className="reuse-group" key={essay.id}>
             <div className="reuse-group-head">
               <div>
@@ -911,17 +912,25 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
               </p>
             ) : null}
 
-            {risky.length > 0 ? (
-              <p className="reuse-risky">
-                <span className="detail-label">Do not reuse here</span>
-                {risky.map(({ match, schoolLabel: label }) => (
-                  <span key={match.id}>{label} · {match.promptTitle}</span>
-                ))}
-                <span className="reuse-risky-why">
-                  This essay names a different institution, so reusing it for another school&apos;s fit prompt reads as a
-                  copy-paste. Write those fresh.
-                </span>
-              </p>
+            {/* Previously "Do not reuse here — write those fresh", which turned a
+                strong essay into a non-recommendation because it mentioned a
+                school. Content fit and adaptation are separate: these are real
+                recommendations that need school-specific editing first. */}
+            {withEdits.length > 0 ? (
+              <div className="reuse-with-edits">
+                <p className="detail-label">Reusable here, after adapting school-specific material</p>
+                <ul className="reuse-rows">
+                  {withEdits.map(({ match, schoolLabel: label }) => (
+                    <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
+                  ))}
+                </ul>
+                <p className="reuse-with-edits-why">
+                  The underlying story fits these prompts. Before submitting, change the institution-specific
+                  material: the school&apos;s name, and any programme, course, professor, club, tradition or visit that
+                  belongs to a different campus. Anything you claim to have done or attended needs your own words —
+                  check each replacement genuinely exists at the target school and genuinely interests you.
+                </p>
+              </div>
             ) : null}
           </article>
         ))}

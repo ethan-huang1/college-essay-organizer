@@ -5,7 +5,16 @@ const FAMILY_NAME_BY_SLUG = new Map<string, string>(PROMPT_FAMILIES.map(([slug, 
 export type RecommendedAction = "ready-to-reuse" | "minor-adaptation" | "major-adaptation" | "new-response";
 
 export type MatchResult = {
+  /**
+   * How well the essay's substance answers the prompt, 0-100. Deliberately
+   * unaffected by school-specific language: naming another university says
+   * nothing about whether the underlying story fits.
+   */
+  contentFitScore: number;
+  /** Alias of contentFitScore, kept as the stored/displayed match score. */
   score: number;
+  /** True when school-specific material must be changed before submitting. */
+  adaptationRequired: boolean;
   matchedThemes: string[];
   missingRequirements: string[];
   wordCountDifference: number;
@@ -73,15 +82,21 @@ function wordCountPenalty(essayWordCount: number, min: number | null, max: numbe
   return { points: 0, difference };
 }
 
+/**
+ * How much school-specific material stands between this essay and submission.
+ *
+ * This is the *adaptation* axis and it deliberately carries no score penalty.
+ * It used to subtract 40 points from the content score, which conflated two
+ * independent questions: a strong Stanford "Why Us" essay is a genuinely useful
+ * starting point for Duke, it simply cannot be submitted unchanged.
+ */
 function schoolSpecificityRisk(promptPrimarySlug: string | null, promptSchoolName: string, essaySchoolSpecificPhrases: string[]) {
-  if (essaySchoolSpecificPhrases.length === 0) return { risk: "low" as const, points: 0 };
+  if (essaySchoolSpecificPhrases.length === 0) return { risk: "low" as const };
   const referencesThisSchool = essaySchoolSpecificPhrases.some((phrase) => phrase.toLowerCase().includes(promptSchoolName.toLowerCase()));
-  // A fit prompt is the one thing you must never reuse across schools, so an
-  // essay naming a different institution is a hard stop rather than a caution.
-  if (promptPrimarySlug === "why-us") {
-    return referencesThisSchool ? { risk: "low" as const, points: 0 } : { risk: "high" as const, points: -40 };
-  }
-  return referencesThisSchool ? { risk: "low" as const, points: 0 } : { risk: "medium" as const, points: -15 };
+  if (referencesThisSchool) return { risk: "low" as const };
+  // A fit prompt carries the most institution-specific material, so it needs
+  // the most rewriting - not disqualification.
+  return { risk: promptPrimarySlug === "why-us" ? ("high" as const) : ("medium" as const) };
 }
 
 // Compares the prompt's declared families against the essay's own assigned
@@ -98,20 +113,31 @@ function missingRequirements(promptPrimarySlug: string | null, promptSecondarySl
     .map((slug) => `may not address ${FAMILY_NAME_BY_SLUG.get(slug) ?? slug} themes`);
 }
 
-function recommendAction(score: number, risk: "low" | "medium" | "high"): RecommendedAction {
-  let action: RecommendedAction = score >= 80 ? "ready-to-reuse" : score >= 55 ? "minor-adaptation" : score >= 30 ? "major-adaptation" : "new-response";
-  if (risk === "high" && (action === "ready-to-reuse" || action === "minor-adaptation")) action = "major-adaptation";
-  return action;
+/**
+ * Two independent inputs, in a fixed order of authority.
+ *
+ * Content fit alone decides whether the essay answers the prompt at all: below
+ * the floor it is a new response no matter what, and school detection can never
+ * rescue it. Above the floor the essay is a usable starting point, and
+ * school-specific material only decides how much editing that takes. A school
+ * name can therefore never force a strong content match to "new response",
+ * which is what it used to do.
+ */
+function recommendAction(contentFit: number, risk: "low" | "medium" | "high"): RecommendedAction {
+  if (contentFit < 30) return "new-response";
+  if (risk === "high") return "major-adaptation";
+  if (risk === "medium") return contentFit >= 55 ? "minor-adaptation" : "major-adaptation";
+  return contentFit >= 80 ? "ready-to-reuse" : contentFit >= 55 ? "minor-adaptation" : "major-adaptation";
 }
 
 function explain(action: RecommendedAction, themes: string[], risk: "low" | "medium" | "high", missing: string[]) {
   const themeNames = themes.map((slug) => FAMILY_NAME_BY_SLUG.get(slug) ?? slug);
   const parts: string[] = [];
   parts.push(themeNames.length > 0 ? `Shares ${themeNames.join(", ")}.` : "No shared prompt family.");
-  if (risk === "high") parts.push("Institution-specific language doesn't match this school — treat as a new response.");
-  else if (risk === "medium") parts.push("Contains another school's specific language — review before reusing.");
+  if (risk === "high") parts.push("Names another institution throughout — adapt the school-specific material before submitting.");
+  else if (risk === "medium") parts.push("Contains another school's specific language — adapt it before reusing.");
   if (missing.length > 0) parts.push(`Gaps: ${missing.join("; ")}.`);
-  const actionLabel = { "ready-to-reuse": "Ready to reuse.", "minor-adaptation": "Needs minor adaptation.", "major-adaptation": "Needs major adaptation.", "new-response": "Best written fresh." }[action];
+  const actionLabel = { "ready-to-reuse": "Ready to reuse.", "minor-adaptation": "Reusable with minor edits.", "major-adaptation": "Reusable with substantial edits.", "new-response": "Best written fresh." }[action];
   parts.push(actionLabel);
   return parts.join(" ");
 }
@@ -128,11 +154,15 @@ export function scoreMatch(input: MatchInput): MatchResult {
   const missing = missingRequirements(input.promptPrimaryFamilySlug, input.promptSecondaryFamilySlugs, input.essayPrimaryFamilySlug, input.essaySecondaryFamilySlugs);
 
   const baseline = 20; // a floor so two essays with zero signal still land as "new-response", not a negative score
-  const score = Math.max(0, Math.min(100, baseline + family.points + words.points + risk.points - missing.length * 5));
-  const recommendedAction = recommendAction(score, risk.risk);
+  // Content fit only. School-specific material is reported separately, via
+  // schoolSpecificityRisk and adaptationRequired.
+  const contentFitScore = Math.max(0, Math.min(100, baseline + family.points + words.points - missing.length * 5));
+  const recommendedAction = recommendAction(contentFitScore, risk.risk);
 
   return {
-    score,
+    contentFitScore,
+    score: contentFitScore,
+    adaptationRequired: risk.risk !== "low",
     matchedThemes: family.themes.map((slug) => FAMILY_NAME_BY_SLUG.get(slug) ?? slug),
     missingRequirements: missing,
     wordCountDifference: words.difference,
