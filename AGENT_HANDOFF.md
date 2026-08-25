@@ -412,74 +412,111 @@ none of this fixture data was committed):
 
 ## Overnight Run State
 
-- Disposition: continue
-- Current objective: make the MVP trustworthy for student testing, per the
-  approved plan (essay editor → zero-prompt colleges → workload engine →
-  minimum catalogue encoding → reuse → taxonomy → loading states → polish)
-- Completed phases: **the whole P0 boundary**. **0** baseline at `48bc303`
-  (tag `pre-trust-run`); **1** essay editor (`a6d8ed3`); **2** zero-prompt
-  colleges (`c18a796`); **3** workload engine (`4f3e1c7`); **4** minimum
-  catalogue encoding (`0c3872f`); **5** reuse correctness (`3c9e56a`).
-- Measured effect, on real catalogue data:
-  - Whole catalogue: 255 raw prompt rows -> 207 canonical rows -> **94 required
-    essays**.
-  - Seven UC campuses: 56 rows -> **8 rendered rows -> 4 required**, each row
-    naming all seven campuses.
-  - Demo workspace (19 schools): 112 prompt rows -> **51 required essays**, with
-    35 conditionals visibly unresolved rather than silently counted.
-  - Reuse reconciles: zero previous-cycle prompts reach any reuse bucket, and
-    the "reusable now" tile equals the open count exactly.
-  - Essay textarea 1087x320px at 1440px wide, up from 176x48px.
-- Current task: Phase 6, the seven-category taxonomy. **ATOMIC** - do not begin
-  without runway to finish; a half-migrated taxonomy breaks classification and
-  matching everywhere. Its `slug` sub-step ships as its own verified commit
-  first, because it is a standalone correctness fix.
-- Next recommended task: Phase 7 (loading states) then Phase 8 (responsive
-  polish), both stretch. Also stretch: the 54 conditional prompts across 16
-  schools still unencoded (they render as unresolved, which is correct but
-  incomplete).
-- Important decisions this run:
-  - **Canonical siblings share response state.** Prompts sharing a
-    `canonical_key` are kept in lockstep at write time (fan-out inside
-    `lib/assignments.ts` and `lib/prompts.ts`, not the actions), so aggregation
-    never has to guess which school row carries an assignment and deleting one
-    UC campus cannot orphan a shared one. Rendered collections dedupe by
-    `canonical_key`; a school-scoped view shows that campus's own instance.
-  - **Zero-prompt college state is a column, never parsed prose.**
-    `schools.catalogue_status` is written by the importer on every import;
-    `schools.notes` stays display-only. `schoolCatalogueState()` in
-    `src/lib/schools.ts` is the single deterministic derivation.
-  - **Secondary categories are no longer user-editable.** The ten-checkbox wall
-    is gone from the essay form. Omitting `secondaryFamilyIds` now means "keep
-    them" so a metadata save cannot wipe importer-derived links; an explicit
-    `[]` still clears.
-- Migration: `drizzle/0002_broken_prima.sql` — 9 `ADD COLUMN`, 2 `CREATE INDEX`,
-  1 `ADD CONSTRAINT`. Read before accepting: no drops, no type changes, no table
-  rebuild. Covers Phases 2 and 3 together.
-- **HUMAN FOLLOW-UP REQUIRED (not a blocker):**
-  1. Apply `drizzle/0002_broken_prima.sql` to Neon and redeploy. The run never
-     touched Neon or Vercel (OVERNIGHT_TASK.md rules 6 and 10).
-  2. Authenticated end-to-end and responsive verification at 1440/1024/768/390px
-     is unperformed by deliberate instruction — there is no local Postgres or
-     Docker on this machine, so a signed-in session would have meant using the
-     production database. Only one datapoint was captured before that
-     instruction landed: the essay textarea measures 1087×320px at 1440px wide
-     with zero horizontal overflow, up from 176×48px.
-  3. A throwaway account `qa-local@example.com` was created in the production
-     Neon database moments before the no-production instruction arrived (user
-     row + empty personal workspace only; no college, prompt, or essay). It was
-     deliberately left in place rather than issuing another production write.
-     Delete it at will — cascade delete is covered by tests.
-- Test/build status: full canonical gate green — lint, strict typecheck,
-  **154 Vitest tests** (was 95), production build, 103 orchestration assertions
+- Disposition: **complete for this run.** Every phase in the approved plan is
+  committed and green, including both stretch phases. What remains is listed
+  under Human Follow-Up and Deliberately Not Done.
+- Objective: make the MVP trustworthy for student testing.
+- Completed phases, in plan order:
+  | Phase | Commit | What it fixed |
+  |---|---|---|
+  | 0 baseline | `48bc303` (tag `pre-trust-run`) | rollback point, gate verified green |
+  | 1 essay editor | `a6d8ed3` | the 176x48px writing box |
+  | 2 zero-prompt colleges | `c18a796` | colleges vanishing; prose-derived state |
+  | 3 workload engine | `4f3e1c7` | counting rows instead of required essays |
+  | 4 catalogue encoding | `0c3872f` | group/program rules that lived only in prose |
+  | 5 reuse correctness | `3c9e56a` | four defects making reuse advice wrong |
+  | 6a family slugs | `315dfab` | a rename silently collapsing every score |
+  | 6b seven categories | `d4b888d` | ten overlapping categories; empty Why Us |
+  | 7 pending states | `c4afeaf` | ~10s actions with no feedback at all |
+  | 8 two responsive fixes | `17ffc7e` | clipped Reuse tab; collapsed input |
+
+### Measured effect, on real catalogue data
+
+| Measure | Before | After |
+|---|---|---|
+| Essay writing box at 1440px | 176x48px | 1087x320px |
+| Whole catalogue: prompt rows -> required essays | 255 counted as work | 207 canonical rows, **94 required** |
+| Seven UC campuses | 56 rows, 0 required, 100% unreachable | **8 rendered rows, 4 required** |
+| Demo workspace (19 schools) | 112 counted as work | **51 required essays** |
+| Prompts classified as Why Us | **0 of 255** | 39 of 255 |
+| Catalogue unclassified / needs review | 112 (44%) | **0 (0%)** |
+| Previous-cycle prompts leaking into reuse | yes | zero |
+| 15-word essay vs a 650-word prompt | scored 80, "ready to reuse" | penalised, not reusable |
+| Vitest tests | 95 | **170** |
+
+### Human follow-up required (not blockers)
+
+1. **Apply the migrations and redeploy.** `drizzle/0002_broken_prima.sql`
+   (additive: 9 ADD COLUMN, 2 indexes, 1 check) and
+   `drizzle/0003_premium_tana_nile.sql` (adds `prompt_families.slug`, nullable
+   -> backfilled -> NOT NULL). Both were read before accepting; drizzle-kit
+   emitted a bare `ADD COLUMN ... NOT NULL` for 0003, which fails on a table
+   with rows, so it was hand-edited. Neither Neon nor Vercel was touched during
+   this run (OVERNIGHT_TASK.md rules 6 and 10).
+2. **Then run `scripts/reimport-catalogue.mts`.** It migrates each workspace's
+   taxonomy and re-imports every college, in that order - the order matters,
+   because the import classifies against the new slugs. Human-run only, refuses
+   to start without `DATABASE_URL`, and goes through the ordinary import path.
+   Try `--dry-run` first.
+3. **Authenticated end-to-end and responsive verification at
+   1440/1024/768/390px is unperformed**, by deliberate instruction: there is no
+   local Postgres or Docker on this machine, so a signed-in session would have
+   meant using the production database. Only one datapoint was captured before
+   that instruction landed (the essay textarea, above). Everything else was
+   verified through PGlite integration tests, the full canonical gate, strict
+   typecheck, lint, and the production build.
+4. **A throwaway account `qa-local@example.com` exists in production Neon.** It
+   was created moments before the no-production instruction arrived - user row
+   and empty personal workspace only, no college, prompt, or essay. Left in
+   place rather than issuing another production write. Safe to delete; cascade
+   deletion is covered by tests.
+
+### Deliberately not done, with reasons
+
+- **54 conditional prompts across 16 schools are still unencoded.** They render
+  as *unresolved* - visible, excluded from required, never silently counted.
+  `coverage.test.ts` names the encoded schools explicitly, so a half-finished
+  file cannot pass quietly, and prints the outstanding count.
+- **Duke, Northwestern and W&L's optional prompt sets are not grouped.** Each is
+  genuinely "you may answer one of these", so a required group would overstate
+  the work. Their required counts are already right; only the optional tally
+  reads "3" rather than "up to 1 of 3".
+- **The rest of Phase 8's responsive and density polish.** Judgement-based
+  visual work, and authenticated browser verification was unavailable - a CSS
+  change nobody can see is where a regression hides. The two defects with
+  precisely located causes were fixed; the rest is untouched.
+
+### Decisions worth knowing before changing this code
+
+- **Canonical siblings share response state.** Prompts sharing a `canonical_key`
+  are one question. Assignment and status writes fan out across siblings, inside
+  `lib/assignments.ts` and `lib/prompts.ts` rather than the Server Actions, so
+  every caller inherits it. That invariant is what lets every read path pick any
+  instance, and why removing one UC campus cannot orphan a shared assignment.
+  A new campus inherits its siblings' state on import.
+- **`workload.ts` is the only place required work is counted**, and
+  `canonicalPromptGroups` the only place aggregate collections are built. Seven
+  count sites and four render sites route through them; that is what stops the
+  sidebar, school headers and overview disagreeing.
+- **Omitting `secondaryFamilyIds` means "keep them", `[]` means "clear them".**
+  The picker is gone from both forms, so a save carries no secondaries and must
+  not wipe importer-derived links.
+- **`Other` is a real seventh category, never a queue.** Needs-review is a
+  separate signal, from `classificationConfidence`. The four retired concepts
+  are internal tags in `prompt_tag_links` / `essay_tag_links` with no UI.
+- **Family identity is the slug, never the display name.** Names are
+  user-editable; joining on them collapsed every score in the workspace.
+- **A conditional prompt resolves three ways, not two.** Unresolved is a real
+  state and must stay visible.
+
+- Test/build status: full canonical gate green - lint, strict typecheck,
+  **170 Vitest tests**, production build, 103 orchestration assertions.
 - Last agent: Claude
-- Stop reason: n/a, run in progress
 
 ## Last Verified Commit
 
-`b65467e` — "Fail closed when Codex review mode is unavailable" (following
-the main redesign in `c82deac`). Full canonical verification passed
-immediately before this checkpoint: lint, strict typecheck, 95 Vitest tests,
-production build, and 103 deterministic orchestration assertions. The
-handoff documentation is committed separately after recording this verified
-code hash.
+`17ffc7e` — "fix: stop the nav clipping Reuse and the add-college input
+collapsing". Every commit in this run is independently green; the full canonical
+gate (lint, strict typecheck, 170 Vitest tests, production build, 103
+orchestration assertions) passed immediately before each checkpoint and again at
+this one. The working tree is clean.
