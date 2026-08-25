@@ -158,6 +158,22 @@ no-supplement outcomes remain distinguishable from an absent record.
 
 ## Completed Work
 
+**Overnight orchestrator reliability redesign.** Replaced the fixed
+Codex-first/two-process wrapper with a durable bounded state machine:
+Claude primary → one Codex reserve cycle by default → one Claude retry by
+default. It classifies normal exit, usage/rate limit, crash/error, timeout,
+and stall separately; independently validates the repo before every
+handoff; writes per-phase stdout/stderr/exit/outcome/handoff files plus a
+morning `summary.md`; persists `logs/overnight/resume.state`; recovers only
+provably stale locks; and refuses to erase dirty or ambiguous state. The
+default Codex limit is an explicit one-cycle proxy because neither CLI
+exposes a trustworthy usage percentage. `--max-budget-usd` was removed,
+Codex now uses the installed CLI's reviewed `--approve-for-me` path while
+remaining in `workspace-write`, and Claude is no longer constrained by the
+old package-command-blocking allowlist. Deterministic disposable-repo tests
+cover completion, all failure classes, bounded exhaustion, handoffs, auth,
+resume, lock safety, and morning logs.
+
 **Personal-vs-example workspace restoration (this session, after the
 redesign).** The redesign had left the Add College form collapsed behind a
 disclosure and the personal workspace polluted with 18 throwaway fixture
@@ -215,6 +231,20 @@ by clicking through the running app.
 
 ## Important Decisions
 
+- Overnight execution is intentionally finite. Defaults are one Claude
+  primary, one Codex reserve invocation, and one Claude retry after a
+  five-minute backoff. Raising cycle counts is explicit configuration;
+  exhausted durable state will not restart until a human deliberately sets
+  `OVERNIGHT_RESET_STATE=1`.
+- Codex reserve usage is bounded by invocation count, not a fabricated
+  percentage. The CLI exposes no exact quota meter suitable for enforcing
+  the requested approximate 20% reserve.
+- Agent exit codes and repository safety are separate judgments. A limit or
+  crash can hand off only if the working tree, handoff commit, conflicts,
+  blockers, and canonical suite all validate.
+- `AGENTS.md` now forwards Codex to the canonical `CLAUDE.md` instructions
+  instead of maintaining a drifting machine-replaced copy.
+
 - Official school sources remain the only basis for current-cycle claims.
   Authenticated Common App content and secondary/consultant sources were
   not used to fill gaps.
@@ -230,6 +260,14 @@ by clicking through the running app.
   university-wide PIQs are identical.
 
 ## Failures / Failed Approaches
+
+- The 2026-08-24 overnight log explains the unexpectedly short first phase:
+  Codex exited `0` after about seven minutes despite making no progress
+  because `workspace-write` could neither install the then-missing packages
+  nor create `.git/index.lock`. The old wrapper treated any zero exit as a
+  successful phase. Claude then returned a JSON 429/session-limit result,
+  but the wrapper collapsed it into generic exit 5. The new wrapper fixes
+  the permission path and classifies progress/outcomes independently.
 
 - One isolated `tsx` validation invocation hit a sandbox IPC `EPERM` while
   creating its temporary socket. The same records were validated through a
@@ -249,6 +287,23 @@ limitations with precise follow-up notes, not blockers to the application
 or to the completed one-outcome-per-school requirement.
 
 ## Tests/Verification Performed
+
+Orchestrator redesign checkpoint `c82deac`:
+
+- Shell syntax checks for both orchestration scripts: pass.
+- Disposable-repository orchestration suite: **101/101 assertions pass**.
+  Scenarios include primary completion; Claude → Codex → Claude; usage
+  limits; crashes; normal exits; distinct stall and timeout outcomes;
+  repeated no-progress termination; dirty and `HUMAN-REQUIRED` stops;
+  bounded exhaustion; resume state; dead/live/ambiguous locks;
+  stale handoffs; agent-specific subscription auth; secret redaction; and
+  complete morning log artifacts.
+- Full canonical `./run_tests.sh`: ESLint pass; strict typecheck pass;
+  Vitest **95/95 pass**; production Next.js build pass; embedded
+  orchestration suite 101/101 pass.
+- The five authentication/session files that were uncommitted at the start
+  were preserved and independently landed as `864e181`; they were not
+  included in the orchestrator commit.
 
 Full canonical `./run_tests.sh` passed immediately before the UI-redesign
 commit:
@@ -346,11 +401,30 @@ none of this fixture data was committed):
    records as schools publish additional official 2026–27 material; this is
    maintenance, not a prerequisite for the next product milestone.
 
+## Overnight Run State
+
+- Disposition: continue
+- Current objective: complete MVP_SPEC.md's P0 Definition of Done
+- Completed tasks: orchestration is now Claude-primary, bounded, classified,
+  checkpoint-gated, logged, and resumable
+- Current task: P0 Phase 4 deterministic editing-suggestion workflow
+- Next recommended task: implement prompt-fit, clarity, concision, and
+  word-limit suggestions with immutable accept and non-mutating reject tests
+- Important decisions: one Codex cycle is the default conservative reserve
+  proxy; no invented percentage and no unbounded agent loop
+- Files changed: `scripts/overnight_handoff.sh`,
+  `scripts/test_overnight_handoff.sh`, `CLAUDE.md`, `AGENTS.md`, and
+  `OVERNIGHT_TASK.md`
+- Test/build status: full canonical suite green (95 Vitest tests, production
+  build, 101 orchestration assertions)
+- Last agent: Codex
+- Stop reason: overnight reliability objective completed and checkpointed;
+  application P0 work remains for the next Claude-primary run
+
 ## Last Verified Commit
 
-`5f5b8b1` — "Confirm before removing a college, and revalidate the whole
-cascade" (preceded by `2a865e4`, the workspace split, and `a4fc7a6`, the
-redesign). Full canonical
-verification above (`./run_tests.sh`: lint, typecheck, 67 vitest tests,
-production build, 80 orchestration tests) passed immediately before it,
-alongside the browser verification listed above.
+`c82deac` — "Make overnight agent handoff bounded and resumable". Full
+canonical verification passed immediately before this checkpoint: lint,
+strict typecheck, 95 Vitest tests, production build, and 101 deterministic
+orchestration assertions. The handoff documentation is committed separately
+after recording this verified code hash.
