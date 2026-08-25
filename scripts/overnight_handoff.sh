@@ -176,6 +176,10 @@ print("{}|{}|{}|{}".format(
         return 0
     fi
 
+    if ! codex exec --help 2>/dev/null | grep -q -- '--approve-for-me'; then
+        log "ABORT (auth $label): Codex CLI does not advertise --approve-for-me."
+        return 1
+    fi
     local codex_status
     codex_status="$(codex login status 2>&1)" || {
         log "ABORT (auth $label): codex login status failed."

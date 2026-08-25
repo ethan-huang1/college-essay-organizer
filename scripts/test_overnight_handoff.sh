@@ -75,6 +75,10 @@ STUB
 cat >"$STUB_BIN/codex" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [ "${1:-}" = exec ] && [ "${2:-}" = --help ]; then
+    if [ "${STUB_CODEX_HELP_HAS_APPROVE:-1}" = 1 ]; then echo 'Options: --approve-for-me --sandbox'; else echo 'Options: --sandbox'; fi
+    exit 0
+fi
 if [ "${1:-}" = login ] && [ "${2:-}" = status ]; then
     printf '%s\n' "${STUB_CODEX_LOGIN:-Logged in using ChatGPT}"; exit 0
 fi
@@ -181,6 +185,7 @@ run_case() {
         STUB_CLAUDE_MODE_2="${STUB_CLAUDE_MODE_2:-complete}" \
         STUB_CODEX_MODE_1="${STUB_CODEX_MODE_1:-complete}" \
         STUB_CODEX_LOGIN="${STUB_CODEX_LOGIN:-Logged in using ChatGPT}" \
+        STUB_CODEX_HELP_HAS_APPROVE="${STUB_CODEX_HELP_HAS_APPROVE:-1}" \
         CODEX_RESERVE_CYCLES="${CODEX_RESERVE_CYCLES:-1}" \
         CLAUDE_RETRY_CYCLES="${CLAUDE_RETRY_CYCLES:-1}" \
         CLAUDE_RETRY_BACKOFF_SECONDS=0 WATCH_INTERVAL_SECONDS=1 \
@@ -336,6 +341,9 @@ d="$(new_case codex_auth_unused)"; STUB_CODEX_LOGIN='Logged in using API key' ru
 assert 'Codex auth does not block completed primary' "$(exit_of "$d")" 0; assert 'Codex was not consulted' "$(seq_of "$d")" claude
 d="$(new_case codex_auth_needed)"; STUB_CLAUDE_MODE_1=continue STUB_CODEX_LOGIN='Logged in using API key' run_case "$d"
 assert 'fallback auth failure is distinct' "$(exit_of "$d")" 25; assert 'only primary ran before fallback auth failed' "$(seq_of "$d")" claude
+d="$(new_case codex_approval_missing)"; STUB_CLAUDE_MODE_1=continue STUB_CODEX_HELP_HAS_APPROVE=0 run_case "$d"
+assert 'missing reviewed-approval capability fails closed' "$(exit_of "$d")" 25
+assert 'missing reviewed-approval capability consumes no Codex cycle' "$(seq_of "$d")" claude
 d="$(new_case anthropic_key)"; ANTHROPIC_API_KEY='secret-test-value' run_case "$d"
 assert 'Anthropic key rejected' "$(exit_of "$d")" 10; assert_not_contains 'Anthropic key never logged' "$(cat "$WORK/case_anthropic_key.stdout")" 'secret-test-value'
 d="$(new_case openai_key)"; OPENAI_API_KEY='secret-test-value-2' run_case "$d"
