@@ -27,7 +27,7 @@ import { DEMO_WORKSPACE_ID } from "./seed";
 import { ensurePersonalWorkspace } from "../users";
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
-import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
+import { createPrompt, deletePrompt, setPromptStatus, updatePrompt } from "../prompts";
 import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, updateEssayMetadata } from "../essays";
 import { recomputeWorkspaceMatches } from "../reuse";
 import { importCollege } from "../college-import";
@@ -694,5 +694,91 @@ describe("local persistence foundation", () => {
     await unassignPrompt(connection.db, PERSONAL, promptId);
     snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay).toBeNull();
+  });
+  // Seven UC campuses each store their own row for Personal Insight Question 1,
+  // but a student writes that essay once. These pin the whole invariant: writes
+  // fan out, a later campus inherits, and removing one campus cannot orphan the
+  // shared work.
+  describe("canonical shared prompts", () => {
+    const ucCampuses = ["University of California, Berkeley", "University of California, Los Angeles"];
+
+    async function importUcCampuses(names = ucCampuses) {
+      const results = [];
+      for (const name of names) results.push(await importCollege(connection.db, PERSONAL, name));
+      return results;
+    }
+
+    // Resolves the same question at any campus. Matching the externalRef
+    // exactly matters: a looser match would silently pick a different question
+    // per campus and the fan-out assertions would compare unrelated rows.
+    async function piqOne(schoolId: string) {
+      const piq = await connection.db.select().from(prompts)
+        .where(and(eq(prompts.schoolId, schoolId), eq(prompts.externalRef, "piq-1-leadership")))
+        .then((rows) => rows[0]);
+      if (!piq) throw new Error("Expected the shared UC PIQ 1 to be imported.");
+      return piq;
+    }
+
+    it("gives every campus the same canonicalKey for the same question", async () => {
+      const [berkeley, ucla] = await importUcCampuses();
+      const first = await piqOne(berkeley.schoolId);
+      const second = await piqOne(ucla.schoolId);
+      expect(first.canonicalKey).toBeTruthy();
+      expect(first.canonicalKey).toBe(second.canonicalKey);
+      expect(first.id).not.toBe(second.id);
+    });
+
+    it("assigning through one campus assigns every campus", async () => {
+      const [berkeley, ucla] = await importUcCampuses();
+      const essayId = await createEssay(connection.db, PERSONAL, {
+        title: "The woodshop", content: "x", status: "draft", designation: "canonical",
+      });
+
+      await assignEssayToPrompt(connection.db, PERSONAL, (await piqOne(berkeley.schoolId)).id, essayId);
+
+      const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
+      const uclaPiq = await piqOne(ucla.schoolId);
+      expect(snapshot?.prompts.find((prompt) => prompt.id === uclaPiq.id)?.assignedEssay?.id).toBe(essayId);
+      // Assigning is starting work, so neither may still read "not started".
+      expect(snapshot?.prompts.find((prompt) => prompt.id === uclaPiq.id)?.status).toBe("in-progress");
+    });
+
+    it("marking one campus complete marks every campus", async () => {
+      const [berkeley, ucla] = await importUcCampuses();
+      await setPromptStatus(connection.db, PERSONAL, (await piqOne(berkeley.schoolId)).id, "complete");
+      expect((await piqOne(ucla.schoolId)).status).toBe("complete");
+    });
+
+    it("a campus imported later inherits the shared answer", async () => {
+      const [berkeley] = await importUcCampuses(["University of California, Berkeley"]);
+      const essayId = await createEssay(connection.db, PERSONAL, {
+        title: "The woodshop", content: "x", status: "draft", designation: "canonical",
+      });
+      await assignEssayToPrompt(connection.db, PERSONAL, (await piqOne(berkeley.schoolId)).id, essayId);
+
+      const [ucla] = await importUcCampuses(["University of California, Los Angeles"]);
+      const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
+      const uclaPiq = await piqOne(ucla.schoolId);
+      expect(snapshot?.prompts.find((prompt) => prompt.id === uclaPiq.id)?.assignedEssay?.id).toBe(essayId);
+    });
+
+    it("removing one campus keeps the shared assignment on the others", async () => {
+      const [berkeley, ucla] = await importUcCampuses();
+      const essayId = await createEssay(connection.db, PERSONAL, {
+        title: "The woodshop", content: "x", status: "draft", designation: "canonical",
+      });
+      // Assign through the campus that is about to be removed - the case where
+      // keeping one arbitrary row would have lost the assignment entirely.
+      await assignEssayToPrompt(connection.db, PERSONAL, (await piqOne(berkeley.schoolId)).id, essayId);
+      const uclaPiqId = (await piqOne(ucla.schoolId)).id;
+
+      await deleteSchool(connection.db, PERSONAL, berkeley.schoolId);
+
+      const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
+      expect(snapshot?.schools.map((school) => school.id)).not.toContain(berkeley.schoolId);
+      expect(snapshot?.prompts.find((prompt) => prompt.id === uclaPiqId)?.assignedEssay?.id).toBe(essayId);
+      // And the essay itself is untouched.
+      expect(snapshot?.essays.map((essay) => essay.id)).toContain(essayId);
+    });
   });
 });

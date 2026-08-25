@@ -75,11 +75,15 @@ export async function deletePromptAction(formData: FormData) {
 export async function setPromptStatusAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const status = field(formData, "status");
+  const db = getAppDatabase().db;
   await setPromptStatus(
-    getAppDatabase().db,
+    db,
     snapshot.workspace.id,
     field(formData, "promptId"),
     ["in-progress", "complete", "submitted"].includes(status) ? (status as PromptInput["status"]) : "not-started",
   );
+  // Completing a prompt closes it as a reuse opportunity, so matches are stale
+  // until rescored.
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidatePromptPaths();
 }

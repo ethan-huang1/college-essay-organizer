@@ -21,15 +21,22 @@ function revalidateAssignmentPaths() {
   revalidatePath("/reuse");
 }
 
+// Assigning changes which prompts are still open, so the reuse suggestions have
+// to be rescored - these were the only mutations that skipped it, which is why
+// the reuse counts drifted out of step with the prompt list.
 export async function assignEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  await assignEssayToPrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"), field(formData, "essayId"));
+  const db = getAppDatabase().db;
+  await assignEssayToPrompt(db, snapshot.workspace.id, field(formData, "promptId"), field(formData, "essayId"));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateAssignmentPaths();
 }
 
 export async function unassignEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  await unassignPrompt(getAppDatabase().db, snapshot.workspace.id, field(formData, "promptId"));
+  const db = getAppDatabase().db;
+  await unassignPrompt(db, snapshot.workspace.id, field(formData, "promptId"));
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateAssignmentPaths();
 }
 

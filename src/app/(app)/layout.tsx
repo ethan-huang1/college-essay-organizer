@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { summarizePrompts, reuseOpportunities } from "@/lib/progress";
+import { reuseOpportunities } from "@/lib/progress";
+import { workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { NavLink } from "../nav-link";
 import { signOutAction } from "../auth-actions";
@@ -34,13 +35,13 @@ const NAV_STATE_TITLE = {
 
 export default async function AppLayout({ children }: Readonly<{ children: ReactNode }>) {
   const snapshot = await getActiveWorkspaceSnapshot();
-  const overall = summarizePrompts(snapshot.prompts);
+  const overall = workspaceWorkload(snapshot);
   const reuse = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
   const openReuse = reuse.reduce((total, group) => total + group.open.length, 0);
 
   const navigation: [string, string, number | null][] = [
     ["Overview", "/", null],
-    ["All prompts", "/schools", overall.total],
+    ["All prompts", "/schools", overall.requiredTotal],
     ["Categories", "/families", snapshot.families.filter((family) => family.promptCount > 0).length],
     ["My essays", "/essays", snapshot.essays.length],
     ["Reuse", "/reuse", openReuse],
@@ -76,13 +77,13 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           {schools.length > 0 ? (
             <ul>
               {schools.map((school) => {
-                const progress = summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id));
+                const progress = workspaceWorkload(snapshot, (prompt) => prompt.schoolId === school.id);
                 return (
                   <li key={school.id}>
                     <NavLink className="nav-school" href={`/schools?school=${school.id}`} schoolId={school.id}>
                       <span title={school.name}>{school.name}</span>
                       <span className={`nav-progress ${school.catalogueState}`} title={NAV_STATE_TITLE[school.catalogueState]}>
-                        {progress.total > 0 ? `${progress.complete}/${progress.total}` : NAV_STATE_MARK[school.catalogueState]}
+                        {progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : NAV_STATE_MARK[school.catalogueState]}
                       </span>
                     </NavLink>
                   </li>

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { DEMO_SCHOOLS } from "@/lib/db/demo-workspace";
-import { reuseOpportunities, summarizePrompts } from "@/lib/progress";
+import { reuseOpportunities } from "@/lib/progress";
+import { canonicalPromptGroups, workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { assignEssayAction } from "../assignment-actions";
 import { AddCollegeForm, ProgressBar, ProgressLine } from "../prompt-ui";
@@ -17,18 +18,27 @@ export const maxDuration = 60;
 
 export default async function Overview() {
   const snapshot = await getActiveWorkspaceSnapshot();
-  const overall = summarizePrompts(snapshot.prompts);
+  const overall = workspaceWorkload(snapshot);
 
   const bySchool = snapshot.schools
-    .map((school) => ({ school, progress: summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id)) }))
-    .sort((a, b) => b.progress.remaining - a.progress.remaining || a.school.name.localeCompare(b.school.name));
+    .map((school) => ({ school, progress: workspaceWorkload(snapshot, (prompt) => prompt.schoolId === school.id) }))
+    .sort((a, b) => b.progress.requiredRemaining - a.progress.requiredRemaining || a.school.name.localeCompare(b.school.name));
 
   const byCategory = snapshot.families
-    .map((family) => ({ family, progress: summarizePrompts(snapshot.prompts.filter((prompt) => prompt.primaryFamily?.id === family.id)) }))
+    .map((family) => ({ family, progress: workspaceWorkload(snapshot, (prompt) => prompt.primaryFamily?.id === family.id) }))
     .filter((row) => row.progress.total + row.progress.previousCycle > 0)
-    .sort((a, b) => b.progress.total - a.progress.total);
+    .sort((a, b) => b.progress.requiredTotal - a.progress.requiredTotal || b.progress.total - a.progress.total);
 
   const reuse = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
+  // A prompt several schools share names all of them, so the panel does not
+  // read as though one campus in particular were asking.
+  const sharedLabel = new Map<string, string>();
+  for (const entry of canonicalPromptGroups(snapshot.prompts, snapshot.schools)) {
+    const label = entry.schools.length > 3
+      ? `${entry.schools.slice(0, 3).map((school) => school.name).join(", ")} +${entry.schools.length - 3}`
+      : entry.schools.map((school) => school.name).join(", ");
+    for (const id of entry.instanceIds) sharedLabel.set(id, label);
+  }
   // Each essay's single strongest opportunity, so the panel shows the breadth
   // of the library rather than six rows of the same essay.
   const topReuse = reuse
@@ -62,11 +72,13 @@ export default async function Overview() {
     );
   }
 
+  // Required essays, not prompt rows: a choose-4-of-8 set counts as four and a
+  // question five campuses share counts once.
   const tiles: [string, number, string?][] = [
-    ["Prompts", overall.total, "current cycle"],
-    ["Complete", overall.complete],
-    ["In progress", overall.inProgress],
-    ["Not started", overall.notStarted],
+    ["Required essays", overall.requiredTotal, "this cycle"],
+    ["Done", overall.requiredComplete],
+    ["To go", overall.requiredRemaining],
+    ["Optional", overall.optionalExtra, "not asked for"],
     ["Reusable now", overall.reusable, "an essay already fits"],
     ["Essays", snapshot.essays.length, `${overall.assigned} assigned`],
   ];
@@ -77,8 +89,9 @@ export default async function Overview() {
         <div>
           <h1>Overview</h1>
           <p className="lede">
-            {snapshot.schools.length} {snapshot.schools.length === 1 ? "school" : "schools"} · {overall.total} prompts
-            this cycle. You are building a reusable library, not starting over at every college.
+            {snapshot.schools.length} {snapshot.schools.length === 1 ? "school" : "schools"} ·{" "}
+            {overall.requiredTotal} required {overall.requiredTotal === 1 ? "essay" : "essays"} this cycle. You are
+            building a reusable library, not starting over at every college.
           </p>
         </div>
         <ProgressLine className="section-progress" progress={overall} />
@@ -108,7 +121,7 @@ export default async function Overview() {
               <li key={school.id}>
                 <Link href={`/schools?school=${school.id}`}>{school.name}</Link>
                 <ProgressBar progress={progress} />
-                <span className="progress-count">{progress.total > 0 ? `${progress.complete}/${progress.total}` : "—"}</span>
+                <span className="progress-count">{progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : "—"}</span>
                 <span className="progress-reuse">{progress.reusable > 0 ? `${progress.reusable} reusable` : ""}</span>
               </li>
             ))}
@@ -128,7 +141,7 @@ export default async function Overview() {
                   {family.name}
                 </Link>
                 <ProgressBar progress={progress} />
-                <span className="progress-count">{progress.total > 0 ? `${progress.complete}/${progress.total}` : "—"}</span>
+                <span className="progress-count">{progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : "—"}</span>
                 <span className="progress-reuse">{progress.reusable > 0 ? `${progress.reusable} reusable` : ""}</span>
               </li>
             ))}
@@ -153,7 +166,7 @@ export default async function Overview() {
               <li key={match.id}>
                 <span className="match-score">{match.score}</span>
                 <span className="reuse-prompt">
-                  <span className="cell-school">{match.schoolName}</span>
+                  <span className="cell-school">{sharedLabel.get(match.promptId) ?? match.schoolName}</span>
                   <span>{match.promptTitle}</span>
                 </span>
                 <span className="reuse-action">{essay.title}</span>

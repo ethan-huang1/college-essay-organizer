@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { reuseOpportunities, summarizePrompts, workState } from "@/lib/progress";
+import { reuseOpportunities, workState, type ReuseMatch } from "@/lib/progress";
+import { canonicalPromptGroups, summarizeWorkloadFor, workspaceWorkload, type WorkloadSummary } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
 import { assignEssayAction } from "../../assignment-actions";
@@ -16,7 +17,7 @@ import {
 } from "../../essay-actions";
 import { createPromptAction } from "../../prompt-actions";
 import { AddCollegeForm, ProgressBar, ProgressLine, PromptFields, PromptRow, PromptTableHead } from "../../prompt-ui";
-import { deleteSchoolAction, updateSchoolAction } from "../../school-actions";
+import { deleteSchoolAction, setSchoolProgramsAction, updateSchoolAction } from "../../school-actions";
 
 const sections = {
   schools: { title: "All prompts", description: "Every prompt on your list, grouped by school." },
@@ -171,6 +172,29 @@ function RemoveConfirmation({ school, cancelHref }: { school: WorkspaceSnapshot[
 }
 
 type SchoolWithState = WorkspaceSnapshot["schools"][number];
+type SnapshotPrompt = WorkspaceSnapshot["prompts"][number];
+
+// "UC Berkeley, UCLA, Davis +2" - one shared question names every school that
+// asks it, so collapsing the duplicates loses nothing.
+function schoolLabel(schools: readonly { name: string }[]) {
+  const shown = schools.slice(0, 3).map((school) => school.name).join(", ");
+  return schools.length > 3 ? `${shown} +${schools.length - 3}` : shown;
+}
+
+/**
+ * Render-ready rows for any aggregate prompt collection.
+ *
+ * Every collection that spans schools goes through this, so a question several
+ * schools ask identically appears once rather than once per school. A
+ * school-scoped view deliberately skips it and renders that campus's own rows.
+ */
+function canonicalRows(snapshot: WorkspaceSnapshot, prompts: readonly SnapshotPrompt[]) {
+  return canonicalPromptGroups(prompts, snapshot.schools).map((entry) => ({
+    prompt: entry.prompt,
+    schoolLabel: schoolLabel(entry.schools),
+    sharedAcross: entry.schools.length,
+  }));
+}
 
 // One line per state, each of which means something different to a student
 // deciding what to work on. "No supplemental essay" is finished work; "wording
@@ -221,7 +245,7 @@ function SchoolHeader({
   focused: boolean;
   removeHref: string;
 }) {
-  const progress = summarizePrompts(snapshot.prompts.filter((prompt) => prompt.schoolId === school.id));
+  const progress = workspaceWorkload(snapshot, (prompt) => prompt.schoolId === school.id);
   return (
     <div className={`school-header${focused ? " focused" : ""}`}>
       <div>
@@ -251,6 +275,48 @@ function SchoolHeader({
   );
 }
 
+/**
+ * Asks which programs the student is applying to, when that is the only thing
+ * standing between a conditional prompt and a real count.
+ *
+ * Submitting with nothing checked is a valid answer, so the button says so:
+ * "none of these" settles the prompts at zero rather than leaving them
+ * unresolved forever.
+ */
+function UnresolvedProgramsPanel({ programs }: { programs: WorkloadSummary["unresolvedPrograms"] }) {
+  if (programs.length === 0) return null;
+  const bySchool = new Map<string, { schoolName: string; programs: WorkloadSummary["unresolvedPrograms"] }>();
+  for (const program of programs) {
+    const entry = bySchool.get(program.schoolId) ?? { schoolName: program.schoolName, programs: [] };
+    entry.programs.push(program);
+    bySchool.set(program.schoolId, entry);
+  }
+
+  return (
+    <>
+      {[...bySchool].map(([schoolId, { schoolName, programs: schoolPrograms }]) => (
+        <form action={setSchoolProgramsAction} className="program-panel" key={schoolId}>
+          <input name="schoolId" type="hidden" value={schoolId} />
+          <p className="program-panel-title">Which {schoolName} programs are you applying to?</p>
+          <p className="detail-note">
+            {schoolPrograms.length} of its prompts are required only for particular programs. Until you say, they are
+            left out of your required count rather than guessed at.
+          </p>
+          <div className="program-options">
+            {schoolPrograms.map((program) => (
+              <label key={program.programKey}>
+                <input type="checkbox" name="programKey" value={program.programKey} />
+                <span>{program.programLabel ?? program.programKey}</span>
+              </label>
+            ))}
+          </div>
+          <button type="submit">Save (leave all unchecked for none)</button>
+        </form>
+      ))}
+    </>
+  );
+}
+
 function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
   const names = schoolNames(snapshot);
   const query = filters.q.trim().toLowerCase();
@@ -270,16 +336,38 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
   // identical to "we never looked". Only an active prompt filter may hide one,
   // because only then is "nothing matches" actually true.
   const promptFilterActive = Boolean(filters.family || filters.status || filters.q);
+
+  // A question several schools ask identically belongs to no one school
+  // section: repeating it under each would show the eight UC Personal Insight
+  // Questions seven times over. It gets its own section instead, naming every
+  // school that asks. Drilling into a single school still shows that campus's
+  // own rows.
+  const shared = filters.school
+    ? []
+    : canonicalPromptGroups(visible, snapshot.schools).filter((entry) => entry.schools.length > 1);
+  const sharedInstanceIds = new Set(shared.flatMap((entry) => entry.instanceIds));
+  const sharedCountBySchool = new Map<string, number>();
+  for (const entry of shared) {
+    for (const school of entry.schools) {
+      sharedCountBySchool.set(school.id, (sharedCountBySchool.get(school.id) ?? 0) + 1);
+    }
+  }
+
   const schools = [...snapshot.schools]
     .filter((school) => !filters.school || school.id === filters.school)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((school) => ({ school, prompts: visible.filter((prompt) => prompt.schoolId === school.id) }))
-    .filter((group) => group.prompts.length > 0 || !promptFilterActive || Boolean(filters.school));
+    .map((school) => ({
+      school,
+      prompts: visible.filter((prompt) => prompt.schoolId === school.id && !sharedInstanceIds.has(prompt.id)),
+      sharedCount: sharedCountBySchool.get(school.id) ?? 0,
+    }))
+    .filter((group) => group.prompts.length > 0 || group.sharedCount > 0 || !promptFilterActive || Boolean(filters.school));
 
   return (
     <>
       <AddPanel snapshot={snapshot} />
       {snapshot.prompts.length > 0 ? <PromptFilterBar snapshot={snapshot} filters={filters} /> : null}
+      <UnresolvedProgramsPanel programs={workspaceWorkload(snapshot).unresolvedPrograms} />
 
       {snapshot.schools.length === 0 ? (
         <EmptyWorkspace>No colleges yet. Add one above — its verified 2026–27 prompts import and classify themselves.</EmptyWorkspace>
@@ -287,7 +375,36 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
         <p className="empty-note">No prompts match this filter.</p>
       ) : (
         <div className="school-sections">
-          {schools.map(({ school, prompts }) => (
+          {shared.length > 0 ? (
+            <section>
+              <div className="school-header shared-header">
+                <div>
+                  <h2>Shared prompts</h2>
+                  <p className="detail-note">
+                    One set of questions, asked identically by {schoolLabel(shared[0].schools)}. Answer each once.
+                  </p>
+                </div>
+                <div className="school-header-side">
+                  <ProgressBar progress={summarizeWorkloadFor(snapshot, shared.map((entry) => entry.prompt))} />
+                </div>
+              </div>
+              <div className="prompt-table">
+                <PromptTableHead />
+                {shared.map((entry) => (
+                  <PromptRow
+                    key={entry.prompt.id}
+                    snapshot={snapshot}
+                    prompt={entry.prompt}
+                    schoolName={schoolLabel(entry.schools)}
+                    editing={filters.edit === entry.prompt.id}
+                    editHref={`${withFilters("/schools", filters, { edit: entry.prompt.id })}#prompt-${entry.prompt.id}`}
+                    cancelHref={`${withFilters("/schools", filters)}#prompt-${entry.prompt.id}`}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {schools.map(({ school, prompts, sharedCount }) => (
             <section key={school.id}>
               <SchoolHeader
                 snapshot={snapshot}
@@ -299,9 +416,15 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
                 <RemoveConfirmation school={school} cancelHref={withFilters("/schools", filters)} />
               ) : null}
               {prompts.length === 0 ? (
-                promptFilterActive && school.promptCount > 0
-                  ? <p className="empty-note">No prompts match this filter for {school.name}.</p>
-                  : <CatalogueStateNote school={school} />
+                sharedCount > 0
+                  ? (
+                    <p className="empty-note">
+                      All {sharedCount} of its prompts are shared with your other campuses — see Shared prompts above.
+                    </p>
+                  )
+                  : promptFilterActive && school.promptCount > 0
+                    ? <p className="empty-note">No prompts match this filter for {school.name}.</p>
+                    : <CatalogueStateNote school={school} />
               ) : (
                 <div className="prompt-table">
                   <PromptTableHead showSchool={false} />
@@ -339,6 +462,7 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
       prompts: snapshot.prompts.filter((prompt) => prompt.primaryFamily?.id === family.id),
     }));
   const unclassified = focused ? [] : snapshot.prompts.filter((prompt) => !prompt.primaryFamily);
+  const unclassifiedRows = canonicalRows(snapshot, unclassified);
 
   const used = groups.filter((group) => group.prompts.length > 0);
   const unused = groups.filter((group) => group.prompts.length === 0);
@@ -353,7 +477,8 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
 
       <div className="category-list">
         {used.map(({ family, prompts }) => {
-          const progress = summarizePrompts(prompts);
+          const progress = summarizeWorkloadFor(snapshot, prompts);
+          const rows = canonicalRows(snapshot, prompts);
           const schoolsAsking = [...new Set(prompts.map((prompt) => names.get(prompt.schoolId) ?? ""))];
           return (
             <details className="category-group" key={family.id} open>
@@ -366,19 +491,19 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
                     {schoolsAsking.length > 4 ? ` +${schoolsAsking.length - 4} more` : ""}
                   </span>
                 </span>
-                <span className="category-count"><strong>{prompts.length}</strong> prompts</span>
+                <span className="category-count"><strong>{rows.length}</strong> prompts</span>
                 <ProgressBar progress={progress} />
               </summary>
               <div className="category-body">
                 <p className="category-description">{family.description}</p>
                 <div className="prompt-table">
                   <PromptTableHead />
-                  {prompts.map((prompt) => (
+                  {rows.map(({ prompt, schoolLabel: label }) => (
                     <PromptRow
                       key={prompt.id}
                       snapshot={snapshot}
                       prompt={prompt}
-                      schoolName={names.get(prompt.schoolId) ?? "Unknown school"}
+                      schoolName={label}
                       editing={filters.edit === prompt.id}
                       editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
                       cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
@@ -390,7 +515,7 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
           );
         })}
 
-        {unclassified.length > 0 ? (
+        {unclassifiedRows.length > 0 ? (
           <details className="category-group">
             <summary>
               <span className="swatch large muted-swatch" aria-hidden="true" />
@@ -398,18 +523,18 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
                 <span className="category-name">Unclassified</span>
                 <span className="category-schools">Prompts with no primary category yet</span>
               </span>
-              <span className="category-count"><strong>{unclassified.length}</strong> prompts</span>
-              <ProgressBar progress={summarizePrompts(unclassified)} />
+              <span className="category-count"><strong>{unclassifiedRows.length}</strong> prompts</span>
+              <ProgressBar progress={summarizeWorkloadFor(snapshot, unclassified)} />
             </summary>
             <div className="category-body">
               <div className="prompt-table">
                 <PromptTableHead />
-                {unclassified.map((prompt) => (
+                {unclassifiedRows.map(({ prompt, schoolLabel: label }) => (
                   <PromptRow
                     key={prompt.id}
                     snapshot={snapshot}
                     prompt={prompt}
-                    schoolName={names.get(prompt.schoolId) ?? "Unknown school"}
+                    schoolName={label}
                     editing={filters.edit === prompt.id}
                     editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
                     cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
@@ -612,12 +737,49 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
 
 /* --------------------------------------------------------------------- reuse */
 
+/**
+ * Collapses reuse suggestions that point at the same shared question.
+ *
+ * A reuse row is an essay/prompt pair, so five campuses asking one Personal
+ * Insight Question produce five identical "you could reuse this here" rows.
+ * "Use here" on the surviving row assigns through the canonical fan-out, which
+ * satisfies every campus at once - so showing one row is not a simplification,
+ * it is what actually happens.
+ */
+function canonicalMatches(snapshot: WorkspaceSnapshot, matches: readonly ReuseMatch[]) {
+  const keyByPromptId = new Map<string, string>();
+  const labelByKey = new Map<string, string>();
+  for (const entry of canonicalPromptGroups(snapshot.prompts, snapshot.schools)) {
+    const key = entry.prompt.canonicalKey ?? `id:${entry.prompt.id}`;
+    labelByKey.set(key, schoolLabel(entry.schools));
+    for (const id of entry.instanceIds) keyByPromptId.set(id, key);
+  }
+
+  const seen = new Set<string>();
+  const rows: { match: ReuseMatch; schoolLabel: string }[] = [];
+  for (const match of matches) {
+    const key = keyByPromptId.get(match.promptId) ?? `id:${match.promptId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ match, schoolLabel: labelByKey.get(key) ?? match.schoolName });
+  }
+  return rows;
+}
+
 function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
+  const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts)
+    .map((group) => ({
+      ...group,
+      open: canonicalMatches(snapshot, group.open),
+      inUse: canonicalMatches(snapshot, group.inUse),
+      risky: canonicalMatches(snapshot, group.risky),
+    }));
   const openTotal = groups.reduce((total, group) => total + group.open.length, 0);
   const riskyTotal = groups.reduce((total, group) => total + group.risky.length, 0);
-  const needsNew = snapshot.prompts.filter(
-    (prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !groups.some((group) => group.open.some((match) => match.promptId === prompt.id)),
+  const answerable = new Set(groups.flatMap((group) => group.open.map((row) => row.match.promptId)));
+  const needsNew = canonicalPromptGroups(
+    snapshot.prompts.filter((prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !answerable.has(prompt.id)),
+    snapshot.schools,
   ).length;
 
   if (groups.length === 0) {
@@ -654,11 +816,11 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 
             {open.length > 0 ? (
               <ul className="reuse-rows">
-                {open.map((match) => (
+                {open.map(({ match, schoolLabel: label }) => (
                   <li key={match.id}>
                     <span className="match-score">{match.score}</span>
                     <span className="reuse-prompt">
-                      <span className="cell-school">{match.schoolName}</span>
+                      <span className="cell-school">{label}</span>
                       <span>{match.promptTitle}</span>
                     </span>
                     <span className="reuse-action">{match.recommendedAction.replaceAll("-", " ")}</span>
@@ -679,15 +841,15 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             {inUse.length > 0 ? (
               <p className="reuse-inuse">
                 <span className="detail-label">Already answering</span>
-                {inUse.map((match) => <span key={match.id}>{match.schoolName} · {match.promptTitle}</span>)}
+                {inUse.map(({ match, schoolLabel: label }) => <span key={match.id}>{label} · {match.promptTitle}</span>)}
               </p>
             ) : null}
 
             {risky.length > 0 ? (
               <p className="reuse-risky">
                 <span className="detail-label">Do not reuse here</span>
-                {risky.map((match) => (
-                  <span key={match.id}>{match.schoolName} · {match.promptTitle}</span>
+                {risky.map(({ match, schoolLabel: label }) => (
+                  <span key={match.id}>{label} · {match.promptTitle}</span>
                 ))}
                 <span className="reuse-risky-why">
                   This essay names a different institution, so reusing it for another school&apos;s fit prompt reads as a
@@ -757,9 +919,7 @@ export default async function SectionPage({
         </div>
         <ProgressLine
           className="section-progress"
-          progress={summarizePrompts(
-            filters.school ? snapshot.prompts.filter((prompt) => prompt.schoolId === filters.school) : snapshot.prompts,
-          )}
+          progress={workspaceWorkload(snapshot, filters.school ? (prompt) => prompt.schoolId === filters.school : undefined)}
         />
       </header>
       {views[sectionName]}

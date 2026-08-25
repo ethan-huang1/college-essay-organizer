@@ -29,6 +29,24 @@ export type RawPromptRecord = {
   // program-specific variants were only summarized, not quoted exactly).
   // Omit to inherit the record's status.
   verificationStatus?: VerificationStatus;
+  // Ties this prompt into an "answer any N of these" set declared in the
+  // school record's promptGroups. Without it every prompt in the set counts as
+  // separate work, which is why seven UC campuses read as 56 essays.
+  groupKey?: string;
+  // The program that makes a conditional prompt actually apply, e.g.
+  // "wharton". A conditional prompt without one cannot be resolved for or
+  // against a given student, so the app has to show it as unresolved rather
+  // than guess - see summarizeWorkload.
+  programKey?: string;
+  programLabel?: string;
+};
+
+// "Answer any 4 of these 8." requiredCount is what the school actually asks
+// for; the set size is however many prompts carry the matching groupKey.
+export type PromptGroup = {
+  key: string;
+  label: string;
+  requiredCount: number;
 };
 
 export type SchoolSourceRecord = {
@@ -59,4 +77,12 @@ export type SchoolSourceRecord = {
   // MVP policy). no-supplement-confirmed and needs-review must be empty -
   // see normalize.ts's validateRecord for the enforced invariant.
   prompts: RawPromptRecord[];
+  // Set when several schools ask the identical question through one shared
+  // application - the UC system's seven campuses share eight Personal Insight
+  // Questions. Prompts matching on (sharedApplicationKey, externalRef) are one
+  // question, so the app renders them once and keeps their response state
+  // identical. Records sharing a key must agree about the question; see
+  // validateCanonicalAgreement, which fails the build if they do not.
+  sharedApplicationKey?: string;
+  promptGroups?: PromptGroup[];
 };

@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 
+import { canonicalSiblingIds } from "./canonical";
 import type { AppDatabase } from "./db/client";
 import { promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 
@@ -163,11 +164,15 @@ export async function updatePrompt(db: AppDatabase, workspaceId: string, promptI
 // it gets its own narrow update: unlike updatePrompt it deliberately leaves
 // classification (and its manual-override flag) untouched.
 export async function setPromptStatus(db: AppDatabase, workspaceId: string, promptId: string, status: PromptInput["status"]) {
+  // Fans out across canonical siblings for the same reason assignment does: one
+  // shared question is one piece of work, so marking it complete at one school
+  // cannot leave the others reading "not started".
+  const promptIds = await canonicalSiblingIds(db, workspaceId, promptId);
   const updated = await db.update(prompts)
     .set({ status, updatedAt: new Date() })
-    .where(and(eq(prompts.id, promptId), eq(prompts.workspaceId, workspaceId)))
+    .where(and(inArray(prompts.id, promptIds), eq(prompts.workspaceId, workspaceId)))
     .returning({ id: prompts.id });
-  if (updated.length !== 1) throw new Error("Prompt not found in the active workspace.");
+  if (updated.length === 0) throw new Error("Prompt not found in the active workspace.");
 }
 
 export async function deletePrompt(db: AppDatabase, workspaceId: string, promptId: string) {

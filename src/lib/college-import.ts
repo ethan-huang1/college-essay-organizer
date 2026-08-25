@@ -3,11 +3,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { classifyText } from "./classification";
 import { CURRENT_CYCLE_LABEL } from "./cycle";
 import type { AppDatabase } from "./db/client";
-import { applicationCycles, promptChangeLog, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
+import { applicationCycles, assignedEssayResponses, promptChangeLog, promptFamilies, promptFamilyLinks, prompts, schools } from "./db/schema";
 import { PROMPT_FAMILIES } from "./db/taxonomy";
 import { promptContentChanged } from "./retrieval/normalize";
 import { lookupSchoolSource } from "./retrieval/registry";
-import type { ApplicationPlatform, RawPromptRecord, SchoolSourceRecord, VerificationStatus } from "./retrieval/types";
+import type { ApplicationPlatform, PromptGroup, RawPromptRecord, SchoolSourceRecord, VerificationStatus } from "./retrieval/types";
 import type { CatalogueStatus } from "./schools";
 import { canonicalizeUniversityName } from "./top-universities";
 
@@ -89,6 +89,60 @@ function familyLinkRows(workspaceId: string, promptId: string, promptText: strin
 
 type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number };
 
+/**
+ * Copies existing canonical siblings' response state onto rows about to be
+ * created, mutating their `status` in place and returning the assignment rows
+ * to insert alongside them.
+ *
+ * This is the counterpart to the write-time fan-out in canonical.ts: that keeps
+ * existing siblings in step with each other, and this brings a newly imported
+ * one up to date on arrival. Together they hold the invariant that every prompt
+ * sharing a canonicalKey has the same status and assignment, which is what lets
+ * every read path pick any instance.
+ */
+async function inheritCanonicalState(
+  db: AppDatabase,
+  workspaceId: string,
+  newPrompts: (typeof prompts.$inferInsert)[],
+) {
+  const canonicalKeys = [...new Set(newPrompts.map((row) => row.canonicalKey).filter((key): key is string => Boolean(key)))];
+  if (canonicalKeys.length === 0) return [];
+
+  const siblings = await db.select({ id: prompts.id, canonicalKey: prompts.canonicalKey, status: prompts.status })
+    .from(prompts)
+    .where(and(eq(prompts.workspaceId, workspaceId), inArray(prompts.canonicalKey, canonicalKeys)));
+  if (siblings.length === 0) return [];
+
+  const assignments = await db.select().from(assignedEssayResponses)
+    .where(inArray(assignedEssayResponses.promptId, siblings.map((sibling) => sibling.id)));
+
+  const stateByKey = new Map<string, { status: (typeof siblings)[number]["status"]; essayId: string | null }>();
+  for (const sibling of siblings) {
+    if (!sibling.canonicalKey || stateByKey.has(sibling.canonicalKey)) continue;
+    stateByKey.set(sibling.canonicalKey, {
+      status: sibling.status,
+      essayId: assignments.find((assignment) => assignment.promptId === sibling.id)?.essayId ?? null,
+    });
+  }
+
+  const inheritedAssignments: (typeof assignedEssayResponses.$inferInsert)[] = [];
+  for (const row of newPrompts) {
+    const state = row.canonicalKey ? stateByKey.get(row.canonicalKey) : undefined;
+    if (!state) continue;
+    row.status = state.status;
+    if (state.essayId) {
+      inheritedAssignments.push({
+        id: crypto.randomUUID(),
+        workspaceId,
+        promptId: row.id,
+        essayId: state.essayId,
+        assignedAt: new Date(),
+      });
+    }
+  }
+  return inheritedAssignments;
+}
+
 // Imports a school's whole prompt set in a fixed number of round-trips rather
 // than five per prompt: one read of everything that already exists, the
 // create/update/unchanged decision made in memory, then one transaction that
@@ -106,7 +160,14 @@ async function upsertPrompts(
   schoolId: string,
   cycleId: string,
   rawPrompts: readonly RawPromptRecord[],
-  recordDefaults: { status: VerificationStatus; sourceUrl: string | null; platform: ApplicationPlatform; retrievedAt: Date },
+  recordDefaults: {
+    status: VerificationStatus;
+    sourceUrl: string | null;
+    platform: ApplicationPlatform;
+    retrievedAt: Date;
+    sharedApplicationKey?: string;
+    promptGroups?: readonly PromptGroup[];
+  },
   familyIds: Map<string, string>,
 ) {
   const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
@@ -117,12 +178,19 @@ async function upsertPrompts(
     : [];
   const existingByRef = new Map(existingRows.map((row) => [row.externalRef, row]));
 
+  const { sharedApplicationKey } = recordDefaults;
+  const groupByKey = new Map((recordDefaults.promptGroups ?? []).map((group) => [group.key, group]));
+  const groupOf = (raw: RawPromptRecord) => (raw.groupKey ? groupByKey.get(raw.groupKey) : undefined);
+  const canonicalKeyOf = (raw: RawPromptRecord) =>
+    sharedApplicationKey ? `${sharedApplicationKey}:${raw.externalRef}` : null;
+
   const newPrompts: (typeof prompts.$inferInsert)[] = [];
   const newLinks: (typeof promptFamilyLinks.$inferInsert)[] = [];
   const changed: { existing: (typeof existingRows)[number]; raw: RawPromptRecord }[] = [];
 
   for (const raw of rawPrompts) {
     const existing = existingByRef.get(raw.externalRef);
+    const group = groupOf(raw);
 
     if (!existing) {
       const promptId = crypto.randomUUID();
@@ -140,6 +208,13 @@ async function upsertPrompts(
         maxCharCount: raw.maxCharCount ?? null,
         requirement: raw.requirement,
         conditionalNote: raw.conditionalNote ?? null,
+        sharedApplicationKey: sharedApplicationKey ?? null,
+        canonicalKey: canonicalKeyOf(raw),
+        groupKey: raw.groupKey ?? null,
+        groupLabel: group?.label ?? null,
+        groupRequiredCount: group?.requiredCount ?? null,
+        programKey: raw.programKey ?? null,
+        programLabel: raw.programLabel ?? null,
         classificationSource: "deterministic",
         verificationStatus: raw.verificationStatus ?? recordDefaults.status,
         applicationPlatform: recordDefaults.platform,
@@ -151,7 +226,7 @@ async function upsertPrompts(
       continue;
     }
 
-    if (!promptContentChanged(existing, raw)) {
+    if (!promptContentChanged(existing, raw, group?.requiredCount ?? null)) {
       counts.unchanged += 1;
       continue;
     }
@@ -161,11 +236,18 @@ async function upsertPrompts(
     counts.flagged += 1;
   }
 
+  // Adding a campus to a shared application later must not lose the work
+  // already done on its questions: a new row inherits whatever its existing
+  // siblings hold, so importing UC Davis after answering UCLA's PIQ 1 shows it
+  // as answered immediately rather than reopening settled work.
+  const inherited = await inheritCanonicalState(db, workspaceId, newPrompts);
+
   if (newPrompts.length === 0 && changed.length === 0) return counts;
 
   await db.transaction(async (tx) => {
     if (newPrompts.length > 0) await tx.insert(prompts).values(newPrompts);
     if (newLinks.length > 0) await tx.insert(promptFamilyLinks).values(newLinks);
+    if (inherited.length > 0) await tx.insert(assignedEssayResponses).values(inherited);
 
     if (changed.length > 0) {
       await tx.insert(promptChangeLog).values(changed.map(({ existing }) => ({
@@ -179,6 +261,7 @@ async function upsertPrompts(
       // Updates stay one statement per prompt: a changed official prompt is
       // rare, so there is nothing to gain from a bulk CASE expression.
       for (const { existing, raw } of changed) {
+        const group = groupOf(raw);
         await tx.update(prompts).set({
           title: raw.title,
           promptText: raw.promptText,
@@ -188,6 +271,15 @@ async function upsertPrompts(
           maxCharCount: raw.maxCharCount ?? null,
           requirement: raw.requirement,
           conditionalNote: raw.conditionalNote ?? null,
+          // Re-import is how newly encoded group and program metadata reaches a
+          // workspace that already holds the row.
+          sharedApplicationKey: sharedApplicationKey ?? null,
+          canonicalKey: canonicalKeyOf(raw),
+          groupKey: raw.groupKey ?? null,
+          groupLabel: group?.label ?? null,
+          groupRequiredCount: group?.requiredCount ?? null,
+          programKey: raw.programKey ?? null,
+          programLabel: raw.programLabel ?? null,
           verificationStatus: "needs-review",
           sourceUrl: recordDefaults.sourceUrl,
           retrievedAt: recordDefaults.retrievedAt,
@@ -260,6 +352,8 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
     sourceUrl: source.sourceUrl,
     platform: source.applicationPlatform,
     retrievedAt: new Date(source.retrievedAt),
+    sharedApplicationKey: source.sharedApplicationKey,
+    promptGroups: source.promptGroups,
   }, familyIds);
   await db.update(schools).set({ catalogueStatus: catalogueStatusFor(source) }).where(eq(schools.id, school.id));
 

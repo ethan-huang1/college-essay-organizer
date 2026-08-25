@@ -100,7 +100,7 @@ import { williamAndMary } from "./sources/william-and-mary";
 import { williams } from "./sources/williams";
 import { universityOfWisconsinMadison } from "./sources/wisconsin-madison";
 import { yale } from "./sources/yale";
-import { validateRecord } from "./normalize";
+import { validateCanonicalAgreement, validateRecord } from "./normalize";
 import type { SchoolSourceRecord } from "./types";
 
 const SOURCES: SchoolSourceRecord[] = [
@@ -213,6 +213,14 @@ for (const source of SOURCES) {
   if (errors.length > 0) {
     throw new Error(`Invalid source record for "${source.schoolName}":\n${errors.map((error) => `  - ${error}`).join("\n")}`);
   }
+}
+
+// Records sharing an application must agree about the prompts they share -
+// otherwise collapsing them into one row would depend on registry order. This
+// can only be checked across records, so it runs once over the whole set.
+const agreementErrors = validateCanonicalAgreement(SOURCES);
+if (agreementErrors.length > 0) {
+  throw new Error(`Shared prompts disagree across source records:\n${agreementErrors.map((error) => `  - ${error}`).join("\n")}`);
 }
 
 const BY_SCHOOL_NAME = new Map<string, SchoolSourceRecord>(SOURCES.map((source) => [source.schoolName, source]));

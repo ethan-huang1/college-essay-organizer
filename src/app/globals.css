@@ -2185,3 +2185,59 @@ a.verification-badge:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Asks which programs a student is applying to, so program-gated prompts can be
+   counted honestly instead of guessed at. */
+.program-panel {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  border: 1px solid #c9b98d;
+  border-left: 3px solid #b99a4a;
+  border-radius: 6px;
+  background: var(--paper-raised);
+  padding: 14px 16px;
+}
+
+.program-panel-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.program-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.program-options label {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.program-panel button {
+  justify-self: start;
+  border: 1px solid var(--moss-dark);
+  border-radius: 4px;
+  background: var(--moss-dark);
+  padding: 7px 14px;
+  color: #f7f4ea;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Unresolved work is neither done nor safely ignorable, so it reads as a
+   question rather than as a neutral count. */
+.unresolved-count {
+  color: #8a6d1f;
+  font-weight: 700;
+}
+
+.shared-header h2 {
+  margin: 0;
+}

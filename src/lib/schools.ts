@@ -77,3 +77,24 @@ export async function deleteSchool(db: AppDatabase, workspaceId: string, schoolI
     .returning({ id: schools.id });
   if (removed.length !== 1) throw new Error("School not found in the active workspace.");
 }
+
+/**
+ * Records which programs a student is applying to at one school.
+ *
+ * An empty array is a real answer ("none of them") and is stored as such: it is
+ * what turns program-gated prompts from unresolved into settled at zero, which
+ * `null` deliberately does not do.
+ */
+export async function setSchoolPrograms(
+  db: AppDatabase,
+  workspaceId: string,
+  schoolId: string,
+  programKeys: readonly string[],
+) {
+  const cleaned = [...new Set(programKeys.map((key) => key.trim()).filter(Boolean))].sort();
+  const updated = await db.update(schools)
+    .set({ selectedPrograms: cleaned, updatedAt: new Date() })
+    .where(and(eq(schools.id, schoolId), eq(schools.workspaceId, workspaceId)))
+    .returning({ id: schools.id });
+  if (updated.length !== 1) throw new Error("School not found in the active workspace.");
+}

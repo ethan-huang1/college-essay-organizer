@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { TOP_UNIVERSITIES } from "@/lib/top-universities";
-import { reuseCandidate, workState, type PromptProgress } from "@/lib/progress";
+import { reuseCandidate, workState } from "@/lib/progress";
+import type { WorkloadSummary } from "@/lib/workload";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
 import { assignEssayAction, draftEssayForPromptAction, unassignEssayAction } from "./assignment-actions";
 import { addCollegeAction } from "./college-actions";
@@ -97,32 +98,36 @@ function PreviousCycleWarning({ cycleLabel }: { cycleLabel: string }) {
   );
 }
 
-export function ProgressBar({ progress }: { progress: PromptProgress }) {
-  const share = (count: number) => (progress.total > 0 ? `${(count / progress.total) * 100}%` : "0%");
+// Measured against the essays the schools actually ask for, not the number of
+// prompt rows: a choose-4-of-8 set that is done reads as full rather than half.
+export function ProgressBar({ progress }: { progress: WorkloadSummary }) {
+  const share = progress.requiredTotal > 0 ? `${(progress.requiredComplete / progress.requiredTotal) * 100}%` : "0%";
   return (
-    <span className="progress-bar" role="img" aria-label={`${progress.complete} of ${progress.total} complete`}>
-      <span className="progress-fill complete" style={{ width: share(progress.complete) }} />
-      <span className="progress-fill in-progress" style={{ width: share(progress.inProgress) }} />
+    <span
+      className="progress-bar"
+      role="img"
+      aria-label={`${progress.requiredComplete} of ${progress.requiredTotal} required essays complete`}
+    >
+      <span className="progress-fill complete" style={{ width: share }} />
     </span>
   );
 }
 
-export function ProgressLine({ progress, className }: { progress: PromptProgress; className?: string }) {
+export function ProgressLine({ progress, className }: { progress: WorkloadSummary; className?: string }) {
+  const dot = <span aria-hidden="true"> · </span>;
   return (
     <p className={`progress-line${className ? ` ${className}` : ""}`}>
-      <strong>{progress.total}</strong> prompts
-      <span aria-hidden="true"> · </span>
-      {progress.complete} complete
-      <span aria-hidden="true"> · </span>
-      {progress.reusable} reusable
-      <span aria-hidden="true"> · </span>
-      {progress.remaining} remaining
-      {progress.previousCycle > 0 ? (
-        <>
-          <span aria-hidden="true"> · </span>
-          <span className="muted">{progress.previousCycle} previous-cycle</span>
-        </>
+      <strong>{progress.requiredTotal}</strong> required
+      {dot}
+      {progress.requiredComplete} done
+      {dot}
+      {progress.requiredRemaining} to go
+      {progress.optionalExtra > 0 ? <>{dot}<span className="muted">{progress.optionalExtra} optional</span></> : null}
+      {progress.programSpecific > 0 ? <>{dot}<span className="muted">{progress.programSpecific} program-specific</span></> : null}
+      {progress.unresolvedConditional > 0 ? (
+        <>{dot}<span className="unresolved-count">{progress.unresolvedConditional} unresolved</span></>
       ) : null}
+      {progress.previousCycle > 0 ? <>{dot}<span className="muted">{progress.previousCycle} previous-cycle</span></> : null}
     </p>
   );
 }

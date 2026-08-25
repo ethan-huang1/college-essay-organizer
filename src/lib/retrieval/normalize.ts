@@ -1,4 +1,4 @@
-import type { RawPromptRecord, SchoolSourceRecord } from "./types";
+import type { PromptGroup, RawPromptRecord, SchoolSourceRecord } from "./types";
 
 export function normalizeWhitespace(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -46,6 +46,98 @@ export function validateRecord(record: SchoolSourceRecord): string[] {
     }
   }
 
+  errors.push(...validatePromptGroups(record));
+
+  return errors;
+}
+
+// A group that asks for more prompts than it contains, or a prompt pointing at
+// a group nobody declared, would make the required count meaningless - so both
+// are load-bearing errors rather than warnings.
+function validatePromptGroups(record: SchoolSourceRecord): string[] {
+  const errors: string[] = [];
+  const groups = record.promptGroups ?? [];
+  const seenKeys = new Set<string>();
+
+  for (const group of groups) {
+    if (!group.key?.trim()) {
+      errors.push("Every promptGroups entry requires a key.");
+      continue;
+    }
+    if (seenKeys.has(group.key)) errors.push(`Duplicate promptGroups key: "${group.key}".`);
+    seenKeys.add(group.key);
+    if (!group.label?.trim()) errors.push(`Group "${group.key}" requires a label (it is shown to the user).`);
+
+    const size = record.prompts.filter((prompt) => prompt.groupKey === group.key).length;
+    if (size === 0) errors.push(`Group "${group.key}" is declared but no prompt carries that groupKey.`);
+    if (!Number.isInteger(group.requiredCount) || group.requiredCount < 1) {
+      errors.push(`Group "${group.key}" requires a requiredCount of at least 1.`);
+    } else if (group.requiredCount > size && size > 0) {
+      errors.push(`Group "${group.key}" asks for ${group.requiredCount} of only ${size} prompts.`);
+    }
+  }
+
+  for (const prompt of record.prompts) {
+    if (prompt.groupKey && !seenKeys.has(prompt.groupKey)) {
+      errors.push(`[${prompt.externalRef || prompt.title}] references undeclared group "${prompt.groupKey}".`);
+    }
+  }
+
+  return errors;
+}
+
+function groupFor(record: SchoolSourceRecord, prompt: RawPromptRecord): PromptGroup | null {
+  return prompt.groupKey ? record.promptGroups?.find((group) => group.key === prompt.groupKey) ?? null : null;
+}
+
+/**
+ * Cross-record check: several schools sharing one application must agree about
+ * the question they share.
+ *
+ * validateRecord only ever sees a single record, but a shared application's
+ * prompts are spread across one record per campus. If two of them disagree
+ * about wording, limits, group membership or required count, then any view that
+ * collapses them into one row has to pick a winner - and the answer would
+ * depend on registry order. Failing the build is the only honest outcome.
+ */
+export function validateCanonicalAgreement(sources: readonly SchoolSourceRecord[]): string[] {
+  const errors: string[] = [];
+  const first = new Map<string, { schoolName: string; prompt: RawPromptRecord; group: PromptGroup | null }>();
+
+  for (const record of sources) {
+    if (!record.sharedApplicationKey) continue;
+    for (const prompt of record.prompts) {
+      const key = `${record.sharedApplicationKey}:${prompt.externalRef}`;
+      const group = groupFor(record, prompt);
+      const seen = first.get(key);
+      if (!seen) {
+        first.set(key, { schoolName: record.schoolName, prompt, group });
+        continue;
+      }
+
+      const differences: string[] = [];
+      const compare = (field: string, a: unknown, b: unknown) => {
+        if (a !== b) differences.push(`${field} (${JSON.stringify(a)} vs ${JSON.stringify(b)})`);
+      };
+      compare("promptText", normalizeWhitespace(seen.prompt.promptText), normalizeWhitespace(prompt.promptText));
+      compare("title", seen.prompt.title, prompt.title);
+      compare("minWordCount", seen.prompt.minWordCount ?? null, prompt.minWordCount ?? null);
+      compare("maxWordCount", seen.prompt.maxWordCount ?? null, prompt.maxWordCount ?? null);
+      compare("minCharCount", seen.prompt.minCharCount ?? null, prompt.minCharCount ?? null);
+      compare("maxCharCount", seen.prompt.maxCharCount ?? null, prompt.maxCharCount ?? null);
+      compare("requirement", seen.prompt.requirement, prompt.requirement);
+      compare("groupKey", seen.prompt.groupKey ?? null, prompt.groupKey ?? null);
+      compare("groupLabel", seen.group?.label ?? null, group?.label ?? null);
+      compare("groupRequiredCount", seen.group?.requiredCount ?? null, group?.requiredCount ?? null);
+
+      if (differences.length > 0) {
+        errors.push(
+          `Shared prompt "${key}" disagrees between "${seen.schoolName}" and "${record.schoolName}": ${differences.join(", ")}.`,
+        );
+      }
+    }
+  }
+
   return errors;
 }
 
@@ -69,15 +161,39 @@ export function validatePromptRecord(prompt: RawPromptRecord): string[] {
 // True when two versions of "the same" prompt (matched by externalRef)
 // actually differ in anything the app tracks - the signal the import
 // pipeline uses to flag needs-review instead of silently overwriting.
+//
+// title, requirement, conditionalNote, groupKey and programKey are compared
+// too: a prompt flipping required -> conditional used to report "unchanged"
+// and never be updated, which meant a re-import could not deliver newly
+// encoded group or program metadata to a workspace that already had the row.
 export function promptContentChanged(
-  previous: { promptText: string; minWordCount: number | null; maxWordCount: number | null; minCharCount: number | null; maxCharCount: number | null },
+  previous: {
+    title: string;
+    promptText: string;
+    minWordCount: number | null;
+    maxWordCount: number | null;
+    minCharCount: number | null;
+    maxCharCount: number | null;
+    requirement: string;
+    conditionalNote: string | null;
+    groupKey?: string | null;
+    groupRequiredCount?: number | null;
+    programKey?: string | null;
+  },
   next: RawPromptRecord,
+  nextGroupRequiredCount: number | null = null,
 ): boolean {
   return (
     normalizeWhitespace(previous.promptText) !== normalizeWhitespace(next.promptText) ||
+    normalizeWhitespace(previous.title) !== normalizeWhitespace(next.title) ||
     (previous.minWordCount ?? null) !== (next.minWordCount ?? null) ||
     (previous.maxWordCount ?? null) !== (next.maxWordCount ?? null) ||
     (previous.minCharCount ?? null) !== (next.minCharCount ?? null) ||
-    (previous.maxCharCount ?? null) !== (next.maxCharCount ?? null)
+    (previous.maxCharCount ?? null) !== (next.maxCharCount ?? null) ||
+    previous.requirement !== next.requirement ||
+    (previous.conditionalNote ?? null) !== (next.conditionalNote ?? null) ||
+    (previous.groupKey ?? null) !== (next.groupKey ?? null) ||
+    (previous.groupRequiredCount ?? null) !== nextGroupRequiredCount ||
+    (previous.programKey ?? null) !== (next.programKey ?? null)
   );
 }
