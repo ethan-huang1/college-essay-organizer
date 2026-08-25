@@ -2018,10 +2018,13 @@ a.verification-badge:hover {
     margin-bottom: 12px;
   }
 
+  /* Wraps rather than scrolling horizontally. Measured at 500px the nav
+     overflowed by 43px with Reuse clipped, and a horizontal scrollbar inside a
+     nav is not something a student discovers - the tab was simply missing. */
   .primary-nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
-    overflow-x: auto;
     padding-bottom: 2px;
   }
 
@@ -2167,7 +2170,19 @@ a.verification-badge:hover {
   .crud-form,
   .add-college-panel .crud-form {
     grid-template-columns: 1fr;
-    justify-items: start;
+    /* stretch, not start: `start` left the college input at its intrinsic
+       172px inside a 464px card, which read as a broken field rather than a
+       narrow one. The button is sized separately below. */
+    justify-items: stretch;
+  }
+
+  .crud-form button,
+  .add-college-panel .crud-form button {
+    justify-self: start;
+  }
+
+  .add-college-panel .crud-form input {
+    width: 100%;
   }
 
   .record-grid,
