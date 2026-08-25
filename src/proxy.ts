@@ -1,45 +1,38 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { authRequired, isAuthConfigured, SESSION_COOKIE, sessionTokenValid } from "@/lib/auth";
+import { SESSION_COOKIE, sessionUserId } from "@/lib/auth";
 
-const SIGN_IN_PATH = "/sign-in";
+const PUBLIC_PATHS = new Set(["/sign-in", "/sign-up"]);
 
 // `middleware.ts` is deprecated in Next.js 16; this is the `proxy.ts`
 // convention that replaced it, and it runs on the Node.js runtime by default.
+//
+// Only the cookie's signature and expiry are checked here - no database read -
+// so the gate stays cheap. Whether the account still exists is settled later by
+// getSignedInUser.
 export function proxy(request: NextRequest) {
-  const env = {
-    username: process.env.AUTH_USERNAME,
-    password: process.env.AUTH_PASSWORD,
-    secret: process.env.AUTH_SECRET,
-    isProduction: process.env.NODE_ENV === "production",
-  };
-
-  // Development runs ungated until the variables are set, so `npm run dev`
-  // needs no setup.
-  if (!authRequired(env)) return NextResponse.next();
-
+  const secret = process.env.AUTH_SECRET;
   const { pathname, search } = request.nextUrl;
-  const onSignInPage = pathname === SIGN_IN_PATH;
+  const isPublic = PUBLIC_PATHS.has(pathname);
 
-  // Fails closed: a production deployment missing its configuration refuses
-  // everything rather than serving the essays unprotected. The sign-in page
-  // itself still renders, so the reason is visible instead of a bare error.
-  if (!isAuthConfigured(env)) {
-    if (onSignInPage) return NextResponse.next();
-    return NextResponse.redirect(new URL(`${SIGN_IN_PATH}?error=unconfigured`, request.url));
+  // Fails closed: without a signing secret no session can be verified, so the
+  // app refuses rather than serving anyone's essays. The sign-in page still
+  // renders so the reason is visible instead of a bare error.
+  if (!secret) {
+    if (isPublic) return NextResponse.next();
+    return NextResponse.redirect(new URL("/sign-in?error=unconfigured", request.url));
   }
 
-  const signedIn = sessionTokenValid(request.cookies.get(SESSION_COOKIE)?.value, env.secret, Date.now());
+  const signedIn = Boolean(sessionUserId(request.cookies.get(SESSION_COOKIE)?.value, secret, Date.now()));
 
   if (signedIn) {
-    // Nothing to do on a protected route; bounce an already-signed-in visitor
-    // off the sign-in page.
-    return onSignInPage ? NextResponse.redirect(new URL("/", request.url)) : NextResponse.next();
+    // Bounce an already-signed-in visitor off the sign-in and sign-up pages.
+    return isPublic ? NextResponse.redirect(new URL("/", request.url)) : NextResponse.next();
   }
 
-  if (onSignInPage) return NextResponse.next();
+  if (isPublic) return NextResponse.next();
 
-  const signIn = new URL(SIGN_IN_PATH, request.url);
+  const signIn = new URL("/sign-in", request.url);
   signIn.searchParams.set("next", `${pathname}${search}`);
   if (request.cookies.has(SESSION_COOKIE)) signIn.searchParams.set("error", "expired");
 

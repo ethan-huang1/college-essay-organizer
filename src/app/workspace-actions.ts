@@ -3,31 +3,35 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getAppDatabase, getReadyDatabase } from "@/lib/db/server";
 import { resetDemoWorkspace } from "@/lib/db/demo-workspace";
-import { DEMO_WORKSPACE_ID, PERSONAL_WORKSPACE_ID } from "@/lib/db/seed";
-import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace-session";
+import { getAppDatabase } from "@/lib/db/server";
+import { DEMO_WORKSPACE_ID } from "@/lib/db/seed";
+import { ensurePersonalWorkspace } from "@/lib/users";
+import { ACTIVE_WORKSPACE_COOKIE, requireSignedInUser } from "@/lib/workspace-session";
 
-async function selectWorkspace(workspaceId: string) {
+// The cookie only ever selects between "my own workspace" and "the shared
+// example" - it never carries a workspace id, so it cannot be edited to point
+// at someone else's data. See getActiveWorkspaceSnapshot.
+async function selectWorkspace(value: "personal" | typeof DEMO_WORKSPACE_ID) {
   const cookieStore = await cookies();
-  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, workspaceId, {
+  cookieStore.set(ACTIVE_WORKSPACE_COOKIE, value, {
     httpOnly: true,
     sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
     path: "/",
   });
 }
 
 export async function openPersonalWorkspace() {
-  // Ensures the empty personal workspace and its taxonomy exist before the
-  // redirect lands on a page that reads them.
-  await getReadyDatabase();
-  await selectWorkspace(PERSONAL_WORKSPACE_ID);
+  const user = await requireSignedInUser();
+  await ensurePersonalWorkspace(getAppDatabase().db, user.id);
+  await selectWorkspace("personal");
   redirect("/schools");
 }
 
 export async function loadDemoWorkspace() {
-  const { db } = getAppDatabase();
-  await resetDemoWorkspace(db);
+  await requireSignedInUser();
+  await resetDemoWorkspace(getAppDatabase().db);
   await selectWorkspace(DEMO_WORKSPACE_ID);
   redirect("/schools");
 }

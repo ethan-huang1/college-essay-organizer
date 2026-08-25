@@ -30,7 +30,7 @@ Schools → Prompts → Essay categories → Essays → Reuse opportunities
 
 Switch between them in the sidebar's Workspace panel. They never share records.
 
-- **My workspace** — starts empty and private. You add your own colleges with
+- **My workspace** — created empty when you sign up, private to your account. You add your own colleges with
   **Add a college**, which imports that school's current-cycle prompts from the
   curated registry and classifies them automatically. Colleges can be renamed or
   removed (with a confirmation step) at any time.
@@ -51,8 +51,8 @@ npm run db:migrate             # apply the committed migrations
 npm run dev                    # http://localhost:3000
 ```
 
-`.env.local` is gitignored. See [Access control](#access-control) for the
-`AUTH_*` variables, which are optional locally and required in production.
+`.env.local` is gitignored. See [Accounts and access control](#accounts-and-access-control)
+for `AUTH_SECRET`, which is optional locally and required in production.
 
 The personal workspace and its taxonomy are created automatically on first
 request, so a freshly migrated database opens to an empty workspace ready for
@@ -61,49 +61,62 @@ its first college.
 Useful scripts: `npm run db:generate` (after an intentional schema change),
 `npm run db:studio` (browse the data), `npm run db:migrate` (apply migrations).
 
-## Access control
+## Accounts and access control
 
-The app is guarded by a single shared account with a real sign-in page at
-`/sign-in`, not the browser's Basic-auth dialog. Credentials are exchanged for
-an HMAC-signed session cookie; the gate lives in [`src/proxy.ts`](src/proxy.ts)
-(Next.js 16 renamed `middleware.ts` to `proxy.ts`) and the logic in
-[`auth.ts`](src/lib/auth.ts).
+Sign-up is open: anyone with the URL can create an account at `/sign-up`, and
+each account gets its own private workspace. Sign-in is at `/sign-in`. The gate
+lives in [`src/proxy.ts`](src/proxy.ts) (Next.js 16 renamed `middleware.ts` to
+`proxy.ts`), with credential and session logic in [`auth.ts`](src/lib/auth.ts)
+and accounts in [`users.ts`](src/lib/users.ts).
 
 ```bash
-AUTH_USERNAME="you"
-AUTH_PASSWORD="a long random string"
-AUTH_SECRET="another long random string"   # signs the session cookie
+AUTH_SECRET="a long random string"   # signs session cookies
 ```
-
-Generate the secret with:
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Behaviour worth knowing:
+How it works:
 
-- **It fails closed in production.** If any of the three is missing, every
-  route redirects to a sign-in page that explains it is unconfigured, rather
-  than serving your essays unprotected. A missing environment variable is the
-  likeliest way this protection would silently disappear.
-- **Local development is not gated** while the variables are unset, so `npm run
-  dev` needs no setup. Set them locally and the gate applies there too.
-- Sessions are **stateless**: the cookie carries its own expiry (14 days) and a
-  signature over it, so nothing is stored server-side. Consequently individual
-  sessions cannot be revoked — rotating `AUTH_SECRET` signs everyone out.
+- **Passwords are hashed with scrypt** (`node:crypto`, so no dependency), with a
+  random salt per password and the parameters stored in the hash so they can be
+  raised later without invalidating existing accounts.
+- **Sessions are stateless.** The cookie holds the user id, an expiry (30 days),
+  and an HMAC over both, so the gate needs no database read. The signature
+  covers the user id *and* the expiry, so neither can be swapped. The trade is
+  that a single session cannot be revoked — rotating `AUTH_SECRET` signs
+  everyone out.
 - The cookie is `httpOnly`, `sameSite=lax`, and `secure` in production.
-- The sign-in page renders under a deliberately minimal root layout, so it
-  works even when the database is unreachable. The sidebar and its workspace
-  queries live in the `(app)` route group's layout, behind the gate.
-- The post-sign-in redirect is validated to be a same-site path, so the page
+- **It fails closed in production.** Without `AUTH_SECRET` no session can be
+  verified, so every route redirects to a sign-in page that says so rather than
+  serving anyone's essays. Development runs ungated while it is unset.
+- Sign-in and sign-up render under a deliberately minimal root layout, so they
+  work even when the database is unreachable. The sidebar and its workspace
+  queries live in the `(app)` route group, behind the gate.
+- Unknown email and wrong password give the same message, and an unknown email
+  still runs a hash comparison, so neither the response nor its timing reveals
+  whether an account exists.
+- The post-sign-in redirect is validated to be a same-site path, so the pages
   cannot be turned into an open redirect.
 
-This is one shared credential, not a user system: anyone who signs in can read
-and edit everything in both workspaces. That matches the product today — one
-student, one private deployment — but it is the thing to replace first if this
-is ever shared. There is also no rate limiting on the sign-in form; the
-protection is the password's entropy, so use a long random one.
+### Workspace isolation
+
+Every table is scoped by `workspaceId`, every query filters on it, and every
+mutation verifies the record belongs to the active workspace before writing.
+On top of that, **the active-workspace cookie does not carry a workspace id** —
+it only selects between "my own workspace" and "the shared example". A user can
+therefore only ever reach their own personal workspace or the demo, even by
+editing cookies. This is verified by test and by pointing one account's cookie
+at another's workspace id, which returns the attacker's own empty workspace.
+
+The example workspace is deliberately shared by everyone: it holds no personal
+data by construction, and anyone can rebuild it with "Reset example".
+
+Remaining gaps, stated plainly: there is **no rate limiting** on sign-in or
+sign-up, no email verification, and no password reset. Anyone with the URL can
+create an account, which is what open sign-up means — so the deployment's
+storage is only as bounded as its obscurity.
 
 ## How prompts get into the app
 
@@ -167,7 +180,8 @@ database connection.
 ```
 src/app/
   layout.tsx            minimal root: no database, so /sign-in always renders
-  sign-in/page.tsx      the sign-in form
+  sign-in/, sign-up/    the auth pages, sharing one AuthCard
+  auth-actions.ts       sign up / sign in / sign out
   proxy.ts (src/)       the auth gate, in front of every route
   (app)/layout.tsx      sidebar navigation, per-school progress, workspace switch
   (app)/page.tsx        Overview dashboard
@@ -182,6 +196,8 @@ src/lib/
   reuse.ts              recomputes every match for a workspace
   progress.ts           derived UI numbers (nothing persisted)
   essays.ts             essay CRUD with immutable versions
+  auth.ts               scrypt hashing + stateless signed sessions
+  users.ts              accounts and their personal workspaces
   db/                   Drizzle schema, migrations, seeds, demo workspace
     client.ts           Neon pool for the app, PGlite for tests
     server.ts           cached pool + one-time workspace initialization
@@ -254,10 +270,12 @@ Recorded honestly rather than papered over:
 - **36 of 100 schools import no prompts** (`needs-review` above). This is a
   data-availability limit, not a bug, and each record says exactly what was
   unresolved.
-- Single user and a single shared credential rather than accounts; no
-  multi-device sync, no password reset, no rate limiting on sign-in. Workspaces
-  are separated by a cookie, not by identity, so everyone who signs in shares
-  the same personal workspace.
+- Open sign-up with no email verification, no password reset, and no rate
+  limiting on sign-in or sign-up. Accounts are properly isolated from each
+  other, but nothing stops a stranger who finds the URL from registering.
+- The example workspace is shared across all accounts, and anyone can rebuild
+  it. That is intentional (it holds no personal data) but means one user's
+  "Reset example" is visible to another.
 - Migrations are applied manually (`npm run db:migrate`), deliberately not on
   boot: concurrent serverless instances racing migrations is how a schema gets
   corrupted.

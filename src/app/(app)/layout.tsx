@@ -80,6 +80,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           <p className="nav-label">Workspace</p>
           <strong>{snapshot.workspace.name}</strong>
           <span>{isDemo ? "Real prompts · sample essays" : "Your colleges · private to you"}</span>
+          <span className="signed-in-as" title={snapshot.user.email}>{snapshot.user.email}</span>
           <div className="workspace-switch-actions">
             <form action={openPersonalWorkspace}>
               <button type="submit" aria-current={isDemo ? undefined : "true"}>My workspace</button>

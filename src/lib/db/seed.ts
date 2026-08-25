@@ -1,12 +1,9 @@
 import type { AppDatabase } from "./client";
-import {
-  promptFamilies,
-  promptTags,
-  workspaces,
-} from "./schema";
+import { promptFamilies, promptTags } from "./schema";
 import { PROMPT_FAMILIES, SECONDARY_TAGS } from "./taxonomy";
 
-export const PERSONAL_WORKSPACE_ID = "workspace-personal";
+// The one shared example workspace. Personal workspaces are per user and their
+// ids are derived from the user's - see personalWorkspaceId in users.ts.
 export const DEMO_WORKSPACE_ID = "workspace-demo";
 
 type InsertDatabase = Pick<AppDatabase, "insert">;
@@ -40,14 +37,4 @@ export async function seedTaxonomy(db: InsertDatabase, workspaceId: string) {
     )
     .onConflictDoNothing()
     ;
-}
-
-export async function initializePersonalWorkspace(db: AppDatabase) {
-  await db.transaction(async (tx) => {
-    await tx.insert(workspaces)
-      .values({ id: PERSONAL_WORKSPACE_ID, kind: "personal", name: "My workspace" })
-      .onConflictDoNothing()
-      ;
-    await seedTaxonomy(tx, PERSONAL_WORKSPACE_ID);
-  });
 }

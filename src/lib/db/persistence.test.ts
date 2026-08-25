@@ -14,6 +14,7 @@ import {
   promptFamilyLinks,
   prompts,
   schools,
+  users,
   workspaces,
 } from "./schema";
 import {
@@ -22,7 +23,8 @@ import {
   DEMO_WORKSPACE_NAME,
   resetDemoWorkspace,
 } from "./demo-workspace";
-import { DEMO_WORKSPACE_ID, initializePersonalWorkspace, PERSONAL_WORKSPACE_ID } from "./seed";
+import { DEMO_WORKSPACE_ID } from "./seed";
+import { ensurePersonalWorkspace, personalWorkspaceId } from "../users";
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
 import { createPrompt, deletePrompt, updatePrompt } from "../prompts";
@@ -49,11 +51,27 @@ async function demoSchoolId(db: AppDatabase) {
 describe("local persistence foundation", () => {
   let connection: ReturnType<typeof openTestDatabase>;
 
+  // Personal workspaces belong to a user now, so each test signs one up. The
+  // id is derived from the user's, which is what keeps workspace resolution a
+  // pure function of the session.
+  let PERSONAL: string;
+
   beforeEach(async () => {
     // PGlite: real Postgres in-process, migrated from the committed SQL, so
     // each test gets a throwaway database on the dialect we deploy on.
     connection = openTestDatabase();
     await connection.migrate();
+    // The user row is inserted directly rather than through createUser: these
+    // tests are about workspace-scoped persistence, and paying production-cost
+    // scrypt hashing in all 23 setups tripled the suite's runtime. Account
+    // creation and password hashing are covered by users.test.ts.
+    const userId = crypto.randomUUID();
+    await connection.db.insert(users).values({
+      id: userId,
+      email: "student@example.com",
+      passwordHash: "scrypt$16384$8$1$dGVzdA$dGVzdA",
+    });
+    PERSONAL = await ensurePersonalWorkspace(connection.db, userId);
   });
 
   afterEach(async () => { await connection.close(); });
@@ -89,13 +107,11 @@ describe("local persistence foundation", () => {
   });
 
   it("seeds an editable ten-family taxonomy idempotently", async () => {
-    await initializePersonalWorkspace(connection.db);
-    await initializePersonalWorkspace(connection.db);
 
     const families = await connection.db
       .select()
       .from(promptFamilies)
-      .where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID));
+      .where(eq(promptFamilies.workspaceId, PERSONAL));
 
     expect(families).toHaveLength(10);
     expect(families.every((family) => family.isEditable)).toBe(true);
@@ -152,10 +168,9 @@ describe("local persistence foundation", () => {
   });
 
   it("resets the example demo workspace without changing personal data", async () => {
-    await initializePersonalWorkspace(connection.db);
     await connection.db.insert(essays).values({
-      id: `${PERSONAL_WORKSPACE_ID}:essay:keep`,
-      workspaceId: PERSONAL_WORKSPACE_ID,
+      id: `${PERSONAL}:essay:keep`,
+      workspaceId: PERSONAL,
       title: "Keep this personal draft",
       currentContent: "This content belongs only to the personal workspace.",
     });
@@ -167,8 +182,8 @@ describe("local persistence foundation", () => {
     expect(second).toEqual(first);
     expect((await connection.db.select({ value: count() }).from(workspaces).then((rows) => rows[0]))?.value).toBe(2);
     expect((await connection.db.select().from(workspaces).where(eq(workspaces.id, DEMO_WORKSPACE_ID)).then((rows) => rows[0]))?.name).toBe(DEMO_WORKSPACE_NAME);
-    expect(await connection.db.select().from(essays).where(eq(essays.workspaceId, PERSONAL_WORKSPACE_ID))).toHaveLength(1);
-    expect(await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL_WORKSPACE_ID))).toHaveLength(0);
+    expect(await connection.db.select().from(essays).where(eq(essays.workspaceId, PERSONAL))).toHaveLength(1);
+    expect(await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL))).toHaveLength(0);
 
     // The reported summary has to match what actually landed in the database.
     const demoSchools = await connection.db.select().from(schools).where(eq(schools.workspaceId, DEMO_WORKSPACE_ID));
@@ -239,16 +254,15 @@ describe("local persistence foundation", () => {
   });
 
   it("returns strictly workspace-scoped read models", async () => {
-    await initializePersonalWorkspace(connection.db);
     await resetDemoWorkspace(connection.db);
     await connection.db.insert(essays).values({
-      id: `${PERSONAL_WORKSPACE_ID}:essay:private`,
-      workspaceId: PERSONAL_WORKSPACE_ID,
+      id: `${PERSONAL}:essay:private`,
+      workspaceId: PERSONAL,
       title: "Private draft",
       currentContent: "Only the personal snapshot may return this essay.",
     });
 
-    const personal = await getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    const personal = await getWorkspaceSnapshot(connection.db, PERSONAL);
     const demo = await getWorkspaceSnapshot(connection.db, DEMO_WORKSPACE_ID);
 
     expect(personal?.essays.map((essay) => essay.title)).toEqual(["Private draft"]);
@@ -261,34 +275,32 @@ describe("local persistence foundation", () => {
   });
 
   it("creates, updates, and deletes schools only inside the selected workspace", async () => {
-    await initializePersonalWorkspace(connection.db);
     await resetDemoWorkspace(connection.db);
-    const created = await createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "  Harbor   College  ", notes: "Personal note" });
+    const created = await createSchool(connection.db, PERSONAL, { name: "  Harbor   College  ", notes: "Personal note" });
     expect(created?.name).toBe("Harbor College");
     if (!created) throw new Error("Expected the school to be created.");
 
     await expect(updateSchool(connection.db, DEMO_WORKSPACE_ID, created.id, { name: "Wrong workspace" })).rejects.toThrow();
-    await updateSchool(connection.db, PERSONAL_WORKSPACE_ID, created.id, { name: "Harbor University", notes: "Updated" });
+    await updateSchool(connection.db, PERSONAL, created.id, { name: "Harbor University", notes: "Updated" });
     await connection.db.insert(prompts).values({
-      id: `${PERSONAL_WORKSPACE_ID}:prompt:cascade-test`,
-      workspaceId: PERSONAL_WORKSPACE_ID,
+      id: `${PERSONAL}:prompt:cascade-test`,
+      workspaceId: PERSONAL,
       schoolId: created.id,
       title: "Cascade test",
       promptText: "This prompt should be removed with its school.",
     });
 
-    await deleteSchool(connection.db, PERSONAL_WORKSPACE_ID, created.id);
+    await deleteSchool(connection.db, PERSONAL, created.id);
     expect(await connection.db.select().from(schools).where(eq(schools.id, created.id))).toHaveLength(0);
     expect(await connection.db.select().from(prompts).where(eq(prompts.schoolId, created.id))).toHaveLength(0);
   });
 
   it("creates and updates prompts with one primary, multiple secondary families, and manual provenance", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const school = await createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Harbor College" });
+    const school = await createSchool(connection.db, PERSONAL, { name: "Harbor College" });
     if (!school) throw new Error("Expected the school to be created.");
     const families = await connection.db.select().from(promptFamilies)
-      .where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID));
-    const promptId = await createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+      .where(eq(promptFamilies.workspaceId, PERSONAL));
+    const promptId = await createPrompt(connection.db, PERSONAL, {
       schoolId: school.id,
       title: "Community reflection",
       promptText: "Describe a community that shaped you and how you contributed to it.",
@@ -306,7 +318,7 @@ describe("local persistence foundation", () => {
     expect(links.every((link) => link.source === "manual")).toBe(true);
     expect((await connection.db.select().from(prompts).where(eq(prompts.id, promptId)).then((rows) => rows[0]))?.classificationSource).toBe("manual");
 
-    await updatePrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId, {
+    await updatePrompt(connection.db, PERSONAL, promptId, {
       schoolId: school.id,
       title: "Community and identity reflection",
       promptText: "Describe a community that shaped your identity and explain your contribution.",
@@ -324,33 +336,32 @@ describe("local persistence foundation", () => {
       status: "in-progress",
       classificationSource: "manual",
     });
-    const snapshotPrompt = (await getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID))?.prompts
+    const snapshotPrompt = (await getWorkspaceSnapshot(connection.db, PERSONAL))?.prompts
       .find((prompt) => prompt.id === promptId);
     expect(snapshotPrompt?.primaryFamily?.id).toBe(families[1].id);
     expect(snapshotPrompt?.secondaryFamilies.map((family) => family.id)).toEqual([families[2].id]);
   });
 
   it("rejects cross-workspace prompt schools and families without partial writes", async () => {
-    await initializePersonalWorkspace(connection.db);
     await resetDemoWorkspace(connection.db);
-    const personalSchool = await createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Harbor College" });
+    const personalSchool = await createSchool(connection.db, PERSONAL, { name: "Harbor College" });
     if (!personalSchool) throw new Error("Expected the school to be created.");
     const personalFamily = await connection.db.select().from(promptFamilies)
-      .where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID)).then((rows) => rows[0]);
+      .where(eq(promptFamilies.workspaceId, PERSONAL)).then((rows) => rows[0]);
     const demoFamily = await connection.db.select().from(promptFamilies)
       .where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID)).then((rows) => rows[0]);
     if (!personalFamily || !demoFamily) throw new Error("Expected seeded families.");
 
-    const baseline = (await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID))).length;
-    await expect(createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+    const baseline = (await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL))).length;
+    await expect(createPrompt(connection.db, PERSONAL, {
       schoolId: await demoSchoolId(connection.db), title: "Wrong school", promptText: "This must not be inserted into personal data.",
       requirement: "required", status: "not-started", primaryFamilyId: personalFamily.id,
     })).rejects.toThrow("School not found");
-    await expect(createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+    await expect(createPrompt(connection.db, PERSONAL, {
       schoolId: personalSchool.id, title: "Wrong family", promptText: "This must not link a demo family.",
       requirement: "required", status: "not-started", primaryFamilyId: demoFamily.id,
     })).rejects.toThrow("family");
-    expect(await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID))).toHaveLength(baseline);
+    expect(await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL))).toHaveLength(baseline);
   });
 
   it("deletes only the scoped prompt and cascades its relationships", async () => {
@@ -366,7 +377,7 @@ describe("local persistence foundation", () => {
     expect((await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId))).length).toBeGreaterThan(0);
     expect((await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.promptId, promptId))).length).toBeGreaterThan(0);
 
-    await expect(deletePrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId)).rejects.toThrow();
+    await expect(deletePrompt(connection.db, PERSONAL, promptId)).rejects.toThrow();
     expect(await connection.db.select().from(prompts).where(eq(prompts.id, promptId)).then((rows) => rows[0])).toBeDefined();
 
     await deletePrompt(connection.db, DEMO_WORKSPACE_ID, promptId);
@@ -378,10 +389,9 @@ describe("local persistence foundation", () => {
   });
 
   it("creates an essay with an immutable initial version and workspace-scoped family assignment", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID));
+    const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
 
-    const essayId = await createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+    const essayId = await createEssay(connection.db, PERSONAL, {
       title: "Why Computer Science",
       content: "I have loved building things since I first broke my family's computer trying to fix it.",
       status: "draft",
@@ -399,7 +409,7 @@ describe("local persistence foundation", () => {
     expect(versions[0]).toMatchObject({ versionNumber: 1, reason: "Initial version" });
     expect(links.find((link) => link.isPrimary)?.familyId).toBe(families[5].id);
 
-    await expect(createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+    await expect(createEssay(connection.db, PERSONAL, {
       title: "Wrong family",
       status: "idea",
       designation: "canonical",
@@ -408,52 +418,49 @@ describe("local persistence foundation", () => {
   });
 
   it("saves essay content changes as new immutable versions and restores without destroying history", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const essayId = await createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+    const essayId = await createEssay(connection.db, PERSONAL, {
       title: "Draft essay",
       content: "First draft content.",
       status: "draft",
       designation: "canonical",
     });
 
-    await saveEssayVersion(connection.db, PERSONAL_WORKSPACE_ID, essayId, { content: "Second draft content, revised.", reason: "Tightened the opening" });
+    await saveEssayVersion(connection.db, PERSONAL, essayId, { content: "Second draft content, revised.", reason: "Tightened the opening" });
     let versions = await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId));
     expect(versions).toHaveLength(2);
     expect((await connection.db.select().from(essays).where(eq(essays.id, essayId)).then((rows) => rows[0]))?.currentContent).toBe("Second draft content, revised.");
 
     const firstVersion = versions.find((version) => version.versionNumber === 1);
     if (!firstVersion) throw new Error("Expected the first version to exist.");
-    await restoreEssayVersion(connection.db, PERSONAL_WORKSPACE_ID, essayId, firstVersion.id);
+    await restoreEssayVersion(connection.db, PERSONAL, essayId, firstVersion.id);
 
     versions = await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId));
     expect(versions).toHaveLength(3);
     expect(versions.find((version) => version.versionNumber === 1)?.content).toBe("First draft content.");
     expect((await connection.db.select().from(essays).where(eq(essays.id, essayId)).then((rows) => rows[0]))?.currentContent).toBe("First draft content.");
 
-    await updateEssayMetadata(connection.db, PERSONAL_WORKSPACE_ID, essayId, {
+    await updateEssayMetadata(connection.db, PERSONAL, essayId, {
       title: "Draft essay", status: "ready", designation: "canonical",
     });
     expect(await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId))).toHaveLength(3);
   });
 
   it("deletes only the scoped essay and cascades its versions, family links, and matches", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const essayId = await createEssay(connection.db, PERSONAL_WORKSPACE_ID, { title: "Disposable", content: "x", status: "idea", designation: "canonical" });
+    const essayId = await createEssay(connection.db, PERSONAL, { title: "Disposable", content: "x", status: "idea", designation: "canonical" });
     await expect(deleteEssay(connection.db, DEMO_WORKSPACE_ID, essayId)).rejects.toThrow();
-    await deleteEssay(connection.db, PERSONAL_WORKSPACE_ID, essayId);
+    await deleteEssay(connection.db, PERSONAL, essayId);
     expect(await connection.db.select().from(essays).where(eq(essays.id, essayId))).toHaveLength(0);
     expect(await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId))).toHaveLength(0);
   });
 
   it("recomputes deterministic reuse matches for every essay/prompt pair in a workspace", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL_WORKSPACE_ID));
-    const school = await createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Lakeview University" });
+    const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
+    const school = await createSchool(connection.db, PERSONAL, { name: "Lakeview University" });
     if (!school) throw new Error("Expected the school to be created.");
     const whyMajorFamily = families.find((family) => family.name === "Why Major / Academic Interests");
     if (!whyMajorFamily) throw new Error("Expected a Why Major family.");
 
-    const promptId = await createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+    const promptId = await createPrompt(connection.db, PERSONAL, {
       schoolId: school.id,
       title: "Why this field",
       promptText: "Why do you want to study your intended field?",
@@ -463,7 +470,7 @@ describe("local persistence foundation", () => {
       status: "not-started",
       primaryFamilyId: whyMajorFamily.id,
     });
-    const essayId = await createEssay(connection.db, PERSONAL_WORKSPACE_ID, {
+    const essayId = await createEssay(connection.db, PERSONAL, {
       title: "Why Computer Science",
       // 15 words x 12 = 180, inside the prompt's [100, 300] range.
       content: Array(12).fill("I want to study computer science because building systems that help people has always driven me.").join(" "),
@@ -472,34 +479,33 @@ describe("local persistence foundation", () => {
       primaryFamilyId: whyMajorFamily.id,
     });
 
-    await recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
-    const matches = await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL_WORKSPACE_ID));
+    await recomputeWorkspaceMatches(connection.db, PERSONAL);
+    const matches = await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL));
     expect(matches).toHaveLength(1);
     expect(matches[0]).toMatchObject({ essayId, promptId, recommendedAction: "ready-to-reuse" });
     expect(matches[0].score).toBeGreaterThanOrEqual(80);
 
     // Recomputing again after nothing changed must not accumulate duplicate rows.
-    await recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
-    expect(await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL_WORKSPACE_ID))).toHaveLength(1);
+    await recomputeWorkspaceMatches(connection.db, PERSONAL);
+    expect(await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL))).toHaveLength(1);
 
     // A personal-workspace recompute must leave the demo's matches alone.
     const demoMatches = (await resetDemoWorkspace(connection.db)).matches;
     expect(demoMatches).toBeGreaterThan(0);
-    await recomputeWorkspaceMatches(connection.db, PERSONAL_WORKSPACE_ID);
+    await recomputeWorkspaceMatches(connection.db, PERSONAL);
     expect(await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID))).toHaveLength(demoMatches);
   });
 
   it("imports and auto-classifies a verified school's prompts, idempotently", async () => {
-    await initializePersonalWorkspace(connection.db);
 
-    const first = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Stanford University");
+    const first = await importCollege(connection.db, PERSONAL, "Stanford University");
     expect(first.verificationStatus).toBe("officially-verified");
     expect(first.counts.created).toBeGreaterThan(0);
     expect(first.counts.updated).toBe(0);
     expect(first.sourceUrl).toMatch(/^https:\/\//);
 
     const imported = await connection.db.select().from(prompts)
-      .where(and(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID), eq(prompts.schoolId, first.schoolId)));
+      .where(and(eq(prompts.workspaceId, PERSONAL), eq(prompts.schoolId, first.schoolId)));
     expect(imported).toHaveLength(first.counts.created);
     expect(imported.every((prompt) => prompt.classificationSource === "deterministic")).toBe(true);
     expect(imported.every((prompt) => prompt.verificationStatus === "officially-verified")).toBe(true);
@@ -510,17 +516,16 @@ describe("local persistence foundation", () => {
 
     // Re-adding the same school does not duplicate its school row or prompts -
     // every prompt is recognized as unchanged (deduplication + idempotency).
-    const second = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "  stanford university  ".trim());
+    const second = await importCollege(connection.db, PERSONAL, "  stanford university  ".trim());
     expect(second.counts.created).toBe(0);
     expect(second.counts.updated).toBe(0);
     expect(second.counts.unchanged).toBe(first.counts.created);
-    expect(await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL_WORKSPACE_ID))).toHaveLength(1);
+    expect(await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL))).toHaveLength(1);
     expect(await connection.db.select().from(prompts).where(eq(prompts.schoolId, first.schoolId))).toHaveLength(first.counts.created);
   });
 
   it("adds a school with no verified prompts as 'not yet verified' rather than guessing", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const result = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Some Unlisted College");
+    const result = await importCollege(connection.db, PERSONAL, "Some Unlisted College");
     expect(result.counts.created).toBe(0);
     expect(result.verificationStatus).toBe("manual");
     expect(result.note).toMatch(/not yet verified/i);
@@ -528,8 +533,7 @@ describe("local persistence foundation", () => {
   });
 
   it("imports confirmed previous-cycle prompts, distinctly cycle-labeled and never as current", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const result = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Harvard University");
+    const result = await importCollege(connection.db, PERSONAL, "Harvard University");
     expect(result.verificationStatus).toBe("previous-cycle");
     expect(result.counts.created).toBeGreaterThan(0);
 
@@ -539,22 +543,21 @@ describe("local persistence foundation", () => {
 
     const promptCycle = await connection.db.select().from(applicationCycles).where(eq(applicationCycles.id, imported[0].cycleId!)).then((rows) => rows[0]);
     const currentCycle = (await connection.db.select().from(applicationCycles)
-      .where(eq(applicationCycles.workspaceId, PERSONAL_WORKSPACE_ID)))
+      .where(eq(applicationCycles.workspaceId, PERSONAL)))
       .find((cycle) => cycle.label === "2026–27");
     expect(promptCycle?.label).toBe("2025–26");
     expect(promptCycle?.id).not.toBe(currentCycle?.id);
 
     // Previous-cycle prompts are visible/matchable but excluded from the
     // "current cycle" prompt stat.
-    const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.some((prompt) => prompt.schoolId === result.schoolId)).toBe(true);
     expect(snapshot?.stats.prompts).toBe(0);
     expect(snapshot?.stats.previousCyclePrompts).toBe(result.counts.created);
   });
 
   it("imports genuinely conditional, degree-dependent prompts with their note intact", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const result = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Princeton University");
+    const result = await importCollege(connection.db, PERSONAL, "Princeton University");
     const conditionalPrompts = await connection.db.select().from(prompts)
       .where(and(eq(prompts.schoolId, result.schoolId), eq(prompts.requirement, "conditional")));
     expect(conditionalPrompts.length).toBeGreaterThanOrEqual(2);
@@ -562,8 +565,7 @@ describe("local persistence foundation", () => {
   });
 
   it("imports character-limited prompts distinctly from word-limited ones", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const result = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Yale University");
+    const result = await importCollege(connection.db, PERSONAL, "Yale University");
     const charLimited = await connection.db.select().from(prompts)
       .where(and(eq(prompts.schoolId, result.schoolId), eq(prompts.externalRef, "short-take-teach-write-create")))
       .then((rows) => rows[0]);
@@ -572,17 +574,15 @@ describe("local persistence foundation", () => {
   });
 
   it("shares one canonical prompt set across UC campuses without cross-campus id collisions", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const berkeley = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "University of California, Berkeley");
-    const ucla = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "University of California, Los Angeles");
+    const berkeley = await importCollege(connection.db, PERSONAL, "University of California, Berkeley");
+    const ucla = await importCollege(connection.db, PERSONAL, "University of California, Los Angeles");
     expect(berkeley.counts.created).toBe(8);
     expect(ucla.counts.created).toBe(8);
-    expect(await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL_WORKSPACE_ID))).toHaveLength(16);
+    expect(await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL))).toHaveLength(16);
   });
 
   it("flags a changed prompt as needs-review and records the prior wording, without duplicating it", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const first = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Massachusetts Institute of Technology");
+    const first = await importCollege(connection.db, PERSONAL, "Massachusetts Institute of Technology");
     const target = await connection.db.select().from(prompts)
       .where(and(eq(prompts.schoolId, first.schoolId), eq(prompts.externalRef, "short-answer-fun")))
       .then((rows) => rows[0]);
@@ -593,7 +593,7 @@ describe("local persistence foundation", () => {
     await connection.db.update(prompts).set({ promptText: "What do you do just for fun on weekends?" })
       .where(eq(prompts.id, target.id));
 
-    const second = await importCollege(connection.db, PERSONAL_WORKSPACE_ID, "Massachusetts Institute of Technology");
+    const second = await importCollege(connection.db, PERSONAL, "Massachusetts Institute of Technology");
     expect(second.counts.updated).toBe(1);
     expect(second.counts.flagged).toBe(1);
 
@@ -610,27 +610,26 @@ describe("local persistence foundation", () => {
   });
 
   it("assigns exactly one essay response per prompt, replacing a prior assignment, and can unassign", async () => {
-    await initializePersonalWorkspace(connection.db);
-    const school = await createSchool(connection.db, PERSONAL_WORKSPACE_ID, { name: "Lakeview University" });
+    const school = await createSchool(connection.db, PERSONAL, { name: "Lakeview University" });
     if (!school) throw new Error("Expected the school to be created.");
-    const promptId = await createPrompt(connection.db, PERSONAL_WORKSPACE_ID, {
+    const promptId = await createPrompt(connection.db, PERSONAL, {
       schoolId: school.id, title: "Community", promptText: "Describe a community you belong to.",
       requirement: "required", status: "not-started",
     });
-    const essayOneId = await createEssay(connection.db, PERSONAL_WORKSPACE_ID, { title: "Essay one", content: "x", status: "draft", designation: "canonical" });
-    const essayTwoId = await createEssay(connection.db, PERSONAL_WORKSPACE_ID, { title: "Essay two", content: "y", status: "draft", designation: "canonical" });
+    const essayOneId = await createEssay(connection.db, PERSONAL, { title: "Essay one", content: "x", status: "draft", designation: "canonical" });
+    const essayTwoId = await createEssay(connection.db, PERSONAL, { title: "Essay two", content: "y", status: "draft", designation: "canonical" });
 
-    await assignEssayToPrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId, essayOneId);
-    let snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    await assignEssayToPrompt(connection.db, PERSONAL, promptId, essayOneId);
+    let snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay?.id).toBe(essayOneId);
 
-    await assignEssayToPrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId, essayTwoId);
+    await assignEssayToPrompt(connection.db, PERSONAL, promptId, essayTwoId);
     expect(await connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.promptId, promptId))).toHaveLength(1);
-    snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay?.id).toBe(essayTwoId);
 
-    await unassignPrompt(connection.db, PERSONAL_WORKSPACE_ID, promptId);
-    snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL_WORKSPACE_ID);
+    await unassignPrompt(connection.db, PERSONAL, promptId);
+    snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay).toBeNull();
   });
 });

@@ -20,13 +20,39 @@ const stamp = (name: string) =>
 // Nullable point-in-time columns the application sets explicitly.
 const optionalStamp = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
-export const workspaces = pgTable("workspaces", {
-  id: text("id").primaryKey(),
-  kind: text("kind", { enum: ["personal", "demo"] }).notNull(),
-  name: text("name").notNull(),
-  createdAt: stamp("created_at"),
-  updatedAt: stamp("updated_at"),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    // Stored lower-cased so uniqueness is case-insensitive without needing a
+    // functional index.
+    email: text("email").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: stamp("created_at"),
+    lastSignedInAt: optionalStamp("last_signed_in_at"),
+  },
+  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+);
+
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: text("id").primaryKey(),
+    // Null for the single shared example workspace, which belongs to nobody.
+    // Every personal workspace is owned by exactly one user and cascades away
+    // with them.
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["personal", "demo"] }).notNull(),
+    name: text("name").notNull(),
+    createdAt: stamp("created_at"),
+    updatedAt: stamp("updated_at"),
+  },
+  (table) => [
+    index("workspaces_user_idx").on(table.userId),
+    // One personal workspace per user.
+    uniqueIndex("workspaces_user_personal_unique").on(table.userId).where(sql`${table.kind} = 'personal'`),
+  ],
+);
 
 export const applicationCycles = pgTable(
   "application_cycles",
@@ -284,6 +310,7 @@ export const assignedEssayResponses = pgTable(
 );
 
 export const schema = {
+  users,
   workspaces,
   applicationCycles,
   schools,

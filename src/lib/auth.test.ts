@@ -1,77 +1,106 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  authRequired,
   createSessionToken,
-  credentialsValid,
-  isAuthConfigured,
+  emailProblem,
+  hashPassword,
+  MIN_PASSWORD_LENGTH,
+  normalizeEmail,
+  passwordMatches,
+  passwordProblem,
   safeNextPath,
-  sessionTokenValid,
+  sessionUserId,
 } from "./auth";
 
-const ENV = { username: "ethan", password: "correct horse: battery", secret: "s3cret-signing-key", isProduction: true };
+const SECRET = "s3cret-signing-key";
+const USER = "8f1a1d1e-0000-4000-8000-000000000001";
 const NOW = 1_760_000_000_000;
 
-describe("credentialsValid", () => {
-  it("accepts the configured pair and nothing else", () => {
-    expect(credentialsValid(ENV, "ethan", "correct horse: battery")).toBe(true);
-    expect(credentialsValid(ENV, "ethan", "wrong")).toBe(false);
-    expect(credentialsValid(ENV, "someone", "correct horse: battery")).toBe(false);
-    expect(credentialsValid(ENV, "", "")).toBe(false);
+describe("email handling", () => {
+  it("normalises case and surrounding space so accounts cannot be duplicated", () => {
+    expect(normalizeEmail("  Ethan@Example.COM ")).toBe("ethan@example.com");
   });
 
-  it("never accepts anything when nothing is configured", () => {
-    expect(credentialsValid({ isProduction: true }, "", "")).toBe(false);
-    expect(credentialsValid({ isProduction: true }, "ethan", "correct horse: battery")).toBe(false);
+  it("rejects obvious non-addresses and accepts ordinary ones", () => {
+    expect(emailProblem("ethan@example.com")).toBeNull();
+    expect(emailProblem("ethan+tag@sub.example.co.uk")).toBeNull();
+    for (const bad of ["", "ethan", "ethan@", "@example.com", "ethan@example", "a b@example.com"]) {
+      expect(emailProblem(bad)).toBeTruthy();
+    }
   });
 });
 
-describe("configuration gating", () => {
-  it("requires all three values to count as configured", () => {
-    expect(isAuthConfigured(ENV)).toBe(true);
-    expect(isAuthConfigured({ ...ENV, secret: undefined })).toBe(false);
-    expect(isAuthConfigured({ ...ENV, password: undefined })).toBe(false);
-    expect(isAuthConfigured({ ...ENV, username: undefined })).toBe(false);
+describe("password policy", () => {
+  it("requires a minimum length and bounds the maximum", () => {
+    expect(passwordProblem("x".repeat(MIN_PASSWORD_LENGTH))).toBeNull();
+    expect(passwordProblem("x".repeat(MIN_PASSWORD_LENGTH - 1))).toBeTruthy();
+    expect(passwordProblem("x".repeat(5000))).toBeTruthy();
+  });
+});
+
+describe("password hashing", () => {
+  it("verifies the right password and rejects a wrong one", async () => {
+    const stored = await hashPassword("correct horse battery staple");
+    expect(await passwordMatches("correct horse battery staple", stored)).toBe(true);
+    expect(await passwordMatches("correct horse battery stapl", stored)).toBe(false);
+    expect(await passwordMatches("", stored)).toBe(false);
   });
 
-  // Production must never serve unprotected because a variable went missing.
-  it("still gates production when unconfigured, but not development", () => {
-    expect(authRequired({ isProduction: true })).toBe(true);
-    expect(authRequired({ isProduction: false })).toBe(false);
-    expect(authRequired({ ...ENV, isProduction: false })).toBe(true);
+  it("salts, so the same password hashes differently every time", async () => {
+    const a = await hashPassword("same password");
+    const b = await hashPassword("same password");
+    expect(a).not.toBe(b);
+    expect(await passwordMatches("same password", a)).toBe(true);
+    expect(await passwordMatches("same password", b)).toBe(true);
+  });
+
+  it("records its parameters so they can be raised later", async () => {
+    const stored = await hashPassword("whatever");
+    expect(stored.split("$").slice(0, 4)).toEqual(["scrypt", "16384", "8", "1"]);
+  });
+
+  it("rejects malformed stored hashes instead of throwing", async () => {
+    for (const stored of ["", "nonsense", "scrypt$1$2$3", "bcrypt$16384$8$1$aaaa$bbbb", "scrypt$0$8$1$aaaa$bbbb"]) {
+      expect(await passwordMatches("whatever", stored)).toBe(false);
+    }
   });
 });
 
 describe("session tokens", () => {
-  it("accepts a token it just issued", () => {
-    const token = createSessionToken(ENV.secret, NOW);
-    expect(sessionTokenValid(token, ENV.secret, NOW)).toBe(true);
+  it("round-trips the user id it was issued for", () => {
+    expect(sessionUserId(createSessionToken(USER, SECRET, NOW), SECRET, NOW)).toBe(USER);
   });
 
   it("rejects a token signed with a different secret", () => {
-    const token = createSessionToken("a-different-key", NOW);
-    expect(sessionTokenValid(token, ENV.secret, NOW)).toBe(false);
+    expect(sessionUserId(createSessionToken(USER, "other-key", NOW), SECRET, NOW)).toBeNull();
   });
 
   it("rejects an expired token", () => {
-    const token = createSessionToken(ENV.secret, NOW, 60);
-    expect(sessionTokenValid(token, ENV.secret, NOW + 59_000)).toBe(true);
-    expect(sessionTokenValid(token, ENV.secret, NOW + 61_000)).toBe(false);
+    const token = createSessionToken(USER, SECRET, NOW, 60);
+    expect(sessionUserId(token, SECRET, NOW + 59_000)).toBe(USER);
+    expect(sessionUserId(token, SECRET, NOW + 61_000)).toBeNull();
   });
 
-  // The signature covers the expiry, so a forged expiry must not be trusted.
+  // The signature covers the user id and the expiry together, so neither can be
+  // swapped for another value.
   it("rejects a token whose expiry was extended", () => {
-    const token = createSessionToken(ENV.secret, NOW, 60);
-    const signature = token.slice(token.lastIndexOf(".") + 1);
-    const forged = `${NOW + 999_999_999}.${signature}`;
-    expect(sessionTokenValid(forged, ENV.secret, NOW)).toBe(false);
+    const token = createSessionToken(USER, SECRET, NOW, 60);
+    const signature = token.split(".")[2];
+    expect(sessionUserId(`${USER}.${NOW + 999_999_999}.${signature}`, SECRET, NOW)).toBeNull();
+  });
+
+  it("rejects a token re-pointed at a different user", () => {
+    const token = createSessionToken(USER, SECRET, NOW);
+    const [, expiresAt, signature] = token.split(".");
+    const otherUser = "8f1a1d1e-0000-4000-8000-000000000002";
+    expect(sessionUserId(`${otherUser}.${expiresAt}.${signature}`, SECRET, NOW)).toBeNull();
   });
 
   it("rejects malformed and missing tokens instead of throwing", () => {
-    for (const token of [undefined, "", ".", "abc", "abc.def", `${NOW + 1000}.`, `.${NOW}`]) {
-      expect(sessionTokenValid(token, ENV.secret, NOW)).toBe(false);
+    for (const token of [undefined, "", ".", "a.b", "a.b.c.d", `${USER}..sig`, `.${NOW}.sig`]) {
+      expect(sessionUserId(token, SECRET, NOW)).toBeNull();
     }
-    expect(sessionTokenValid(createSessionToken(ENV.secret, NOW), undefined, NOW)).toBe(false);
+    expect(sessionUserId(createSessionToken(USER, SECRET, NOW), undefined, NOW)).toBeNull();
   });
 });
 
@@ -90,8 +119,9 @@ describe("safeNextPath", () => {
     expect(safeNextPath(undefined)).toBe("/");
   });
 
-  it("does not bounce back to the sign-in page itself", () => {
+  it("does not bounce back to the auth pages themselves", () => {
     expect(safeNextPath("/sign-in")).toBe("/");
+    expect(safeNextPath("/sign-up")).toBe("/");
     expect(safeNextPath("/sign-in?next=%2Fschools")).toBe("/");
   });
 });
