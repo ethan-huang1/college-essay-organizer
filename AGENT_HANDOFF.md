@@ -268,6 +268,12 @@ by clicking through the running app.
   successful phase. Claude then returned a JSON 429/session-limit result,
   but the wrapper collapsed it into generic exit 5. The new wrapper fixes
   the permission path and classifies progress/outcomes independently.
+- The first final canonical rerun hit one existing PGlite `beforeEach`
+  30-second timeout while the long-lived Next dev server was still consuming
+  resources. The timeout was not raised or weakened. After stopping that
+  project-local server, the persistence file passed 23/23 and a second full
+  canonical run passed 95/95. Treat recurrence as resource contention first,
+  then investigate PGlite startup if it reproduces under a clean load.
 
 - One isolated `tsx` validation invocation hit a sandbox IPC `EPERM` while
   creating its temporary socket. The same records were validated through a
@@ -288,19 +294,22 @@ or to the completed one-outcome-per-school requirement.
 
 ## Tests/Verification Performed
 
-Orchestrator redesign checkpoint `c82deac`:
+Orchestrator redesign checkpoints `c82deac` and `b65467e`:
 
 - Shell syntax checks for both orchestration scripts: pass.
-- Disposable-repository orchestration suite: **101/101 assertions pass**.
+- Disposable-repository orchestration suite: **103/103 assertions pass**.
   Scenarios include primary completion; Claude → Codex → Claude; usage
   limits; crashes; normal exits; distinct stall and timeout outcomes;
   repeated no-progress termination; dirty and `HUMAN-REQUIRED` stops;
   bounded exhaustion; resume state; dead/live/ambiguous locks;
   stale handoffs; agent-specific subscription auth; secret redaction; and
   complete morning log artifacts.
+- The final two assertions verify that a Codex fallback is not started when
+  the installed CLI does not advertise the reviewed `--approve-for-me`
+  capability.
 - Full canonical `./run_tests.sh`: ESLint pass; strict typecheck pass;
   Vitest **95/95 pass**; production Next.js build pass; embedded
-  orchestration suite 101/101 pass.
+  orchestration suite 103/103 pass.
 - The five authentication/session files that were uncommitted at the start
   were preserved and independently landed as `864e181`; they were not
   included in the orchestrator commit.
@@ -416,15 +425,16 @@ none of this fixture data was committed):
   `scripts/test_overnight_handoff.sh`, `CLAUDE.md`, `AGENTS.md`, and
   `OVERNIGHT_TASK.md`
 - Test/build status: full canonical suite green (95 Vitest tests, production
-  build, 101 orchestration assertions)
+  build, 103 orchestration assertions)
 - Last agent: Codex
 - Stop reason: overnight reliability objective completed and checkpointed;
   application P0 work remains for the next Claude-primary run
 
 ## Last Verified Commit
 
-`c82deac` — "Make overnight agent handoff bounded and resumable". Full
-canonical verification passed immediately before this checkpoint: lint,
-strict typecheck, 95 Vitest tests, production build, and 101 deterministic
-orchestration assertions. The handoff documentation is committed separately
-after recording this verified code hash.
+`b65467e` — "Fail closed when Codex review mode is unavailable" (following
+the main redesign in `c82deac`). Full canonical verification passed
+immediately before this checkpoint: lint, strict typecheck, 95 Vitest tests,
+production build, and 103 deterministic orchestration assertions. The
+handoff documentation is committed separately after recording this verified
+code hash.
