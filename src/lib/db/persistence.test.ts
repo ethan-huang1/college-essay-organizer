@@ -715,6 +715,41 @@ describe("local persistence foundation", () => {
     snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.find((prompt) => prompt.id === promptId)?.assignedEssay).toBeNull();
   });
+  // Unassigning is delete-shaped, so a prompt that has already gone away is
+  // success. Routing it through canonicalSiblingIds briefly made it throw,
+  // which turned an ordinary race into a Server Action crash.
+  it("treats unassigning an already-deleted prompt as a no-op", async () => {
+    await expect(unassignPrompt(connection.db, PERSONAL, crypto.randomUUID())).resolves.toBeUndefined();
+  });
+
+  // The whole canonical design rests on siblings agreeing, and every read path
+  // is allowed to pick an arbitrary instance because of it. This asserts the
+  // invariant holds across the shipped example workspace rather than trusting
+  // that every write path remembered to fan out.
+  it("holds the canonical lockstep invariant across the whole demo workspace", async () => {
+    await resetDemoWorkspace(connection.db);
+    const rows = await connection.db.select().from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID));
+    const assignments = await connection.db.select().from(assignedEssayResponses)
+      .where(eq(assignedEssayResponses.workspaceId, DEMO_WORKSPACE_ID));
+    const essayByPrompt = new Map(assignments.map((row) => [row.promptId, row.essayId]));
+
+    const byCanonicalKey = new Map<string, { statuses: Set<string>; essays: Set<string> }>();
+    for (const row of rows) {
+      if (!row.canonicalKey) continue;
+      const group = byCanonicalKey.get(row.canonicalKey) ?? { statuses: new Set(), essays: new Set() };
+      group.statuses.add(row.status);
+      group.essays.add(essayByPrompt.get(row.id) ?? "none");
+      byCanonicalKey.set(row.canonicalKey, group);
+    }
+
+    // The demo must actually contain shared prompts, or this proves nothing.
+    expect(byCanonicalKey.size).toBeGreaterThan(0);
+    for (const [key, group] of byCanonicalKey) {
+      expect(group.statuses.size, `${key} has divergent statuses`).toBe(1);
+      expect(group.essays.size, `${key} has divergent assignments`).toBe(1);
+    }
+  });
+
   // Seven UC campuses each store their own row for Personal Insight Question 1,
   // but a student writes that essay once. These pin the whole invariant: writes
   // fan out, a later campus inherits, and removing one campus cannot orphan the
@@ -761,6 +796,27 @@ describe("local persistence foundation", () => {
       expect(snapshot?.prompts.find((prompt) => prompt.id === uclaPiq.id)?.assignedEssay?.id).toBe(essayId);
       // Assigning is starting work, so neither may still read "not started".
       expect(snapshot?.prompts.find((prompt) => prompt.id === uclaPiq.id)?.status).toBe("in-progress");
+    });
+
+    // setPromptStatus fans out, but the "Edit prompt" form goes through
+    // updatePrompt, which writes status too. Without the same fan-out a student
+    // editing PIQ 1 at one campus leaves its siblings reading "not started",
+    // and the aggregate count that canonicalPromptGroups builds is then wrong
+    // for what the app itself calls one shared question.
+    it("editing a shared prompt's status through updatePrompt marks every campus", async () => {
+      const [berkeley, ucla] = await importUcCampuses();
+      const berkeleyPiq = await piqOne(berkeley.schoolId);
+
+      await updatePrompt(connection.db, PERSONAL, berkeleyPiq.id, {
+        schoolId: berkeleyPiq.schoolId,
+        title: berkeleyPiq.title,
+        promptText: berkeleyPiq.promptText,
+        maxWordCount: berkeleyPiq.maxWordCount,
+        requirement: berkeleyPiq.requirement,
+        status: "complete",
+      });
+
+      expect((await piqOne(ucla.schoolId)).status).toBe("complete");
     });
 
     it("marking one campus complete marks every campus", async () => {
@@ -910,6 +966,52 @@ describe("local persistence foundation", () => {
       const essayLinks = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
       expect(essayLinks.find((link) => link.isPrimary)?.familyId).toBe(otherId);
       expect(await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.essayId, essayId))).toHaveLength(1);
+    });
+
+    // Two of the retired categories can collapse onto the same new one for a
+    // single prompt. If one of those links was the student's own choice, the
+    // survivor has to stay 'manual' - otherwise a hand-classification silently
+    // starts reading as auto-generated, and updatePrompt's provenance flag is
+    // the only record that a human ever touched it.
+    it("keeps hand-classified provenance when two retired categories collapse into one", async () => {
+      await seedLegacyTaxonomy(PERSONAL);
+      const school = await createSchool(connection.db, PERSONAL, { name: "Provenance University" });
+      if (!school) throw new Error("Expected the school to be created.");
+      const promptId = await createPrompt(connection.db, PERSONAL, {
+        schoolId: school.id,
+        title: "Collapses from two retired categories",
+        promptText: "A prompt filed under two categories that both retire into Other.",
+        requirement: "required",
+        status: "not-started",
+      });
+
+      // Straight to the table: one deterministic primary and one manual
+      // secondary, both of which map to `other`.
+      await connection.db.delete(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
+      await connection.db.insert(promptFamilyLinks).values([
+        {
+          id: crypto.randomUUID(),
+          workspaceId: PERSONAL,
+          promptId,
+          familyId: `${PERSONAL}:family:activities-impact`,
+          isPrimary: true,
+          source: "deterministic",
+        },
+        {
+          id: crypto.randomUUID(),
+          workspaceId: PERSONAL,
+          promptId,
+          familyId: `${PERSONAL}:family:values-meaning`,
+          isPrimary: false,
+          source: "manual",
+        },
+      ]);
+
+      await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
+
+      const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
+      expect(links).toHaveLength(1);
+      expect(links[0]).toMatchObject({ familyId: `${PERSONAL}:family:other`, isPrimary: true, source: "manual" });
     });
 
     it("is idempotent and leaves an already-migrated workspace alone", async () => {
