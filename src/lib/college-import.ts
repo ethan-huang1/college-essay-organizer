@@ -7,7 +7,8 @@ import { applicationCycles, promptChangeLog, promptFamilies, promptFamilyLinks, 
 import { PROMPT_FAMILIES } from "./db/taxonomy";
 import { promptContentChanged } from "./retrieval/normalize";
 import { lookupSchoolSource } from "./retrieval/registry";
-import type { ApplicationPlatform, RawPromptRecord, VerificationStatus } from "./retrieval/types";
+import type { ApplicationPlatform, RawPromptRecord, SchoolSourceRecord, VerificationStatus } from "./retrieval/types";
+import type { CatalogueStatus } from "./schools";
 import { canonicalizeUniversityName } from "./top-universities";
 
 const FAMILY_NAME_BY_SLUG = new Map<string, string>(PROMPT_FAMILIES.map(([slug, name]) => [slug, name]));
@@ -212,6 +213,17 @@ export type ImportCollegeResult = {
 // looks up the retrieval registry, and imports/updates/flags each prompt
 // through the shared upsert pipeline above - every school (however it was
 // researched) goes through identical logic, never special-cased here.
+// The registry record's own verification outcome, mapped to the school-level
+// state the UI shows. A school typed in by hand has no record at all, which is
+// exactly what "manual" means.
+function catalogueStatusFor(source: SchoolSourceRecord | null): CatalogueStatus {
+  if (!source) return "manual";
+  if (source.prompts.length === 0) {
+    return source.verificationStatus === "no-supplement-confirmed" ? "no-supplement" : "not-published";
+  }
+  return source.verificationStatus === "previous-cycle" ? "previous-cycle" : "current";
+}
+
 export async function importCollege(db: AppDatabase, workspaceId: string, schoolName: string): Promise<ImportCollegeResult> {
   const currentCycleId = await getOrCreateCycle(db, workspaceId, CURRENT_CYCLE_LABEL);
   const school = await getOrCreateSchool(db, workspaceId, canonicalizeUniversityName(schoolName), currentCycleId);
@@ -219,14 +231,15 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
 
   if (!source || source.prompts.length === 0) {
     const note = source?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.";
-    // Persisted on the school record (reusing the existing notes column)
-    // so a no-supplement-confirmed/needs-review outcome stays visible on
-    // later visits, not just as this one-time return value - otherwise a
-    // school with zero prompts looks identical whether it's genuinely
-    // unresearched or confirmed to have no supplement.
-    if (source && !school.notes) {
-      await db.update(schools).set({ notes: note }).where(eq(schools.id, school.id));
-    }
+    // catalogueStatus is the structured reason this school has no prompts, so
+    // the UI never has to guess (or parse `notes`) whether a zero-prompt
+    // college is confirmed supplement-free or merely unresearched. It is
+    // rewritten on every import so a re-import converges; `notes` stays the
+    // human-readable justification and is still only written once.
+    await db.update(schools).set({
+      catalogueStatus: catalogueStatusFor(source),
+      ...(source && !school.notes ? { notes: note } : {}),
+    }).where(eq(schools.id, school.id));
     return {
       schoolId: school.id,
       schoolName: school.name,
@@ -248,6 +261,7 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
     platform: source.applicationPlatform,
     retrievedAt: new Date(source.retrievedAt),
   }, familyIds);
+  await db.update(schools).set({ catalogueStatus: catalogueStatusFor(source) }).where(eq(schools.id, school.id));
 
   return {
     schoolId: school.id,

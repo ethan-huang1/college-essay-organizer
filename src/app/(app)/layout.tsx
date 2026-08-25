@@ -11,6 +11,27 @@ import { loadDemoWorkspace, openPersonalWorkspace } from "../workspace-actions";
 // workspace cookie and the database.
 export const dynamic = "force-dynamic";
 
+// A college with no prompts used to render a bare "—" whatever the reason. The
+// sidebar has room for one glyph, so each state gets a distinct one plus a
+// title for the full explanation.
+const NAV_STATE_MARK = {
+  current: "—",
+  "no-supplement": "✓",
+  "not-published": "⏳",
+  "needs-review": "⚠",
+  "previous-cycle-only": "'25",
+  manual: "?",
+} as const;
+
+const NAV_STATE_TITLE = {
+  current: "No prompts on file yet",
+  "no-supplement": "No supplemental essay this cycle",
+  "not-published": "2026–27 wording not published yet",
+  "needs-review": "A prompt changed since import — needs review",
+  "previous-cycle-only": "Only 2025–26 prompts are on file",
+  manual: "No verified prompts on file yet",
+} as const;
+
 export default async function AppLayout({ children }: Readonly<{ children: ReactNode }>) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const overall = summarizePrompts(snapshot.prompts);
@@ -60,8 +81,8 @@ export default async function AppLayout({ children }: Readonly<{ children: React
                   <li key={school.id}>
                     <NavLink className="nav-school" href={`/schools?school=${school.id}`} schoolId={school.id}>
                       <span title={school.name}>{school.name}</span>
-                      <span className="nav-progress">
-                        {progress.total > 0 ? `${progress.complete}/${progress.total}` : "—"}
+                      <span className={`nav-progress ${school.catalogueState}`} title={NAV_STATE_TITLE[school.catalogueState]}>
+                        {progress.total > 0 ? `${progress.complete}/${progress.total}` : NAV_STATE_MARK[school.catalogueState]}
                       </span>
                     </NavLink>
                   </li>

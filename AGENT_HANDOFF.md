@@ -413,22 +413,54 @@ none of this fixture data was committed):
 ## Overnight Run State
 
 - Disposition: continue
-- Current objective: complete MVP_SPEC.md's P0 Definition of Done
-- Completed tasks: orchestration is now Claude-primary, bounded, classified,
-  checkpoint-gated, logged, and resumable
-- Current task: P0 Phase 4 deterministic editing-suggestion workflow
-- Next recommended task: implement prompt-fit, clarity, concision, and
-  word-limit suggestions with immutable accept and non-mutating reject tests
-- Important decisions: one Codex cycle is the default conservative reserve
-  proxy; no invented percentage and no unbounded agent loop
-- Files changed: `scripts/overnight_handoff.sh`,
-  `scripts/test_overnight_handoff.sh`, `CLAUDE.md`, `AGENTS.md`, and
-  `OVERNIGHT_TASK.md`
-- Test/build status: full canonical suite green (95 Vitest tests, production
-  build, 103 orchestration assertions)
-- Last agent: Codex
-- Stop reason: overnight reliability objective completed and checkpointed;
-  application P0 work remains for the next Claude-primary run
+- Current objective: make the MVP trustworthy for student testing, per the
+  approved plan (essay editor → zero-prompt colleges → workload engine →
+  minimum catalogue encoding → reuse → taxonomy → loading states → polish)
+- Completed phases: **0** baseline verified at `48bc303` (tag `pre-trust-run`);
+  **1** essay editor usable (`a6d8ed3`); **2** zero-prompt colleges truthful
+- Current task: Phase 3, the workload engine (`src/lib/workload.ts`) — required
+  vs optional vs conditional counting, choose-N prompt groups, and canonical
+  shared prompts
+- Next recommended task: after Phase 3, Phase 4 encodes the minimum catalogue
+  set (UC, Yale, Duke, Penn, Georgetown, Dartmouth, Washington and Lee). Phase 3
+  changes no observable behaviour until that lands, so both are inside the P0
+  boundary.
+- Important decisions this run:
+  - **Canonical siblings share response state.** Prompts sharing a
+    `canonical_key` are kept in lockstep at write time (fan-out inside
+    `lib/assignments.ts` and `lib/prompts.ts`, not the actions), so aggregation
+    never has to guess which school row carries an assignment and deleting one
+    UC campus cannot orphan a shared one. Rendered collections dedupe by
+    `canonical_key`; a school-scoped view shows that campus's own instance.
+  - **Zero-prompt college state is a column, never parsed prose.**
+    `schools.catalogue_status` is written by the importer on every import;
+    `schools.notes` stays display-only. `schoolCatalogueState()` in
+    `src/lib/schools.ts` is the single deterministic derivation.
+  - **Secondary categories are no longer user-editable.** The ten-checkbox wall
+    is gone from the essay form. Omitting `secondaryFamilyIds` now means "keep
+    them" so a metadata save cannot wipe importer-derived links; an explicit
+    `[]` still clears.
+- Migration: `drizzle/0002_broken_prima.sql` — 9 `ADD COLUMN`, 2 `CREATE INDEX`,
+  1 `ADD CONSTRAINT`. Read before accepting: no drops, no type changes, no table
+  rebuild. Covers Phases 2 and 3 together.
+- **HUMAN FOLLOW-UP REQUIRED (not a blocker):**
+  1. Apply `drizzle/0002_broken_prima.sql` to Neon and redeploy. The run never
+     touched Neon or Vercel (OVERNIGHT_TASK.md rules 6 and 10).
+  2. Authenticated end-to-end and responsive verification at 1440/1024/768/390px
+     is unperformed by deliberate instruction — there is no local Postgres or
+     Docker on this machine, so a signed-in session would have meant using the
+     production database. Only one datapoint was captured before that
+     instruction landed: the essay textarea measures 1087×320px at 1440px wide
+     with zero horizontal overflow, up from 176×48px.
+  3. A throwaway account `qa-local@example.com` was created in the production
+     Neon database moments before the no-production instruction arrived (user
+     row + empty personal workspace only; no college, prompt, or essay). It was
+     deliberately left in place rather than issuing another production write.
+     Delete it at will — cascade delete is covered by tests.
+- Test/build status: full canonical gate green — lint, strict typecheck,
+  **101 Vitest tests** (was 95), production build, 103 orchestration assertions
+- Last agent: Claude
+- Stop reason: n/a, run in progress
 
 ## Last Verified Commit
 

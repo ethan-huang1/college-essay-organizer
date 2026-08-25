@@ -532,6 +532,52 @@ h3 {
   font-size: 12.5px;
 }
 
+/* A zero-prompt college states its reason rather than rendering blank. The
+   colour carries the same distinction as the wording: settled, waiting, or
+   wants attention. */
+.catalogue-badge {
+  display: inline-block;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 2px 9px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.catalogue-badge.no-supplement {
+  border-color: #9aab90;
+  color: var(--moss-dark);
+}
+
+.catalogue-badge.needs-review {
+  border-color: #c08d88;
+  color: var(--oxblood);
+}
+
+.catalogue-note {
+  margin: 10px 0 4px;
+  border-left: 2px solid var(--rule);
+  padding-left: 12px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.catalogue-note.no-supplement {
+  border-left-color: #9aab90;
+}
+
+.catalogue-note.needs-review {
+  border-left-color: #c08d88;
+}
+
+.nav-progress.needs-review {
+  color: var(--oxblood);
+}
+
 .overview-note strong {
   color: var(--ink);
 }

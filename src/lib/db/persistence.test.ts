@@ -563,7 +563,36 @@ describe("local persistence foundation", () => {
     expect(result.counts.created).toBe(0);
     expect(result.verificationStatus).toBe("manual");
     expect(result.note).toMatch(/not yet verified/i);
-    expect((await connection.db.select().from(schools).where(eq(schools.id, result.schoolId)).then((rows) => rows[0]))?.name).toBe("Some Unlisted College");
+    const row = await connection.db.select().from(schools).where(eq(schools.id, result.schoolId)).then((rows) => rows[0]);
+    expect(row?.name).toBe("Some Unlisted College");
+    expect(row?.catalogueStatus).toBe("manual");
+  });
+
+  // A college with zero prompts is not one state but four, and they mean
+  // opposite things to a student. Each has to be readable from a column, never
+  // from the prose in schools.notes.
+  it("distinguishes every zero-prompt college state from structured data alone", async () => {
+    const noSupplement = await importCollege(connection.db, PERSONAL, "Colby College");
+    const notPublished = await importCollege(connection.db, PERSONAL, "Boston University");
+    const previousOnly = await importCollege(connection.db, PERSONAL, "Harvard University");
+    const manual = await importCollege(connection.db, PERSONAL, "Some Unlisted College");
+
+    const byId = new Map(
+      (await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL))).map((row) => [row.id, row]),
+    );
+    expect(byId.get(noSupplement.schoolId)?.catalogueStatus).toBe("no-supplement");
+    expect(byId.get(notPublished.schoolId)?.catalogueStatus).toBe("not-published");
+    expect(byId.get(previousOnly.schoolId)?.catalogueStatus).toBe("previous-cycle");
+    expect(byId.get(manual.schoolId)?.catalogueStatus).toBe("manual");
+
+    const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
+    const stateOf = (schoolId: string) => snapshot?.schools.find((school) => school.id === schoolId)?.catalogueState;
+    expect(stateOf(noSupplement.schoolId)).toBe("no-supplement");
+    expect(stateOf(notPublished.schoolId)).toBe("not-published");
+    expect(stateOf(manual.schoolId)).toBe("manual");
+    // Harvard has prompts, all previous-cycle, so the state comes from the
+    // prompt rows rather than the stored status.
+    expect(stateOf(previousOnly.schoolId)).toBe("previous-cycle-only");
   });
 
   it("imports confirmed previous-cycle prompts, distinctly cycle-labeled and never as current", async () => {

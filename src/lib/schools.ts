@@ -3,6 +3,49 @@ import { and, eq } from "drizzle-orm";
 import type { AppDatabase } from "./db/client";
 import { schools } from "./db/schema";
 
+export type CatalogueStatus = NonNullable<typeof schools.$inferSelect.catalogueStatus>;
+
+export type SchoolCatalogueState =
+  | "current"
+  | "no-supplement"
+  | "not-published"
+  | "needs-review"
+  | "previous-cycle-only"
+  | "manual";
+
+/**
+ * Why a college looks the way it does, as one deterministic value.
+ *
+ * A college with no prompts is not a college with nothing to say: it may have
+ * no supplement at all, may not have published this cycle's wording yet, or may
+ * only ever have been entered by hand. Both inputs here are structured -
+ * `catalogueStatus` written by the importer and each prompt's own
+ * `verificationStatus` - so this never depends on reading `schools.notes`.
+ */
+export function schoolCatalogueState(
+  catalogueStatus: CatalogueStatus | null,
+  schoolPrompts: readonly { isCurrentCycle: boolean; verificationStatus: string }[],
+): SchoolCatalogueState {
+  if (schoolPrompts.length > 0) {
+    // A flagged prompt outranks the rest: its wording changed under us, so
+    // every count derived from it is suspect until someone looks.
+    if (schoolPrompts.some((prompt) => prompt.verificationStatus === "needs-review")) return "needs-review";
+    return schoolPrompts.some((prompt) => prompt.isCurrentCycle) ? "current" : "previous-cycle-only";
+  }
+  switch (catalogueStatus) {
+    case "no-supplement":
+      return "no-supplement";
+    case "not-published":
+      return "not-published";
+    case "previous-cycle":
+      return "previous-cycle-only";
+    // "current" with zero prompts means the catalogue said there were prompts
+    // and none survived import - treat it as unverified rather than done.
+    default:
+      return "manual";
+  }
+}
+
 function cleanName(name: string) {
   const value = name.trim().replace(/\s+/g, " ");
   if (value.length < 2 || value.length > 120) throw new Error("School name must be between 2 and 120 characters.");

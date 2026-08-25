@@ -15,6 +15,7 @@ import {
   workspaces,
 } from "./db/schema";
 import { CURRENT_CYCLE_LABEL } from "./cycle";
+import { schoolCatalogueState } from "./schools";
 
 function wordCount(content: string) {
   return content.trim() ? content.trim().split(/\s+/).length : 0;
@@ -68,10 +69,18 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
       assignments: assignments.length,
       strongMatches: matches.filter((match) => match.score >= 75).length,
     },
-    schools: workspaceSchools.map((school) => ({
-      ...school,
-      promptCount: workspacePrompts.filter((prompt) => prompt.schoolId === school.id).length,
-    })),
+    schools: workspaceSchools.map((school) => {
+      const schoolPrompts = workspacePrompts
+        .filter((prompt) => prompt.schoolId === school.id)
+        .map((prompt) => ({ isCurrentCycle: isCurrentCyclePrompt(prompt), verificationStatus: prompt.verificationStatus }));
+      return {
+        ...school,
+        promptCount: schoolPrompts.length,
+        // Never null, so no view has to invent a fallback for a college that
+        // simply has nothing to answer.
+        catalogueState: schoolCatalogueState(school.catalogueStatus, schoolPrompts),
+      };
+    }),
     prompts: workspacePrompts.map((prompt) => {
       const links = familyPromptLinks.filter((link) => link.promptId === prompt.id);
       const primaryLink = links.find((link) => link.isPrimary);

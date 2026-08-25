@@ -15,6 +15,13 @@
       "when": 1787614868625,
       "tag": "0001_colorful_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787630439871,
+      "tag": "0002_broken_prima",
+      "breakpoints": true
     }
   ]
 }

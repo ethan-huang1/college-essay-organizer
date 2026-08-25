@@ -170,6 +170,46 @@ function RemoveConfirmation({ school, cancelHref }: { school: WorkspaceSnapshot[
   );
 }
 
+type SchoolWithState = WorkspaceSnapshot["schools"][number];
+
+// One line per state, each of which means something different to a student
+// deciding what to work on. "No supplemental essay" is finished work; "wording
+// not published" is a reason to check back; "needs review" is a reason to look
+// now. Collapsing them into one blank cell was the original bug.
+const CATALOGUE_STATE_COPY: Record<SchoolWithState["catalogueState"], { badge: string; note: string } | null> = {
+  current: null,
+  "no-supplement": {
+    badge: "✓ No supplemental essay",
+    note: "This college asks for no supplemental essay this cycle. Nothing to write here — that is the finished state, not a gap.",
+  },
+  "not-published": {
+    badge: "⏳ Wording not published",
+    note: "This college has not published its 2026–27 wording yet. Its prompts will import once they are official; add any you already know by hand.",
+  },
+  "needs-review": {
+    badge: "⚠ Needs review",
+    note: "At least one prompt changed since it was imported. Check the wording before relying on the word limits.",
+  },
+  "previous-cycle-only": {
+    badge: "2025–26 only",
+    note: "Only last cycle's prompts are on file. They are useful for planning, but none of them count toward this cycle's work.",
+  },
+  manual: {
+    badge: "Not yet verified",
+    note: "No verified prompts on file for this college yet. Add prompts by hand, or check back once the catalogue covers it.",
+  },
+};
+
+function CatalogueStateBadge({ school }: { school: SchoolWithState }) {
+  const copy = CATALOGUE_STATE_COPY[school.catalogueState];
+  return copy ? <span className={`catalogue-badge ${school.catalogueState}`}>{copy.badge}</span> : null;
+}
+
+function CatalogueStateNote({ school }: { school: SchoolWithState }) {
+  const copy = CATALOGUE_STATE_COPY[school.catalogueState];
+  return <p className={`catalogue-note ${school.catalogueState}`}>{copy?.note ?? "No prompts on file for this college yet."}</p>;
+}
+
 function SchoolHeader({
   snapshot,
   school,
@@ -188,9 +228,10 @@ function SchoolHeader({
         {focused ? null : (
           <>
             <h2><Link href={`/schools?school=${school.id}`}>{school.name}</Link></h2>
-            <ProgressLine progress={progress} />
+            {school.promptCount > 0 ? <ProgressLine progress={progress} /> : null}
           </>
         )}
+        <CatalogueStateBadge school={school} />
         {school.notes ? <p className="detail-note">{school.notes}</p> : null}
       </div>
       <div className="school-header-side">
@@ -224,11 +265,16 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
     return true;
   });
 
+  // A college the student chose is always worth showing: a school with no
+  // prompts has a reason, and hiding it made "no supplemental essay" look
+  // identical to "we never looked". Only an active prompt filter may hide one,
+  // because only then is "nothing matches" actually true.
+  const promptFilterActive = Boolean(filters.family || filters.status || filters.q);
   const schools = [...snapshot.schools]
     .filter((school) => !filters.school || school.id === filters.school)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((school) => ({ school, prompts: visible.filter((prompt) => prompt.schoolId === school.id) }))
-    .filter((group) => group.prompts.length > 0 || Boolean(filters.school));
+    .filter((group) => group.prompts.length > 0 || !promptFilterActive || Boolean(filters.school));
 
   return (
     <>
@@ -253,7 +299,9 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
                 <RemoveConfirmation school={school} cancelHref={withFilters("/schools", filters)} />
               ) : null}
               {prompts.length === 0 ? (
-                <p className="empty-note">No prompts match this filter for {school.name}.</p>
+                promptFilterActive && school.promptCount > 0
+                  ? <p className="empty-note">No prompts match this filter for {school.name}.</p>
+                  : <CatalogueStateNote school={school} />
               ) : (
                 <div className="prompt-table">
                   <PromptTableHead showSchool={false} />

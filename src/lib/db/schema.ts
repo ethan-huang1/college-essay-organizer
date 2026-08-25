@@ -79,6 +79,18 @@ export const schools = pgTable(
     cycleId: text("cycle_id").references(() => applicationCycles.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     notes: text("notes"),
+    // Why this school has the prompts it has, as a value rather than prose.
+    // `notes` stays free-text justification for display; deciding what to show
+    // for a zero-prompt college must never mean parsing it. Null means the
+    // school predates this column and has not been re-imported since.
+    catalogueStatus: text("catalogue_status", {
+      enum: ["current", "no-supplement", "not-published", "previous-cycle", "manual"],
+    }),
+    // Null = the student has not been asked which programs they are applying
+    // to, so program-gated prompts are unresolved. [] = asked and answered
+    // "none", so they are settled at zero. The distinction is the whole point
+    // of the column being nullable.
+    selectedPrograms: jsonb("selected_programs").$type<string[]>(),
     createdAt: stamp("created_at"),
     updatedAt: stamp("updated_at"),
   },
@@ -141,6 +153,23 @@ export const prompts = pgTable(
     sourceUrl: text("source_url"),
     retrievedAt: optionalStamp("retrieved_at"),
     externalRef: text("external_ref"),
+    // One application asking one question of several schools at once - the UC
+    // system's seven campuses share eight Personal Insight Questions. Prompts
+    // sharing a canonicalKey are the same question, so the app renders them
+    // once and keeps their response state identical. sharedApplicationKey is
+    // stored separately rather than parsed back out of canonicalKey.
+    sharedApplicationKey: text("shared_application_key"),
+    canonicalKey: text("canonical_key"),
+    // "Answer any 4 of these 8." Without this the app counts eight essays of
+    // work where the school asks for four, and progress can never reach 100%.
+    groupKey: text("group_key"),
+    groupLabel: text("group_label"),
+    groupRequiredCount: integer("group_required_count"),
+    // Which program makes a conditional prompt apply, so "required only if you
+    // apply to Wharton" is a value the app can resolve against the student's
+    // answer instead of free text nobody can count.
+    programKey: text("program_key"),
+    programLabel: text("program_label"),
     notes: text("notes"),
     createdAt: stamp("created_at"),
     updatedAt: stamp("updated_at"),
@@ -148,6 +177,12 @@ export const prompts = pgTable(
   (table) => [
     index("prompts_workspace_idx").on(table.workspaceId),
     index("prompts_school_idx").on(table.schoolId),
+    index("prompts_canonical_idx").on(table.workspaceId, table.canonicalKey),
+    index("prompts_group_idx").on(table.schoolId, table.groupKey),
+    check(
+      "prompts_group_required_count_positive_check",
+      sql`${table.groupRequiredCount} is null or ${table.groupRequiredCount} >= 1`,
+    ),
     uniqueIndex("prompts_school_external_ref_unique").on(table.schoolId, table.externalRef).where(sql`${table.externalRef} is not null`),
     check("prompts_word_count_nonnegative_check", sql`coalesce(${table.minWordCount}, 0) >= 0 and coalesce(${table.maxWordCount}, 0) >= 0`),
     check("prompts_word_count_order_check", sql`${table.minWordCount} is null or ${table.maxWordCount} is null or ${table.maxWordCount} >= ${table.minWordCount}`),
