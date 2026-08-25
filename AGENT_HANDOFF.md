@@ -477,10 +477,13 @@ none of this fixture data was committed):
   as *unresolved* - visible, excluded from required, never silently counted.
   `coverage.test.ts` names the encoded schools explicitly, so a half-finished
   file cannot pass quietly, and prints the outstanding count.
-- **Duke, Northwestern and W&L's optional prompt sets are not grouped.** Each is
-  genuinely "you may answer one of these", so a required group would overstate
-  the work. Their required counts are already right; only the optional tally
-  reads "3" rather than "up to 1 of 3".
+- **Duke, Northwestern, Bowdoin and W&L's optional prompt sets are not
+  grouped.** The plan listed Duke, Northwestern and Bowdoin as group files, but
+  that was an error in the plan rather than a gap in the work: Duke's,
+  Northwestern's and W&L's sets are genuinely "you may answer one of these", so a
+  required group would overstate the work, and Bowdoin publishes two optional
+  essays with no choose-N rule at all. Their required counts are already right;
+  only the optional tally reads "3" rather than "up to 1 of 3".
 - **The rest of Phase 8's responsive and density polish.** Judgement-based
   visual work, and authenticated browser verification was unavailable - a CSS
   change nobody can see is where a regression hides. The two defects with
@@ -509,8 +512,14 @@ none of this fixture data was committed):
 - **A conditional prompt resolves three ways, not two.** Unresolved is a real
   state and must stay visible.
 
+- **Pre-production verification complete.** See [DEPLOYMENT.md](DEPLOYMENT.md)
+  for the verdict, the migration rehearsal results, the exact production
+  sequence, the invariants to check at each step, and the rollback constraints.
+  Five real defects were found and repaired (one blocker: `updatePrompt` did not
+  fan status out to canonical siblings). Verdict: READY WITH SPECIFIED MANUAL
+  CHECKS.
 - Test/build status: full canonical gate green - lint, strict typecheck,
-  **170 Vitest tests**, production build, 103 orchestration assertions.
+  **191 Vitest tests**, production build, 103 orchestration assertions.
 - Last agent: Claude
 
 ## Last Verified Commit
