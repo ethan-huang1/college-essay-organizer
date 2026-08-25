@@ -16,37 +16,52 @@
   AGENT_HANDOFF.md is the source of truth for context, status, and next
   steps.
 
-## Running the automated overnight pipeline (Layer 3)
+## Running the automated overnight pipeline
 
-`scripts/overnight_handoff.sh` runs **Codex first, then Claude**,
-non-interactively and strictly sequentially in this checkout — never
-concurrently. Tonight's run is exactly one Codex phase followed by one
-Claude phase, then it stops (no multi-round loop). A fail-closed
-subscription-only authentication preflight runs before each real agent call
-(see "Zero incremental spend" below); repo/handoff state is validated before
-Codex, after Codex, and after Claude.
+`scripts/overnight_handoff.sh` runs agents non-interactively and strictly
+sequentially in this preferred order:
 
-**Codex ending nonzero does not automatically abort the run.** If Codex left
-a safe, verified checkpoint (clean tree, no conflicts, valid non-stale
-handoff, no `HUMAN-REQUIRED:` marker) even though it exited nonzero — e.g. it
-ran out of included usage mid-phase after already committing good work —
-the pipeline still continues to Claude, and reports a distinct **degraded
-but recovered** result rather than silently claiming a clean run.
+1. **Claude primary** — continues normally until the objective is complete
+   or it hits a genuine limit/error/stall. There is no short elapsed-time
+   handoff.
+2. **Codex reserve** — only if work remains and Claude left a safe verified
+   checkpoint. `CODEX_RESERVE_CYCLES=1` is the conservative default proxy;
+   neither CLI exposes a trustworthy percentage of remaining ChatGPT/Codex
+   quota, so the script never invents a “20% used” measurement.
+3. **Claude retry** — once by default, after a configurable backoff, if the
+   bounded Codex reserve leaves work remaining.
+
+The default sequence is therefore at most three agent invocations. It never
+loops Claude ↔ Codex indefinitely. `CLAUDE_RETRY_CYCLES` and
+`CODEX_RESERVE_CYCLES` accept explicit integer bounds; exhausted state stays
+terminal across reruns unless a human deliberately supplies
+`OVERNIGHT_RESET_STATE=1`.
+
+Before and after every phase, the repository must be a clean, non-conflicted,
+tested checkpoint with a non-stale `AGENT_HANDOFF.md`. A usage limit or crash
+can hand off only if that independent validation succeeds. A dirty or stale
+state is preserved for investigation and stops the sequence; the script
+never resets or cleans it.
 
 **Exit codes** (also written to `logs/overnight/<run-id>/exit_code`):
 
 | Code | Meaning |
 |---|---|
-| 0 | Codex and Claude both exited 0; all validations passed |
-| 2 | pre-flight repo/handoff check failed (before Codex ran) |
-| 3 | Codex ended nonzero **and** left an unsafe state — Claude never ran |
-| 4 | post-Codex validation failed even though Codex itself exited 0 |
-| 5 | Claude phase itself ended nonzero |
-| 6 | post-Claude validation failed |
-| 9 | lock already held — nothing ran, existing lock untouched |
-| 10 | pre-Codex auth preflight failed — nothing ran |
-| 11 | Codex left a valid checkpoint, but Claude was skipped (pre-Claude auth preflight failed — e.g. Claude's usage is unavailable tonight) |
-| 12 | Codex ended nonzero but left a safe checkpoint; Claude then finished successfully — degraded but recovered, never reported as plain `0` |
+| 0 | objective marked complete and final validation passed |
+| 2 | pre-flight objective/repo/handoff validation failed |
+| 9 | another live run holds the lock, or lock ownership is ambiguous |
+| 10 | Claude-primary subscription auth preflight failed |
+| 20 | bounded sequence ended cleanly with work remaining |
+| 21 | bounded sequence ended on a usage/rate limit |
+| 22 | bounded sequence ended on a crash/error or unexpected exit |
+| 23 | bounded sequence ended on timeout/stall/repeated no progress |
+| 24 | an agent left an unsafe checkpoint; no handoff occurred |
+| 25 | a later agent's auth preflight failed; prior checkpoint is intact |
+| 26 | a `HUMAN-REQUIRED:` blocker stopped the sequence |
+| 28 | wrapper interrupted; durable resume state remains |
+
+Every phase additionally writes its own `.outcome` file with one of
+`normal-exit`, `usage-limit`, `crash-error`, `timeout`, or `stall`.
 
 ### Zero incremental spend
 
@@ -60,44 +75,35 @@ in your Claude and ChatGPT subscriptions. Before your first real run:
    check) — it never claims to have verified it. If ChatGPT/Codex has an
    equivalent credit or spend-limit setting, check that too; this repo has
    no way to inspect it either.
-2. The orchestrator's auth preflight (`run_auth_preflight`, called before
-   Codex and again before Claude) fails closed: it aborts if
-   `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is set, if Claude isn't
-   authenticated via a `claude.ai` subscription (checked via
-   `claude auth status --json`: `loggedIn`, `authMethod`, `apiProvider`, and
-   an allowlisted `subscriptionType`), or if Codex isn't "Logged in using
-   ChatGPT" (`codex login status`). Anything missing, ambiguous, or
-   unrecognized is rejected, not assumed safe.
-3. `CLAUDE_BUDGET_USD` (default 2, overridable via env var) is an
-   **estimated included-usage ceiling** — it caps how far one Claude
-   invocation goes. It does **not** verify authentication and does **not**
-   authorize spending; the auth preflight above is what actually prevents
-   billable usage, not this number. Pick a value based on how much included
-   usage you're comfortable letting one run consume.
+2. The phase-specific auth preflight fails closed if an API-key environment
+   variable is present. Before a Claude phase it requires a `claude.ai`
+   first-party subscription; before a Codex phase it requires “Logged in
+   using ChatGPT.” Codex auth does not block a Claude-primary run that
+   completes without using the reserve.
+3. The old `--max-budget-usd` switch was removed. It is an API-dollar
+   mechanism, not a subscription-quota gauge, and cannot enforce a
+   percentage of included Codex usage. The bounded cycle counts are the
+   documented conservative proxy instead.
 
 ### Operating commands
 
-- **Start:** `CLAUDE_BUDGET_USD=<your choice> ./scripts/overnight_handoff.sh`
-  (repo root; requires the manual prerequisite above, a real Objective in
-  `OVERNIGHT_TASK.md`, and a clean, verified commit — see AGENT_HANDOFF.md's
-  Next Steps).
+- **Start:** `./scripts/overnight_handoff.sh` from the repo root. It requires
+  a real objective plus a clean verified checkpoint. Optional controls:
+  `CODEX_RESERVE_CYCLES=1`, `CLAUDE_RETRY_CYCLES=1`,
+  `CLAUDE_RETRY_BACKOFF_SECONDS=300`, `PHASE_STALL_SECONDS=1800`, and
+  `PHASE_MAX_SECONDS=14400`.
 - **Monitor (while running or after):** `tail -f logs/overnight/<run-id>/orchestrator.log`;
-  the run-id is the timestamp printed at start. Per-phase output is in
-  `codex.log`/`claude.log` in the same directory, with `codex.exit`/`claude.exit`
-  and a top-level `exit_code` once the run finishes.
-- **Recover from a stopped/failed run:** read `AGENT_HANDOFF.md`, the exit
-  code above, and the last run's logs to see what happened; fix or resolve
-  whatever caused it (clear a `HUMAN-REQUIRED:` marker once addressed,
-  resolve a conflict, commit/clean a dirty tree, fix auth), then re-run the
-  same command. If a previous run crashed and left
-  `.overnight_handoff.lock/` behind without finishing, confirm no run is
-  actually active (`ps aux | grep -E 'claude -p|codex exec'`) before
-  removing it by hand.
-- **Cancel a running pipeline:** `Ctrl-C` the foreground process, or
-  `pkill -f scripts/overnight_handoff.sh`; also stop any still-running agent
-  process directly (`pkill -f 'claude -p'` / `pkill -f 'codex exec'`) since
-  killing the wrapper script doesn't kill an in-flight child. Then remove
-  `.overnight_handoff.lock/` once you've confirmed nothing is still running.
+  the run-id is the timestamp printed at start. `summary.md` is the morning
+  overview. Each phase has stdout, stderr, exit, outcome, and handoff-snapshot
+  files; `exit_code` records the final category.
+- **Recover from a stopped wrapper:** rerun the same command. Durable state
+  in `logs/overnight/resume.state` selects the unfinished phase. A lock whose
+  wrapper and phase PIDs are provably dead is recovered automatically; a
+  live or ambiguous lock fails closed. Objective-file changes automatically
+  start fresh state. A deliberately exhausted sequence requires human review
+  before `OVERNIGHT_RESET_STATE=1` authorizes another bounded sequence.
+- **Cancel:** use `Ctrl-C`. The signal handler stops its current direct child,
+  records interruption, preserves the same next phase, and releases its lock.
 - **Test the pipeline itself for free:** `bash scripts/test_overnight_handoff.sh`
   runs it against disposable scratch repos with fake agents — no real API,
   auth, or model calls, no cost.

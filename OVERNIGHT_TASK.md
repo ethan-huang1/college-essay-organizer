@@ -14,12 +14,14 @@ Definition of Done — lives in [MVP_SPEC.md](MVP_SPEC.md). Read it completely
 before starting or resuming work; this file only holds the rules for *how*
 to work, not *what* to build.
 
-Tonight's run is scoped to **one Codex phase, then one Claude phase, then
-stop** (see [CLAUDE.md](CLAUDE.md) for the automated pipeline that runs
-this). That is not expected to reach the full P0 Definition of Done in one
-night — make as much verified progress as the phases allow, checkpoint, and
-leave [AGENT_HANDOFF.md](AGENT_HANDOFF.md) accurate for whoever (human or
-agent) continues from there.
+The automated run uses **Claude as primary, a tightly bounded Codex reserve,
+and one bounded Claude retry when work remains** (see [CLAUDE.md](CLAUDE.md)).
+Claude should keep working normally until the objective is complete or a
+real terminal condition occurs; elapsed time alone is not a handoff reason.
+The sequence is finite and resumable, and is not expected to reach the full
+P0 Definition of Done in every run. Make as much verified progress as the
+bounded phases allow, checkpoint, and leave
+[AGENT_HANDOFF.md](AGENT_HANDOFF.md) accurate for the next agent.
 
 (This replaces a staged-but-never-run Layer 3 pipeline smoke-test objective
 — `scripts/layer3_smoke.py`, multiply/divide — which never got a real run
@@ -96,6 +98,13 @@ history for reference.)
     AGENT_HANDOFF.md to reflect the new requirement and re-verify any
     already-written code the change affects — never let code silently keep
     representing a superseded spec as satisfied.
+13. **Persist a complete handoff before stopping.** Keep the
+    `## Overnight Run State` section of AGENT_HANDOFF.md current. Record the
+    objective, completed work, current task, exact next task, important
+    decisions, files changed, tests/build status, latest verified commit,
+    stop reason, and `Disposition: complete` or `Disposition: continue`.
+    The orchestrator also writes a per-phase snapshot, but that automatic
+    snapshot supplements rather than replaces the committed handoff.
 
 ## Definition of Done
 

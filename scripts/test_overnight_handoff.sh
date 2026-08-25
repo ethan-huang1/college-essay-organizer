@@ -1,592 +1,358 @@
 #!/usr/bin/env bash
-# Deterministic tests for scripts/overnight_handoff.sh.
-#
-# Runs the real orchestrator script against disposable scratch git repos with
-# fake `claude`/`codex` executables (no real API calls, no cost, no real
-# auth/model calls of any kind). Each case copies a shared valid "template"
-# repo, mutates it to set up one scenario, runs the orchestrator, and
-# asserts its exit code / effects. Plain asserts, no test framework - run
-# with: bash scripts/test_overnight_handoff.sh
+# Free deterministic tests for overnight_handoff.sh. Real Claude/Codex are
+# replaced by stubs and every run happens in a disposable scratch repository.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ORCH="$REPO_ROOT/scripts/overnight_handoff.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-
 pass=0
 fail=0
 
 assert() {
     local desc="$1" got="$2" want="$3"
-    if [ "$got" = "$want" ]; then
-        pass=$((pass + 1))
-        printf 'PASS: %s\n' "$desc"
-    else
-        fail=$((fail + 1))
-        printf 'FAIL: %s (want %s, got %s)\n' "$desc" "$want" "$got"
-    fi
+    if [ "$got" = "$want" ]; then pass=$((pass + 1)); printf 'PASS: %s\n' "$desc"
+    else fail=$((fail + 1)); printf 'FAIL: %s (want %q, got %q)\n' "$desc" "$want" "$got"; fi
 }
-
 assert_contains() {
-    local desc="$1" haystack="$2" needle="$3"
-    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
-        pass=$((pass + 1))
-        printf 'PASS: %s\n' "$desc"
-    else
-        fail=$((fail + 1))
-        printf 'FAIL: %s (expected to find %q)\n' "$desc" "$needle"
-    fi
+    local desc="$1" text="$2" needle="$3"
+    if printf '%s' "$text" | grep -qF -- "$needle"; then pass=$((pass + 1)); printf 'PASS: %s\n' "$desc"
+    else fail=$((fail + 1)); printf 'FAIL: %s (missing %q)\n' "$desc" "$needle"; fi
 }
-
 assert_not_contains() {
-    local desc="$1" haystack="$2" needle="$3"
-    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
-        fail=$((fail + 1))
-        printf 'FAIL: %s (expected NOT to find %q)\n' "$desc" "$needle"
-    else
-        pass=$((pass + 1))
-        printf 'PASS: %s\n' "$desc"
-    fi
+    local desc="$1" text="$2" needle="$3"
+    if ! printf '%s' "$text" | grep -qF -- "$needle"; then pass=$((pass + 1)); printf 'PASS: %s\n' "$desc"
+    else fail=$((fail + 1)); printf 'FAIL: %s (unexpected %q)\n' "$desc" "$needle"; fi
 }
-
-assert_file_missing_or_empty() {
+assert_file() {
     local desc="$1" path="$2"
-    if [ ! -s "$path" ]; then
-        pass=$((pass + 1))
-        printf 'PASS: %s\n' "$desc"
-    else
-        fail=$((fail + 1))
-        printf 'FAIL: %s (expected %s to be missing/empty, has content)\n' "$desc" "$path"
-    fi
+    if [ -s "$path" ]; then pass=$((pass + 1)); printf 'PASS: %s\n' "$desc"
+    else fail=$((fail + 1)); printf 'FAIL: %s (missing/empty %s)\n' "$desc" "$path"; fi
 }
 
-# ---------------------------------------------------------------------------
-# Stub claude/codex executables. Both handle three call shapes:
-#   --help                    -> capability fixture (for the "supports auto" check)
-#   auth status --json        -> call-numbered Claude auth fixture (claude only)
-#   login status              -> call-numbered Codex auth fixture (codex only)
-#   <real work invocation>    -> argv capture, sequence log, stdin check, then
-#                                 STUB_*_MODE-driven behavior
-# ---------------------------------------------------------------------------
 STUB_BIN="$WORK/bin"
 mkdir -p "$STUB_BIN"
 
 cat >"$STUB_BIN/claude" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-
 if [ "${1:-}" = "--help" ]; then
-    if [ "${STUB_CLAUDE_HELP_HAS_AUTO:-1}" = "1" ]; then
-        echo 'Options: --permission-mode <mode> (choices: "acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan")'
-    else
-        echo 'Options: --permission-mode <mode> (choices: "acceptEdits", "bypassPermissions", "manual", "dontAsk", "plan")'
-    fi
+    if [ "${STUB_CLAUDE_HELP_HAS_AUTO:-1}" = 1 ]; then echo 'choices: "auto", "manual"'; else echo 'choices: "manual"'; fi
     exit 0
 fi
-
-if [ "${1:-}" = "auth" ] && [ "${2:-}" = "status" ]; then
-    count=0
-    if [ -f "$STUB_CLAUDE_AUTH_COUNTER_FILE" ]; then
-        count="$(cat "$STUB_CLAUDE_AUTH_COUNTER_FILE")"
-    fi
-    count=$((count + 1))
-    echo "$count" >"$STUB_CLAUDE_AUTH_COUNTER_FILE"
-    if [ "$count" -le 1 ]; then
-        printf '%s' "$STUB_CLAUDE_AUTH_JSON_1"
-    else
-        printf '%s' "$STUB_CLAUDE_AUTH_JSON_2"
-    fi
-    exit 0
+if [ "${1:-}" = auth ] && [ "${2:-}" = status ]; then
+    count=0; [ -f "$STUB_CLAUDE_AUTH_COUNT" ] && count="$(cat "$STUB_CLAUDE_AUTH_COUNT")"
+    count=$((count + 1)); echo "$count" >"$STUB_CLAUDE_AUTH_COUNT"
+    eval "value=\${STUB_CLAUDE_AUTH_$count:-\${STUB_CLAUDE_AUTH_1}}"
+    printf '%s' "$value"; exit 0
 fi
-
-# Real work invocation: claude -p "<prompt>" ...
-printf '%s\n' "$@" >"$STUB_ARGV_FILE.claude"
-echo claude >>"$STUB_SEQ_FILE"
-if read -r -t 1 _line; then
-    echo "HAD_DATA" >"$STUB_STDIN_CHECK_FILE.claude"
-else
-    echo "EOF" >"$STUB_STDIN_CHECK_FILE.claude"
-fi
-
-mode="${STUB_CLAUDE_MODE:-success}"
-if [ "$mode" = "fail" ]; then
-    echo '{"is_error":true}'
-    exit 1
-fi
-
-echo "claude progress $$" >>stub_progress.txt
-git add stub_progress.txt
-git commit -q -m "stub: claude progress"
-newhash="$(git rev-parse HEAD)"
-sed -i '' "s/COMPLETED_PLACEHOLDER/stub claude did its part/" AGENT_HANDOFF.md
-sed -i '' "s/\`[0-9a-f]\{7,40\}\`/\`$newhash\`/" AGENT_HANDOFF.md
-if [ "$mode" = "human-required" ]; then
-    sed -i '' "s/BLOCKERS_PLACEHOLDER/HUMAN-REQUIRED: stub claude needs a human/" AGENT_HANDOFF.md
-else
-    sed -i '' "s/BLOCKERS_PLACEHOLDER/none/" AGENT_HANDOFF.md
-fi
-git add AGENT_HANDOFF.md
-git commit -q -m "stub: claude update handoff"
+count=0; [ -f "$STUB_CLAUDE_CALL_COUNT" ] && count="$(cat "$STUB_CLAUDE_CALL_COUNT")"
+count=$((count + 1)); echo "$count" >"$STUB_CLAUDE_CALL_COUNT"
+eval "mode=\${STUB_CLAUDE_MODE_$count:-complete}"
+printf '%s\n' "$@" >"$STUB_ARGV.claude.$count"
+echo claude >>"$STUB_SEQUENCE"
+if read -r -t 1 _line; then echo HAD_DATA >"$STUB_STDIN.claude.$count"; else echo EOF >"$STUB_STDIN.claude.$count"; fi
+case "$mode" in
+usage) echo '{"is_error":true,"api_error_status":429,"result":"You have hit your session limit; resets 1:40am"}'; exit 1 ;;
+fail) echo '{"is_error":true,"result":"unexpected crash"}'; exit 7 ;;
+normal) echo '{"is_error":false}'; exit 0 ;;
+dirty) echo stray >claude-stray.txt; exit 1 ;;
+stall) sleep 10; exit 0 ;;
+esac
+echo "claude-$count" >>stub_progress.txt
+git add stub_progress.txt && git commit -q -m "stub: claude progress $count"
+hash="$(git rev-parse HEAD)"
+sed -i '' "s/- Disposition: .*/- Disposition: $mode/" AGENT_HANDOFF.md
+sed -i '' "s/- Last agent: .*/- Last agent: claude/" AGENT_HANDOFF.md
+sed -i '' "s/- Stop reason: .*/- Stop reason: stub $mode/" AGENT_HANDOFF.md
+sed -i '' "s/\`[0-9a-f]\{7,40\}\`/\`$hash\`/" AGENT_HANDOFF.md
+if [ "$mode" = human ]; then sed -i '' 's/BLOCKER_PLACEHOLDER/HUMAN-REQUIRED: stub needs a human/' AGENT_HANDOFF.md; fi
+git add AGENT_HANDOFF.md && git commit -q -m "stub: claude handoff $count"
 echo '{"is_error":false}'
 STUB
 
 cat >"$STUB_BIN/codex" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-
-if [ "${1:-}" = "login" ] && [ "${2:-}" = "status" ]; then
-    count=0
-    if [ -f "$STUB_CODEX_LOGIN_COUNTER_FILE" ]; then
-        count="$(cat "$STUB_CODEX_LOGIN_COUNTER_FILE")"
-    fi
-    count=$((count + 1))
-    echo "$count" >"$STUB_CODEX_LOGIN_COUNTER_FILE"
-    if [ "$count" -le 1 ]; then
-        printf '%s' "$STUB_CODEX_LOGIN_STATUS_1"
-    else
-        printf '%s' "$STUB_CODEX_LOGIN_STATUS_2"
-    fi
-    exit 0
+if [ "${1:-}" = login ] && [ "${2:-}" = status ]; then
+    printf '%s\n' "${STUB_CODEX_LOGIN:-Logged in using ChatGPT}"; exit 0
 fi
-
-if [ "${1:-}" != "exec" ]; then
-    echo "stub codex: unsupported invocation: $*" >&2
-    exit 64
-fi
-
-# Real work invocation: codex exec ...
-printf '%s\n' "$@" >"$STUB_ARGV_FILE.codex"
-echo codex >>"$STUB_SEQ_FILE"
-if read -r -t 1 _line; then
-    echo "HAD_DATA" >"$STUB_STDIN_CHECK_FILE.codex"
-else
-    echo "EOF" >"$STUB_STDIN_CHECK_FILE.codex"
-fi
-
-mode="${STUB_CODEX_MODE:-success}"
-
+count=0; [ -f "$STUB_CODEX_CALL_COUNT" ] && count="$(cat "$STUB_CODEX_CALL_COUNT")"
+count=$((count + 1)); echo "$count" >"$STUB_CODEX_CALL_COUNT"
+eval "mode=\${STUB_CODEX_MODE_$count:-complete}"
+printf '%s\n' "$@" >"$STUB_ARGV.codex.$count"
+echo codex >>"$STUB_SEQUENCE"
+if read -r -t 1 _line; then echo HAD_DATA >"$STUB_STDIN.codex.$count"; else echo EOF >"$STUB_STDIN.codex.$count"; fi
 case "$mode" in
-fail)
-    # Exits nonzero without touching the repo at all - "trivial nonzero but safe (unchanged)".
-    echo '{"type":"error"}'
-    exit 1
-    ;;
-dirty-fail | dirty-success)
-    # Leaves an uncommitted, unexpected change - unsafe regardless of exit code.
-    echo "uncommitted stray change" >>codex_stray.txt
-    if [ "$mode" = "dirty-fail" ]; then
-        exit 1
-    else
-        exit 0
-    fi
-    ;;
-stale)
-    # Commits a NEW non-doc file without updating Last Verified Commit -
-    # HEAD moves past the recorded commit with a real code change unaccounted for.
-    echo "silent code change $$" >>untracked_by_handoff.txt
-    git add untracked_by_handoff.txt
-    git commit -q -m "stub: codex made a change without updating the handoff"
-    exit 1
-    ;;
+usage) echo '{"type":"error","message":"usage limit reached"}'; exit 1 ;;
+fail) echo '{"type":"error","message":"crash"}'; exit 7 ;;
+normal) echo '{"type":"result"}'; exit 0 ;;
+dirty) echo stray >codex-stray.txt; exit 1 ;;
+stall) sleep 10; exit 0 ;;
 esac
-
-# success, human-required, and degraded all commit safely first.
-echo "codex progress $$" >>stub_progress.txt
-git add stub_progress.txt
-git commit -q -m "stub: codex progress"
-newhash="$(git rev-parse HEAD)"
-sed -i '' "s/NEXTSTEPS_PLACEHOLDER/stub codex finished the rest/" AGENT_HANDOFF.md
-sed -i '' "s/\`[0-9a-f]\{7,40\}\`/\`$newhash\`/" AGENT_HANDOFF.md
-if [ "$mode" = "human-required" ]; then
-    sed -i '' "s/BLOCKERS_PLACEHOLDER/HUMAN-REQUIRED: stub codex needs a human/" AGENT_HANDOFF.md
-fi
-git add AGENT_HANDOFF.md
-git commit -q -m "stub: codex update handoff"
-
-if [ "$mode" = "degraded" ]; then
-    # Real, safe, verified work happened above - THEN codex fails (e.g. usage ran out).
-    echo '{"type":"error"}'
-    exit 1
-fi
-
+echo "codex-$count" >>stub_progress.txt
+git add stub_progress.txt && git commit -q -m "stub: codex progress $count"
+hash="$(git rev-parse HEAD)"
+sed -i '' "s/- Disposition: .*/- Disposition: $mode/" AGENT_HANDOFF.md
+sed -i '' "s/- Last agent: .*/- Last agent: codex/" AGENT_HANDOFF.md
+sed -i '' "s/- Stop reason: .*/- Stop reason: stub $mode/" AGENT_HANDOFF.md
+sed -i '' "s/\`[0-9a-f]\{7,40\}\`/\`$hash\`/" AGENT_HANDOFF.md
+if [ "$mode" = human ]; then sed -i '' 's/BLOCKER_PLACEHOLDER/HUMAN-REQUIRED: stub needs a human/' AGENT_HANDOFF.md; fi
+git add AGENT_HANDOFF.md && git commit -q -m "stub: codex handoff $count"
 echo '{"type":"result"}'
 STUB
-
 chmod +x "$STUB_BIN/claude" "$STUB_BIN/codex"
 
-# ---------------------------------------------------------------------------
-# Shared valid template repo
-# ---------------------------------------------------------------------------
 TEMPLATE="$WORK/template"
-mkdir -p "$TEMPLATE"
+mkdir -p "$TEMPLATE/scripts"
 git -C "$TEMPLATE" init -q
-git -C "$TEMPLATE" config user.email "test@example.com"
-git -C "$TEMPLATE" config user.name "Overnight Handoff Test"
-
+git -C "$TEMPLATE" config user.email test@example.com
+git -C "$TEMPLATE" config user.name 'Overnight Test'
+cp "$ORCH" "$TEMPLATE/scripts/overnight_handoff.sh"
+chmod +x "$TEMPLATE/scripts/overnight_handoff.sh"
 cat >"$TEMPLATE/OVERNIGHT_TASK.md" <<'EOF'
 # Overnight Task
 ## Objective
-Test objective: append a line to stub_progress.txt. See MVP_SPEC.md.
-## Rules
-1. Test rule.
-## Definition of Done
-- [ ] stub_progress.txt updated and committed.
+Finish the deterministic test objective.
 EOF
-
 cat >"$TEMPLATE/MVP_SPEC.md" <<'EOF'
-# Test fixture MVP_SPEC.md
-Placeholder product spec referenced by OVERNIGHT_TASK.md and both agent prompts.
+# Test spec
+Complete means the stub marks the handoff complete.
 EOF
-
+cat >"$TEMPLATE/CLAUDE.md" <<'EOF'
+# Instructions
+Stay inside this fixture.
+EOF
 cat >"$TEMPLATE/AGENT_HANDOFF.md" <<'EOF'
 # Agent Handoff
 ## Current Status
-STATUS_PLACEHOLDER
-## Completed
-COMPLETED_PLACEHOLDER
-## In Progress
-INPROGRESS_PLACEHOLDER
-## Next Steps
-NEXTSTEPS_PLACEHOLDER
+Objective is unfinished.
+## Completed Work
+Initial fixture.
+## Important Decisions
+Use stub agents.
+## Overnight Run State
+- Disposition: continue
+- Current objective: finish fixture
+- Current task: next stub phase
+- Next recommended task: complete fixture
+- Last agent: none
+- Stop reason: initial state
+- Files changed: none
+- Test/build status: fixture valid
 ## Failed Approaches
-FAILEDAPPROACHES_PLACEHOLDER
+None.
 ## Blockers
-BLOCKERS_PLACEHOLDER
+BLOCKER_PLACEHOLDER
 ## Tests/Verification Performed
-TESTS_PLACEHOLDER
+Fixture initialization.
 ## Last Verified Commit
-
 `PLACEHOLDER`
 EOF
-
-cat >"$TEMPLATE/CLAUDE.md" <<'EOF'
-# Repo Instructions
-Test fixture CLAUDE.md.
-EOF
-
 cat >"$TEMPLATE/.gitignore" <<'EOF'
 logs/
 .overnight_handoff.lock/
 EOF
+git -C "$TEMPLATE" add -A && git -C "$TEMPLATE" commit -q -m initial
+base="$(git -C "$TEMPLATE" rev-parse HEAD)"
+sed -i '' "s/\`PLACEHOLDER\`/\`$base\`/" "$TEMPLATE/AGENT_HANDOFF.md"
+git -C "$TEMPLATE" add AGENT_HANDOFF.md && git -C "$TEMPLATE" commit -q -m handoff
 
-mkdir -p "$TEMPLATE/scripts"
-cp "$ORCH" "$TEMPLATE/scripts/overnight_handoff.sh"
-chmod +x "$TEMPLATE/scripts/overnight_handoff.sh"
+VALID_AUTH='{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"pro"}'
+new_case() { local dir="$WORK/case_$1"; cp -R "$TEMPLATE" "$dir"; printf '%s' "$dir"; }
+exit_of() { cat "$WORK/$(basename "$1").exit" 2>/dev/null; }
+seq_of() { cat "$WORK/$(basename "$1").seq" 2>/dev/null; }
+latest_run() { find "$1/logs/overnight" -mindepth 1 -maxdepth 1 -type d ! -name state -print | sort | tail -1; }
 
-# Only fill placeholders no stub touches - see the stub scripts above for
-# which placeholders COMPLETED/NEXTSTEPS/BLOCKERS/FAILEDAPPROACHES are left
-# for. Consuming them here too would make the stubs' own sed replacements
-# silent no-ops (this bit us once already during Layer 3 development).
-sed -i '' "s/STATUS_PLACEHOLDER/idle/; s/INPROGRESS_PLACEHOLDER/none/; s/TESTS_PLACEHOLDER/none/" "$TEMPLATE/AGENT_HANDOFF.md"
-git -C "$TEMPLATE" add -A
-git -C "$TEMPLATE" commit -q -m "template: initial state"
-base_hash="$(git -C "$TEMPLATE" rev-parse HEAD)"
-sed -i '' "s/\`PLACEHOLDER\`/\`$base_hash\`/" "$TEMPLATE/AGENT_HANDOFF.md"
-git -C "$TEMPLATE" add AGENT_HANDOFF.md
-git -C "$TEMPLATE" commit -q -m "template: record initial verified commit"
-
-# ---------------------------------------------------------------------------
-# Harness helpers
-# ---------------------------------------------------------------------------
-VALID_CLAUDE_AUTH_JSON='{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"pro"}'
-VALID_CODEX_LOGIN_STATUS='Logged in using ChatGPT'
-
-new_case() {
-    local name="$1"
-    local dir="$WORK/case_$name"
-    cp -R "$TEMPLATE" "$dir"
-    echo "$dir"
-}
-
-exit_code_of() { cat "$WORK/$(basename "$1").exit_code" 2>/dev/null; }
-argv_of() { cat "$WORK/$(basename "$1").$2" 2>/dev/null; }
-assert_has_line() {
-    local desc="$1" haystack="$2" line="$3"
-    if printf '%s\n' "$haystack" | grep -qxF -- "$line"; then
-        pass=$((pass + 1))
-        printf 'PASS: %s\n' "$desc"
-    else
-        fail=$((fail + 1))
-        printf 'FAIL: %s (expected a line exactly %q)\n' "$desc" "$line"
-    fi
-}
-
-# run_orchestrator DIR
-# Reads (with defaults) the following env vars if the caller has exported
-# them before calling: STUB_CLAUDE_MODE, STUB_CODEX_MODE,
-# STUB_CLAUDE_HELP_HAS_AUTO, STUB_CLAUDE_AUTH_JSON_1, STUB_CLAUDE_AUTH_JSON_2,
-# STUB_CODEX_LOGIN_STATUS_1, STUB_CODEX_LOGIN_STATUS_2, ANTHROPIC_API_KEY,
-# OPENAI_API_KEY. Everything else (file paths) is set internally per-case.
-run_orchestrator() {
-    local dir="$1"
-    local name
-    name="$(basename "$dir")"
-    local seqfile="$WORK/$name.seq.log"
-    local argv_base="$WORK/$name"
-    local stdin_base="$WORK/$name.stdin"
-    : >"$seqfile"
-    rm -f "$argv_base.claude" "$argv_base.codex"
+run_case() {
+    local dir="$1" name="$(basename "$1")" seq="$WORK/$(basename "$1").seq"
+    : >"$seq"
     (
-        cd "$dir" &&
-            PATH="$STUB_BIN:$PATH" \
-                STUB_SEQ_FILE="$seqfile" \
-                STUB_ARGV_FILE="$argv_base" \
-                STUB_STDIN_CHECK_FILE="$stdin_base" \
-                STUB_CLAUDE_AUTH_COUNTER_FILE="$WORK/$name.claude_auth_count" \
-                STUB_CODEX_LOGIN_COUNTER_FILE="$WORK/$name.codex_login_count" \
-                STUB_CLAUDE_MODE="${STUB_CLAUDE_MODE:-success}" \
-                STUB_CODEX_MODE="${STUB_CODEX_MODE:-success}" \
-                STUB_CLAUDE_HELP_HAS_AUTO="${STUB_CLAUDE_HELP_HAS_AUTO:-1}" \
-                STUB_CLAUDE_AUTH_JSON_1="${STUB_CLAUDE_AUTH_JSON_1:-$VALID_CLAUDE_AUTH_JSON}" \
-                STUB_CLAUDE_AUTH_JSON_2="${STUB_CLAUDE_AUTH_JSON_2:-${STUB_CLAUDE_AUTH_JSON_1:-$VALID_CLAUDE_AUTH_JSON}}" \
-                STUB_CODEX_LOGIN_STATUS_1="${STUB_CODEX_LOGIN_STATUS_1:-$VALID_CODEX_LOGIN_STATUS}" \
-                STUB_CODEX_LOGIN_STATUS_2="${STUB_CODEX_LOGIN_STATUS_2:-${STUB_CODEX_LOGIN_STATUS_1:-$VALID_CODEX_LOGIN_STATUS}}" \
-                ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
-                OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
-                bash scripts/overnight_handoff.sh
-    ) >"$WORK/$name.stdout.log" 2>&1
-    echo $? >"$WORK/$name.exit_code"
-    cat "$seqfile"
+        cd "$dir" || exit 99
+        PATH="$STUB_BIN:$PATH" \
+        STUB_SEQUENCE="$seq" STUB_ARGV="$WORK/$name.argv" STUB_STDIN="$WORK/$name.stdin" \
+        STUB_CLAUDE_AUTH_COUNT="$WORK/$name.claude-auth-count" \
+        STUB_CLAUDE_CALL_COUNT="$WORK/$name.claude-call-count" \
+        STUB_CODEX_CALL_COUNT="$WORK/$name.codex-call-count" \
+        STUB_CLAUDE_AUTH_1="${STUB_CLAUDE_AUTH_1:-$VALID_AUTH}" \
+        STUB_CLAUDE_AUTH_2="${STUB_CLAUDE_AUTH_2:-${STUB_CLAUDE_AUTH_1:-$VALID_AUTH}}" \
+        STUB_CLAUDE_MODE_1="${STUB_CLAUDE_MODE_1:-complete}" \
+        STUB_CLAUDE_MODE_2="${STUB_CLAUDE_MODE_2:-complete}" \
+        STUB_CODEX_MODE_1="${STUB_CODEX_MODE_1:-complete}" \
+        STUB_CODEX_LOGIN="${STUB_CODEX_LOGIN:-Logged in using ChatGPT}" \
+        CODEX_RESERVE_CYCLES="${CODEX_RESERVE_CYCLES:-1}" \
+        CLAUDE_RETRY_CYCLES="${CLAUDE_RETRY_CYCLES:-1}" \
+        CLAUDE_RETRY_BACKOFF_SECONDS=0 WATCH_INTERVAL_SECONDS=1 \
+        PHASE_STALL_SECONDS="${PHASE_STALL_SECONDS:-4}" PHASE_MAX_SECONDS="${PHASE_MAX_SECONDS:-12}" \
+        MAX_NO_PROGRESS_PHASES="${MAX_NO_PROGRESS_PHASES:-2}" \
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+        bash scripts/overnight_handoff.sh
+    ) >"$WORK/$name.stdout" 2>&1
+    echo $? >"$WORK/$name.exit"
 }
 
-echo "=== case: lock already held -> refuses to start, nothing touched ==="
-d=$(new_case lock_held)
-mkdir "$d/.overnight_handoff.lock"
-seq_out=$(run_orchestrator "$d")
-assert "lock held -> orchestrator exit 9" "$(exit_code_of "$d")" "9"
-assert "lock held -> neither agent invoked" "$seq_out" ""
-assert "lock held -> no claude auth-status call happened" "$([ -f "$WORK/case_lock_held.claude_auth_count" ] && echo present || echo absent)" "absent"
-assert "lock held -> no codex login-status call happened" "$([ -f "$WORK/case_lock_held.codex_login_count" ] && echo present || echo absent)" "absent"
-assert "lock held -> existing lock directory still exists" "$([ -d "$d/.overnight_handoff.lock" ] && echo yes || echo no)" "yes"
-rmdir "$d/.overnight_handoff.lock" 2>/dev/null || true
+echo '=== primary Claude completes: no reserve usage ==='
+d="$(new_case primary_complete)"; run_case "$d"
+assert 'complete exits 0' "$(exit_of "$d")" 0
+assert 'only Claude ran' "$(seq_of "$d")" claude
+assert 'tree clean' "$(git -C "$d" status --porcelain)" ''
+assert_contains 'handoff records completion' "$(cat "$d/AGENT_HANDOFF.md")" '- Disposition: complete'
+assert 'durable state complete' "$(awk -F= '$1=="COMPLETE"{print $2}' "$d/logs/overnight/resume.state")" 1
+assert 'Claude stdin EOF' "$(cat "$WORK/case_primary_complete.stdin.claude.1")" EOF
+claude_argv="$(cat "$WORK/case_primary_complete.argv.claude.1")"
+assert_contains 'Claude permission auto' "$claude_argv" '--permission-mode'
+assert_not_contains 'Claude has no dollar budget switch' "$claude_argv" '--max-budget-usd'
+assert_not_contains 'Claude never bypasses permissions' "$claude_argv" 'bypassPermissions'
+assert_contains 'Claude prompt requires full handoff' "$claude_argv" 'Current task'
 
-echo "=== case: happy path (Codex then Claude, both succeed) ==="
-d=$(new_case happy)
-seq_out=$(run_orchestrator "$d")
-assert "happy path exits 0" "$(exit_code_of "$d")" "0"
-assert "happy path: codex ran before claude" "$seq_out" "$(printf 'codex\nclaude')"
-assert "happy path: working tree clean at end" "$(git -C "$d" status --porcelain)" ""
-assert_contains "happy path: AGENT_HANDOFF.md shows both parts done" "$(cat "$d/AGENT_HANDOFF.md")" "stub claude did its part"
-argv_claude="$(argv_of "$d" claude)"
-argv_codex="$(argv_of "$d" codex)"
-assert_contains "happy path: claude argv has --permission-mode flag" "$argv_claude" "--permission-mode"
-assert_has_line "happy path: claude argv has 'auto' as a value" "$argv_claude" "auto"
-assert_not_contains "happy path: claude argv lacks bypassPermissions" "$argv_claude" "bypassPermissions"
-assert_not_contains "happy path: claude argv lacks --dangerously-skip-permissions" "$argv_claude" "--dangerously-skip-permissions"
-assert_not_contains "happy path: claude argv lacks --permission-prompt-tool" "$argv_claude" "--permission-prompt-tool"
-assert_not_contains "happy path: codex argv lacks --permission-prompt-tool" "$argv_codex" "--permission-prompt-tool"
-assert_contains "happy path: codex argv has workspace-write sandbox" "$argv_codex" "workspace-write"
-assert_contains "happy path: claude prompt references MVP_SPEC.md" "$argv_claude" "MVP_SPEC.md"
-assert_contains "happy path: codex prompt references MVP_SPEC.md" "$argv_codex" "MVP_SPEC.md"
-assert "happy path: claude stdin was EOF (from /dev/null)" "$(cat "$WORK/case_happy.stdin.claude" 2>/dev/null)" "EOF"
-assert "happy path: codex stdin was EOF (from /dev/null)" "$(cat "$WORK/case_happy.stdin.codex" 2>/dev/null)" "EOF"
+echo '=== normal continuation: Claude -> Codex -> Claude retry ==='
+d="$(new_case full_flow)"; STUB_CLAUDE_MODE_1=continue STUB_CODEX_MODE_1=continue STUB_CLAUDE_MODE_2=complete run_case "$d"
+assert 'full flow exits 0' "$(exit_of "$d")" 0
+assert 'preferred sequence' "$(seq_of "$d")" "$(printf 'claude\ncodex\nclaude')"
+assert 'one Codex reserve cycle used' "$(awk -F= '$1=="CODEX_USED"{print $2}' "$d/logs/overnight/resume.state")" 1
+assert_contains 'Codex uses workspace-write' "$(cat "$WORK/case_full_flow.argv.codex.1")" 'workspace-write'
+assert_contains 'Codex enables reviewed approval escalation' "$(cat "$WORK/case_full_flow.argv.codex.1")" '--approve-for-me'
+assert_not_contains 'Codex does not use danger-full-access' "$(cat "$WORK/case_full_flow.argv.codex.1")" 'danger-full-access'
+assert 'Codex stdin EOF' "$(cat "$WORK/case_full_flow.stdin.codex.1")" EOF
+assert 'three clean checkpoint commits exist' "$(git -C "$d" log --format=%s | grep -c 'stub: .* progress')" 3
 
-echo "=== case: no objective set -> pre-flight abort ==="
-d=$(new_case no_objective)
-cat >"$d/OVERNIGHT_TASK.md" <<'EOF'
-# Overnight Task
-## Objective
-(No objective set yet.)
+echo '=== retry count is configurable but still bounded ==='
+d="$(new_case two_retries)"; STUB_CLAUDE_MODE_1=continue STUB_CODEX_MODE_1=continue STUB_CLAUDE_MODE_2=continue STUB_CLAUDE_MODE_3=complete CLAUDE_RETRY_CYCLES=2 run_case "$d"
+assert 'second configured retry can complete' "$(exit_of "$d")" 0
+assert 'two-retry sequence is still finite' "$(seq_of "$d")" "$(printf 'claude\ncodex\nclaude\nclaude')"
+assert 'two retry cycles recorded' "$(awk -F= '$1=="CLAUDE_RETRIES_USED"{print $2}' "$d/logs/overnight/resume.state")" 2
+
+echo '=== primary usage limit falls back safely ==='
+d="$(new_case primary_limit)"; STUB_CLAUDE_MODE_1=usage STUB_CODEX_MODE_1=complete run_case "$d"
+assert 'usage recovered to completion' "$(exit_of "$d")" 0
+assert 'usage sequence Claude then Codex' "$(seq_of "$d")" "$(printf 'claude\ncodex')"
+run="$(latest_run "$d")"
+assert 'usage classified distinctly' "$(cat "$run/claude-primary.outcome")" usage-limit
+assert_file 'usage handoff snapshot exists' "$run/claude-primary-handoff.md"
+assert_contains 'summary names usage limit' "$(cat "$run/summary.md")" 'usage-limit'
+
+echo '=== exhausted bounded sequence reports final limit ==='
+d="$(new_case limit_exhausted)"; STUB_CLAUDE_MODE_1=usage STUB_CODEX_MODE_1=usage STUB_CLAUDE_MODE_2=usage run_case "$d"
+assert 'terminal usage exit' "$(exit_of "$d")" 21
+assert 'bounded sequence has exactly three calls' "$(seq_of "$d")" "$(printf 'claude\ncodex\nclaude')"
+assert 'state terminal' "$(awk -F= '$1=="NEXT_PHASE"{print $2}' "$d/logs/overnight/resume.state")" terminal
+before="$(seq_of "$d")"; run_case "$d"; after="$(seq_of "$d")"
+assert 'rerun after terminal remains terminal' "$(exit_of "$d")" 21
+assert 'terminal rerun invokes nobody' "$after" ''
+
+echo '=== crash is distinct and can recover ==='
+d="$(new_case crash_recovered)"; STUB_CLAUDE_MODE_1=fail STUB_CODEX_MODE_1=complete run_case "$d"
+assert 'crash recovered' "$(exit_of "$d")" 0
+run="$(latest_run "$d")"; assert 'crash classified' "$(cat "$run/claude-primary.outcome")" crash-error
+assert 'crash still hands off safely' "$(seq_of "$d")" "$(printf 'claude\ncodex')"
+
+echo '=== stall and hard timeout are distinct ==='
+d="$(new_case stall_recovered)"; STUB_CLAUDE_MODE_1=stall STUB_CODEX_MODE_1=complete PHASE_STALL_SECONDS=1 PHASE_MAX_SECONDS=8 run_case "$d"
+assert 'stall recovered' "$(exit_of "$d")" 0
+run="$(latest_run "$d")"; assert 'stall classified' "$(cat "$run/claude-primary.outcome")" stall
+assert 'stall synthetic exit' "$(cat "$run/claude-primary.exit")" 125
+d="$(new_case timeout_recovered)"; STUB_CLAUDE_MODE_1=stall STUB_CODEX_MODE_1=complete PHASE_STALL_SECONDS=8 PHASE_MAX_SECONDS=1 run_case "$d"
+assert 'timeout recovered' "$(exit_of "$d")" 0
+run="$(latest_run "$d")"; assert 'timeout classified' "$(cat "$run/claude-primary.outcome")" timeout
+assert 'timeout synthetic exit' "$(cat "$run/claude-primary.exit")" 124
+
+echo '=== repeated normal exits stop as no-progress ==='
+d="$(new_case no_progress)"; STUB_CLAUDE_MODE_1=normal STUB_CODEX_MODE_1=normal MAX_NO_PROGRESS_PHASES=2 run_case "$d"
+assert 'no-progress terminal exit' "$(exit_of "$d")" 23
+assert 'stops after two no-progress phases' "$(seq_of "$d")" "$(printf 'claude\ncodex')"
+assert 'state records no-progress' "$(awk -F= '$1=="LAST_OUTCOME"{print $2}' "$d/logs/overnight/resume.state")" no-progress
+
+echo '=== unsafe and human-required states never hand off ==='
+d="$(new_case dirty_agent)"; STUB_CLAUDE_MODE_1=dirty run_case "$d"
+assert 'dirty checkpoint exit' "$(exit_of "$d")" 24
+assert 'Codex never runs after dirty tree' "$(seq_of "$d")" claude
+assert_contains 'dirty file is preserved, not reset' "$(git -C "$d" status --porcelain)" 'claude-stray.txt'
+d="$(new_case human_agent)"; STUB_CLAUDE_MODE_1=human run_case "$d"
+assert 'human blocker exit' "$(exit_of "$d")" 26
+assert 'Codex never runs after human blocker' "$(seq_of "$d")" claude
+assert_contains 'human marker persisted' "$(cat "$d/AGENT_HANDOFF.md")" 'HUMAN-REQUIRED:'
+
+echo '=== resumability and stale lock recovery ==='
+d="$(new_case resume_codex)"
+task_hash="$(shasum -a 256 "$d/OVERNIGHT_TASK.md" | awk '{print $1}')"
+mkdir -p "$d/logs/overnight"
+cat >"$d/logs/overnight/resume.state" <<EOF
+VERSION=2
+TASK_HASH=$task_hash
+NEXT_PHASE=codex-1
+CODEX_USED=0
+CLAUDE_RETRIES_USED=0
+NO_PROGRESS_COUNT=0
+COMPLETE=0
+IN_FLIGHT=1
+LAST_OUTCOME=interrupted
 EOF
-git -C "$d" add OVERNIGHT_TASK.md
-git -C "$d" commit -q -m "blank the objective"
-newhash="$(git -C "$d" rev-parse HEAD)"
-sed -i '' "s/\`[0-9a-f]\{7,40\}\`/\`$newhash\`/" "$d/AGENT_HANDOFF.md"
-git -C "$d" add AGENT_HANDOFF.md
-git -C "$d" commit -q -m "record verified commit"
-seq_out=$(run_orchestrator "$d")
-assert "no objective -> orchestrator exit 2" "$(exit_code_of "$d")" "2"
-assert "no objective -> neither agent invoked" "$seq_out" ""
+run_case "$d"
+assert 'resume exits complete' "$(exit_of "$d")" 0
+assert 'resume starts at recorded Codex phase' "$(seq_of "$d")" codex
+d="$(new_case stale_lock)"; mkdir "$d/.overnight_handoff.lock"; echo 99999999 >"$d/.overnight_handoff.lock/pid"; run_case "$d"
+assert 'dead lock recovered' "$(exit_of "$d")" 0
+assert 'dead lock run invokes Claude' "$(seq_of "$d")" claude
+assert 'lock cleaned after recovered run' "$([ -d "$d/.overnight_handoff.lock" ] && echo present || echo absent)" absent
+d="$(new_case ambiguous_lock)"; mkdir "$d/.overnight_handoff.lock"; run_case "$d"
+assert 'ambiguous lock fails closed' "$(exit_of "$d")" 9
+assert 'ambiguous lock invokes nobody' "$(seq_of "$d")" ''
+assert 'ambiguous lock left untouched' "$([ -d "$d/.overnight_handoff.lock" ] && echo present || echo absent)" present
+rmdir "$d/.overnight_handoff.lock"
+d="$(new_case live_phase_lock)"; mkdir "$d/.overnight_handoff.lock"; echo 99999999 >"$d/.overnight_handoff.lock/pid"; echo $$ >"$d/.overnight_handoff.lock/phase_pid"; run_case "$d"
+assert 'dead wrapper with live phase fails closed' "$(exit_of "$d")" 9
+assert 'live phase lock invokes nobody' "$(seq_of "$d")" ''
+assert 'live phase lock is preserved' "$([ -d "$d/.overnight_handoff.lock" ] && echo present || echo absent)" present
+rm -f "$d/.overnight_handoff.lock/pid" "$d/.overnight_handoff.lock/phase_pid"; rmdir "$d/.overnight_handoff.lock"
 
-echo "=== case: dirty working tree at start -> pre-flight abort ==="
-d=$(new_case dirty_tree)
-echo "unexpected stray change" >"$d/stray.txt"
-seq_out=$(run_orchestrator "$d")
-assert "dirty tree -> orchestrator exit 2" "$(exit_code_of "$d")" "2"
-assert "dirty tree -> neither agent invoked" "$seq_out" ""
-rm -f "$d/stray.txt"
+echo '=== repository preflight safety ==='
+d="$(new_case no_objective)"; sed -i '' 's/Finish the deterministic test objective./(No objective set yet.)/' "$d/OVERNIGHT_TASK.md"; git -C "$d" add . && git -C "$d" commit -q -m objective; run_case "$d"
+assert 'no objective exits 2' "$(exit_of "$d")" 2; assert 'no objective invokes nobody' "$(seq_of "$d")" ''
+d="$(new_case dirty_pre)"; echo stray >"$d/stray.txt"; run_case "$d"
+assert 'dirty preflight exits 2' "$(exit_of "$d")" 2; assert 'dirty preflight invokes nobody' "$(seq_of "$d")" ''
+d="$(new_case stale_handoff)"; echo code >"$d/code.txt"; git -C "$d" add . && git -C "$d" commit -q -m code; run_case "$d"
+assert 'stale handoff exits 2' "$(exit_of "$d")" 2; assert 'stale handoff invokes nobody' "$(seq_of "$d")" ''
+d="$(new_case docs_ok)"; echo note >>"$d/AGENT_HANDOFF.md"; git -C "$d" add . && git -C "$d" commit -q -m docs; run_case "$d"
+assert 'docs-only commit remains valid' "$(exit_of "$d")" 0
+d="$(new_case human_pre)"; sed -i '' 's/BLOCKER_PLACEHOLDER/HUMAN-REQUIRED: existing blocker/' "$d/AGENT_HANDOFF.md"; git -C "$d" add . && git -C "$d" commit -q -m blocker; run_case "$d"
+assert 'preexisting human blocker exit' "$(exit_of "$d")" 26; assert 'preexisting blocker invokes nobody' "$(seq_of "$d")" ''
 
-echo "=== case: stale handoff at start (code changed without updating Last Verified Commit) ==="
-d=$(new_case stale_handoff)
-echo "silent code change" >"$d/untracked_by_handoff.txt"
-git -C "$d" add untracked_by_handoff.txt
-git -C "$d" commit -q -m "a code change nobody recorded in AGENT_HANDOFF.md"
-seq_out=$(run_orchestrator "$d")
-assert "stale handoff -> orchestrator exit 2" "$(exit_code_of "$d")" "2"
-assert "stale handoff -> neither agent invoked" "$seq_out" ""
+echo '=== subscription auth fails closed and is agent-specific ==='
+for fixture in \
+    '{"loggedIn":false,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"pro"}' \
+    '{"loggedIn":true,"authMethod":"apiKey","apiProvider":"firstParty","subscriptionType":"pro"}' \
+    '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"bedrock","subscriptionType":"pro"}' \
+    '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}' \
+    '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"trial"}' \
+    'not-json'; do
+    d="$(new_case "auth_$pass")"; STUB_CLAUDE_AUTH_1="$fixture" run_case "$d"
+    assert 'invalid Claude auth exits 10' "$(exit_of "$d")" 10
+    assert 'invalid Claude auth invokes nobody' "$(seq_of "$d")" ''
+done
+d="$(new_case no_auto)"; STUB_CLAUDE_HELP_HAS_AUTO=0 run_case "$d"
+assert 'missing auto mode exits 10' "$(exit_of "$d")" 10; assert 'missing auto invokes nobody' "$(seq_of "$d")" ''
+d="$(new_case codex_auth_unused)"; STUB_CODEX_LOGIN='Logged in using API key' run_case "$d"
+assert 'Codex auth does not block completed primary' "$(exit_of "$d")" 0; assert 'Codex was not consulted' "$(seq_of "$d")" claude
+d="$(new_case codex_auth_needed)"; STUB_CLAUDE_MODE_1=continue STUB_CODEX_LOGIN='Logged in using API key' run_case "$d"
+assert 'fallback auth failure is distinct' "$(exit_of "$d")" 25; assert 'only primary ran before fallback auth failed' "$(seq_of "$d")" claude
+d="$(new_case anthropic_key)"; ANTHROPIC_API_KEY='secret-test-value' run_case "$d"
+assert 'Anthropic key rejected' "$(exit_of "$d")" 10; assert_not_contains 'Anthropic key never logged' "$(cat "$WORK/case_anthropic_key.stdout")" 'secret-test-value'
+d="$(new_case openai_key)"; OPENAI_API_KEY='secret-test-value-2' run_case "$d"
+assert 'OpenAI key rejected' "$(exit_of "$d")" 10; assert_not_contains 'OpenAI key never logged' "$(cat "$WORK/case_openai_key.stdout")" 'secret-test-value-2'
 
-echo "=== case: docs-only commit after verified commit is NOT stale (real-world pattern) ==="
-d=$(new_case docs_only_ok)
-printf '\n<!-- trivial doc touch-up, no code change -->\n' >>"$d/AGENT_HANDOFF.md"
-git -C "$d" add AGENT_HANDOFF.md
-git -C "$d" commit -q -m "docs-only touch-up (Last Verified Commit still points at prior commit)"
-seq_out=$(run_orchestrator "$d")
-assert "docs-only commit after verified commit -> still runs (exit 0)" "$(exit_code_of "$d")" "0"
+echo '=== logging artifacts are morning-readable ==='
+d="$(new_case logs)"; STUB_CLAUDE_MODE_1=usage STUB_CODEX_MODE_1=complete run_case "$d"; run="$(latest_run "$d")"
+assert_file 'orchestrator log' "$run/orchestrator.log"
+assert_file 'summary table' "$run/summary.md"
+assert_file 'Claude stdout' "$run/claude-primary.stdout.log"
+assert_file 'Claude exit' "$run/claude-primary.exit"
+assert_file 'Claude outcome' "$run/claude-primary.outcome"
+assert_file 'Claude handoff snapshot' "$run/claude-primary-handoff.md"
+assert_file 'Codex handoff snapshot' "$run/codex-1-handoff.md"
+assert_file 'final exit file' "$run/exit_code"
+assert_contains 'snapshot carries objective' "$(cat "$run/claude-primary-handoff.md")" 'Current objective'
+assert_contains 'snapshot carries tests and next task through handoff copy' "$(cat "$run/claude-primary-handoff.md")" 'Test/build status'
 
-echo "=== case: HUMAN-REQUIRED marker already present -> pre-flight abort ==="
-d=$(new_case human_required_preexisting)
-sed -i '' "s/BLOCKERS_PLACEHOLDER/HUMAN-REQUIRED: pre-existing blocker/" "$d/AGENT_HANDOFF.md"
-git -C "$d" add AGENT_HANDOFF.md
-git -C "$d" commit -q -m "flag a pre-existing blocker"
-newhash="$(git -C "$d" rev-parse HEAD)"
-sed -i '' "s/\`[0-9a-f]\{7,40\}\`/\`$newhash\`/" "$d/AGENT_HANDOFF.md"
-git -C "$d" add AGENT_HANDOFF.md
-git -C "$d" commit -q -m "record verified commit"
-seq_out=$(run_orchestrator "$d")
-assert "pre-existing HUMAN-REQUIRED -> orchestrator exit 2" "$(exit_code_of "$d")" "2"
-assert "pre-existing HUMAN-REQUIRED -> neither agent invoked" "$seq_out" ""
-
-echo "=== case: merge conflict present -> pre-flight abort ==="
-d=$(new_case merge_conflict)
-git -C "$d" checkout -q -b other
-echo "branch-other-version" >"$d/conflict.txt"
-git -C "$d" add conflict.txt
-git -C "$d" commit -q -m "other branch change"
-git -C "$d" checkout -q main
-echo "main-version" >"$d/conflict.txt"
-git -C "$d" add conflict.txt
-git -C "$d" commit -q -m "main branch change"
-git -C "$d" merge other -q >/dev/null 2>&1 || true
-seq_out=$(run_orchestrator "$d")
-assert "merge conflict -> orchestrator exit 2" "$(exit_code_of "$d")" "2"
-assert "merge conflict -> neither agent invoked" "$seq_out" ""
-git -C "$d" merge --abort >/dev/null 2>&1 || true
-
-# --- Claude auth allowlist rejections (pre-Codex, call 1) ---
-echo "=== case: Claude loggedIn:false -> reject ==="
-d=$(new_case auth_logged_out)
-seq_out=$(STUB_CLAUDE_AUTH_JSON_1='{"loggedIn":false,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"pro"}' run_orchestrator "$d")
-assert "loggedIn:false -> exit 10" "$(exit_code_of "$d")" "10"
-assert "loggedIn:false -> codex never invoked" "$seq_out" ""
-
-echo "=== case: Claude wrong authMethod (apiKey) -> reject ==="
-d=$(new_case auth_wrong_method)
-seq_out=$(STUB_CLAUDE_AUTH_JSON_1='{"loggedIn":true,"authMethod":"apiKey","apiProvider":"firstParty","subscriptionType":"pro"}' run_orchestrator "$d")
-assert "wrong authMethod -> exit 10" "$(exit_code_of "$d")" "10"
-assert "wrong authMethod -> codex never invoked" "$seq_out" ""
-
-echo "=== case: Claude wrong apiProvider (bedrock, contradictory fields) -> reject ==="
-d=$(new_case auth_wrong_provider)
-seq_out=$(STUB_CLAUDE_AUTH_JSON_1='{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"bedrock","subscriptionType":"pro"}' run_orchestrator "$d")
-assert "wrong apiProvider -> exit 10" "$(exit_code_of "$d")" "10"
-assert "wrong apiProvider -> codex never invoked" "$seq_out" ""
-
-echo "=== case: Claude missing subscriptionType -> reject ==="
-d=$(new_case auth_missing_sub)
-seq_out=$(STUB_CLAUDE_AUTH_JSON_1='{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}' run_orchestrator "$d")
-assert "missing subscriptionType -> exit 10" "$(exit_code_of "$d")" "10"
-assert "missing subscriptionType -> codex never invoked" "$seq_out" ""
-
-echo "=== case: Claude unknown subscriptionType (trial) -> reject ==="
-d=$(new_case auth_unknown_sub)
-seq_out=$(STUB_CLAUDE_AUTH_JSON_1='{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"trial"}' run_orchestrator "$d")
-assert "unknown subscriptionType -> exit 10" "$(exit_code_of "$d")" "10"
-assert "unknown subscriptionType -> codex never invoked" "$seq_out" ""
-
-echo "=== case: Claude malformed JSON -> reject ==="
-d=$(new_case auth_malformed)
-seq_out=$(STUB_CLAUDE_AUTH_JSON_1='not json at all {{{' run_orchestrator "$d")
-assert "malformed JSON -> exit 10" "$(exit_code_of "$d")" "10"
-assert "malformed JSON -> codex never invoked" "$seq_out" ""
-
-echo "=== case: claude --help omits auto -> reject before any auth-status call ==="
-d=$(new_case auth_no_auto_mode)
-seq_out=$(STUB_CLAUDE_HELP_HAS_AUTO=0 run_orchestrator "$d")
-assert "no auto mode -> exit 10" "$(exit_code_of "$d")" "10"
-assert "no auto mode -> codex never invoked" "$seq_out" ""
-assert "no auto mode -> claude auth status never called" "$([ -f "$WORK/case_auth_no_auto_mode.claude_auth_count" ] && echo present || echo absent)" "absent"
-
-echo "=== case: Codex login status not ChatGPT -> reject ==="
-d=$(new_case auth_codex_wrong)
-seq_out=$(STUB_CODEX_LOGIN_STATUS_1='Logged in using an API key' run_orchestrator "$d")
-assert "codex wrong auth -> exit 10" "$(exit_code_of "$d")" "10"
-assert "codex wrong auth -> codex never invoked" "$seq_out" ""
-
-echo "=== case: ANTHROPIC_API_KEY set -> reject, nothing invoked, secret never printed ==="
-d=$(new_case auth_anthropic_key)
-seq_out=$(ANTHROPIC_API_KEY='sk-test-fake-dummy-not-real' run_orchestrator "$d")
-assert "ANTHROPIC_API_KEY set -> exit 10" "$(exit_code_of "$d")" "10"
-assert "ANTHROPIC_API_KEY set -> nothing invoked" "$seq_out" ""
-assert "ANTHROPIC_API_KEY set -> claude auth status never called" "$([ -f "$WORK/case_auth_anthropic_key.claude_auth_count" ] && echo present || echo absent)" "absent"
-assert_not_contains "ANTHROPIC_API_KEY value never appears in orchestrator log" "$(cat "$WORK/case_auth_anthropic_key.stdout.log")" "sk-test-fake-dummy-not-real"
-
-echo "=== case: OPENAI_API_KEY set -> reject, nothing invoked, secret never printed ==="
-d=$(new_case auth_openai_key)
-seq_out=$(OPENAI_API_KEY='sk-test-fake-dummy-not-real-2' run_orchestrator "$d")
-assert "OPENAI_API_KEY set -> exit 10" "$(exit_code_of "$d")" "10"
-assert "OPENAI_API_KEY set -> nothing invoked" "$seq_out" ""
-assert_not_contains "OPENAI_API_KEY value never appears in orchestrator log" "$(cat "$WORK/case_auth_openai_key.stdout.log")" "sk-test-fake-dummy-not-real-2"
-
-# --- Safe-continuation logic (the core new behavior) ---
-echo "=== case: Codex exit 0, valid checkpoint -> Claude runs, exit 0 ==="
-d=$(new_case codex_ok)
-seq_out=$(STUB_CODEX_MODE=success STUB_CLAUDE_MODE=success run_orchestrator "$d")
-assert "codex ok -> exit 0" "$(exit_code_of "$d")" "0"
-assert "codex ok -> codex then claude" "$seq_out" "$(printf 'codex\nclaude')"
-
-echo "=== case: Codex nonzero (trivial, unchanged) but safe -> Claude still runs, exit 12 ==="
-d=$(new_case codex_fail_safe)
-seq_out=$(STUB_CODEX_MODE=fail STUB_CLAUDE_MODE=success run_orchestrator "$d")
-assert "codex trivial-fail but safe -> Claude still runs" "$seq_out" "$(printf 'codex\nclaude')"
-assert "codex trivial-fail but safe + Claude succeeds -> exit 12 (not 0)" "$(exit_code_of "$d")" "12"
-
-echo "=== case: Codex nonzero after real, safe committed progress (degraded) -> Claude still runs, exit 12 ==="
-d=$(new_case codex_degraded)
-seq_out=$(STUB_CODEX_MODE=degraded STUB_CLAUDE_MODE=success run_orchestrator "$d")
-assert "codex degraded -> Claude still runs" "$seq_out" "$(printf 'codex\nclaude')"
-assert "codex degraded + Claude succeeds -> exit 12" "$(exit_code_of "$d")" "12"
-assert_contains "codex degraded -> codex's commit is preserved in git log" "$(git -C "$d" log --oneline)" "stub: codex progress"
-
-echo "=== case: Codex nonzero + dirty tree left behind -> Claude does not run, exit 3 ==="
-d=$(new_case codex_dirty_fail)
-seq_out=$(STUB_CODEX_MODE=dirty-fail run_orchestrator "$d")
-assert "codex dirty-fail -> exit 3" "$(exit_code_of "$d")" "3"
-assert "codex dirty-fail -> claude never invoked" "$seq_out" "codex"
-
-echo "=== case: Codex exit 0 but leaves dirty tree anyway -> Claude does not run, exit 4 ==="
-d=$(new_case codex_dirty_success)
-seq_out=$(STUB_CODEX_MODE=dirty-success run_orchestrator "$d")
-assert "codex dirty-success -> exit 4" "$(exit_code_of "$d")" "4"
-assert "codex dirty-success -> claude never invoked" "$seq_out" "codex"
-
-echo "=== case: Codex nonzero + stale Last Verified Commit left behind -> exit 3 ==="
-d=$(new_case codex_stale)
-seq_out=$(STUB_CODEX_MODE=stale run_orchestrator "$d")
-assert "codex stale -> exit 3" "$(exit_code_of "$d")" "3"
-assert "codex stale -> claude never invoked" "$seq_out" "codex"
-
-echo "=== case: Codex succeeds, but pre-Claude auth preflight fails -> exit 11, checkpoint stands ==="
-d=$(new_case preclaude_auth_fails)
-seq_out=$(STUB_CODEX_MODE=success STUB_CLAUDE_AUTH_JSON_2='{"loggedIn":true,"authMethod":"apiKey","apiProvider":"firstParty","subscriptionType":"pro"}' run_orchestrator "$d")
-assert "pre-Claude auth fails -> exit 11" "$(exit_code_of "$d")" "11"
-assert "pre-Claude auth fails -> claude -p never invoked" "$seq_out" "codex"
-assert_contains "pre-Claude auth fails -> codex's commit is preserved" "$(git -C "$d" log --oneline)" "stub: codex progress"
-
-echo "=== case: Claude itself fails after Codex succeeded cleanly -> exit 5, codex commit stands ==="
-d=$(new_case claude_fails_after_codex_ok)
-seq_out=$(STUB_CODEX_MODE=success STUB_CLAUDE_MODE=fail run_orchestrator "$d")
-assert "claude fails after codex ok -> exit 5" "$(exit_code_of "$d")" "5"
-assert "claude fails after codex ok -> both were invoked" "$seq_out" "$(printf 'codex\nclaude')"
-assert_contains "claude fails after codex ok -> codex's commit is preserved" "$(git -C "$d" log --oneline)" "stub: codex progress"
-
-echo "=== case: Codex sets HUMAN-REQUIRED mid-run -> Claude must not start (exit 4) ==="
-d=$(new_case human_required_midrun)
-seq_out=$(STUB_CODEX_MODE=human-required STUB_CLAUDE_MODE=success run_orchestrator "$d")
-assert "mid-run HUMAN-REQUIRED -> orchestrator exit 4" "$(exit_code_of "$d")" "4"
-assert "mid-run HUMAN-REQUIRED -> claude never invoked" "$seq_out" "codex"
-
-echo "=== case: timestamped logs and exit codes are preserved ==="
-d=$(new_case logs)
-STUB_CODEX_MODE=success STUB_CLAUDE_MODE=success run_orchestrator "$d" >/dev/null
-run_dir=$(find "$d/logs/overnight" -mindepth 1 -maxdepth 1 -type d | head -1)
-assert "a timestamped run log dir was created" "$([ -n "$run_dir" ] && echo yes || echo no)" "yes"
-if [ -n "$run_dir" ]; then
-    assert "codex.exit recorded" "$(cat "$run_dir/codex.exit" 2>/dev/null)" "0"
-    assert "claude.exit recorded" "$(cat "$run_dir/claude.exit" 2>/dev/null)" "0"
-    assert "orchestrator exit_code recorded" "$(cat "$run_dir/exit_code" 2>/dev/null)" "0"
-fi
-
-echo
-echo "=== $pass passed, $fail failed ==="
-[ "$fail" -eq 0 ]
+printf '\n=== %d passed, %d failed ===\n' "$pass" "$fail"
+if [ "$fail" -ne 0 ]; then exit 1; fi
