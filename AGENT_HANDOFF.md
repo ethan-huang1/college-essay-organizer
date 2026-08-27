@@ -419,7 +419,7 @@ none of this fixture data was committed):
 
 ## Overnight Run State
 
-- Disposition: **continue.**
+- Disposition: continue
 - Objective: implement the reuse-scoring redesign in
   [docs/reuse-scoring.md](docs/reuse-scoring.md). That document is the single
   source of truth; [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) holds the five stages
@@ -543,10 +543,16 @@ none of it can half-survive.
 
 ## Last Verified Commit
 
-`2723d5c` — "feat: commit the hand-reviewed classification for all 255
-catalogue prompts". The full canonical gate (lint, strict typecheck, 218 Vitest
-tests, production build, 103 orchestration assertions) passed immediately before
-this checkpoint. The working tree is clean.
+`699b187` — "docs: specify the reuse-scoring redesign and set it as the
+overnight objective". The full canonical gate (lint, strict typecheck, 218
+Vitest tests, production build, 103 orchestration assertions) passed immediately
+before this checkpoint. The working tree is clean.
+
+Note for whoever edits this next: `validate_state` in
+`scripts/overnight_handoff.sh` only tolerates post-checkpoint changes to
+AGENT_HANDOFF.md, OVERNIGHT_TASK.md, CLAUDE.md, AGENTS.md and MVP_SPEC.md.
+Anything under `docs/` counts as a non-doc change, so a commit touching
+`docs/` must be recorded here rather than left trailing the verified commit.
 
 Production is deployed from `09a9804` plus the reuse hotfixes through `2373f8f`;
 nothing in this run has been deployed, and nothing in it changes runtime
