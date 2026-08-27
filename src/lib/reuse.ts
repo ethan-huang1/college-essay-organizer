@@ -5,10 +5,53 @@ import { assignedEssayResponses, essayFamilyLinks, essayPromptMatches, essayTagL
 import { scoreMatch } from "./matching";
 import { categoryReview } from "./retrieval/category-review";
 import { classifyText } from "./classification";
+import { calibrate, cosine, decodeVector, embedTexts } from "./embedding";
+import { PROMPT_VECTORS } from "./retrieval/prompt-vectors";
+import { essayEmbeddingText } from "./semantic";
 import { detectSchoolMentionsIn } from "./school-mentions";
 import { wordCount } from "./essays";
 
 type FamilyLink = { familyId: string; isPrimary: boolean };
+
+/**
+ * Committed catalogue vectors, decoded once per process.
+ *
+ * Decoding all 255 costs a fraction of a millisecond and happens on first use,
+ * so a workspace with no essays never pays for it.
+ */
+let promptVectors: Map<string, number[]> | null = null;
+function catalogueVectors() {
+  promptVectors ??= new Map(PROMPT_VECTORS.map(([school, ref, encoded]) => [`${school}|${ref}`, decodeVector(encoded)]));
+  return promptVectors;
+}
+
+/**
+ * Essay embeddings, keyed by the exact text embedded.
+ *
+ * Recomputing matches is O(essays x prompts) and runs on every save, so without
+ * this an unchanged essay would be re-embedded on every recomputation. Keyed by
+ * content rather than essay id so an edit invalidates itself, and bounded so a
+ * long-lived server process cannot grow without limit.
+ */
+const essayVectorCache = new Map<string, number[]>();
+const ESSAY_VECTOR_CACHE_LIMIT = 200;
+
+async function essayVectors(texts: string[]): Promise<Map<string, number[]> | null> {
+  const missing = [...new Set(texts.filter((text) => !essayVectorCache.has(text)))];
+  if (missing.length > 0) {
+    const computed = await embedTexts(missing);
+    // Null means no provider: the caller falls back to a neutral semantic score
+    // rather than treating "we cannot tell" as "these do not match".
+    if (!computed) return null;
+    for (const [index, text] of missing.entries()) {
+      if (essayVectorCache.size >= ESSAY_VECTOR_CACHE_LIMIT) {
+        essayVectorCache.delete(essayVectorCache.keys().next().value!);
+      }
+      essayVectorCache.set(text, computed[index]);
+    }
+  }
+  return new Map(texts.map((text) => [text, essayVectorCache.get(text)!]));
+}
 
 // Resolved through the family's own slug column. This used to go via the
 // display name, so a student renaming a category silently unmapped every
@@ -81,6 +124,41 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
     if (fn) essayFunctions.set(assignment.essayId, fn);
   }
 
+  // Semantic similarity, computed before the transaction because embedding is
+  // the slow part and holding a transaction open across it would serialise
+  // every other write in the workspace behind a model call.
+  const essayTexts = new Map(workspaceEssays.map((essay) => [essay.id, essayEmbeddingText(essay.title, essay.currentContent)]));
+  const vectors = workspaceEssays.length > 0 ? await essayVectors([...essayTexts.values()]) : new Map<string, number[]>();
+  const vectorFor = (prompt: { schoolId: string; externalRef: string | null }) => {
+    const school = workspaceSchools.find((candidate) => candidate.id === prompt.schoolId);
+    return prompt.externalRef ? catalogueVectors().get(`${school?.name ?? ""}|${prompt.externalRef}`) : undefined;
+  };
+
+  /**
+   * Per-essay z-scores, calibrated across every prompt in the workspace.
+   *
+   * Calibrated per essay rather than globally, because the useful question is
+   * "is this prompt closer than the average prompt *for this essay*". Raw
+   * cosines from this model sit in a narrow band that shifts with text length,
+   * so a global threshold would rank essays against each other instead of
+   * ranking prompts for one essay.
+   */
+  const zScores = new Map<string, Map<string, number>>();
+  if (vectors) {
+    for (const essay of workspaceEssays) {
+      const essayVector = vectors.get(essayTexts.get(essay.id)!);
+      if (!essayVector) continue;
+      // Only prompts with a committed vector take part; a prompt the student
+      // added has none and scores neutral.
+      const scored = workspacePrompts
+        .map((prompt) => ({ prompt, vector: vectorFor(prompt) }))
+        .filter((entry): entry is { prompt: typeof entry.prompt; vector: number[] } => Boolean(entry.vector))
+        .map((entry) => ({ promptId: entry.prompt.id, similarity: cosine(essayVector, entry.vector) }));
+      const calibrated = calibrate(scored.map((entry) => entry.similarity));
+      zScores.set(essay.id, new Map(scored.map((entry, index) => [entry.promptId, calibrated[index]])));
+    }
+  }
+
   await db.transaction(async (tx) => {
     await tx.delete(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId));
 
@@ -146,10 +224,10 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
           promptFunction,
           promptMinWordCount: prompt.minWordCount,
           promptMaxWordCount: prompt.maxWordCount,
-          // No embedding provider is configured, so semantic similarity is
-          // unavailable and its factor scores neutral. Stage E wires this up;
-          // this same path is its rollback.
-          semanticZScore: null,
+          // Undefined for a prompt with no committed vector, or when no
+          // provider is available: matching then scores this factor neutral
+          // rather than treating "we cannot tell" as "no match".
+          semanticZScore: zScores.get(essay.id)?.get(prompt.id) ?? null,
         });
         return {
           id: crypto.randomUUID(),

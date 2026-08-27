@@ -9,3 +9,7 @@ data/
 .env*.local
 .vercel
 .env*
+
+# Local embedding model files, fetched on first use by src/lib/embedding.ts.
+# ~25MB of ONNX weights: reproducible from the pinned model id, so not committed.
+.model-cache/
