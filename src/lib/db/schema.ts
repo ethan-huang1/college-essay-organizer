@@ -324,7 +324,14 @@ export const essayPromptMatches = pgTable(
     missingRequirements: jsonb("missing_requirements").$type<string[]>().notNull().default([]),
     wordCountDifference: integer("word_count_difference").notNull().default(0),
     schoolSpecificityRisk: text("school_specificity_risk", { enum: ["low", "medium", "high"] }).notNull().default("low"),
-    recommendedAction: text("recommended_action", { enum: ["ready-to-reuse", "minor-adaptation", "major-adaptation", "new-response"] }).notNull(),
+    // Drizzle's `enum` here is TypeScript-only: this emits plain `text` with no
+    // CHECK constraint (see drizzle/0000), so the vocabulary changed from the
+    // four adaptation names to these four bands with no migration. Stored rows
+    // hold the old strings until recomputeWorkspaceMatches rewrites them, which
+    // the reimport does.
+    recommendedAction: text("recommended_action", {
+      enum: ["reusable-slight-edits", "reusable-edits", "reusable-significant-edits", "new-response"],
+    }).notNull(),
     explanation: text("explanation").notNull(),
     calculatedAt: stamp("calculated_at"),
   },

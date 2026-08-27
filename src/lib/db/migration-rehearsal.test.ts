@@ -633,11 +633,14 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
       void summary;
 
       // A same-family, unlimited-length match against the previous-cycle
-      // prompt genuinely exists in the match table (ready-to-reuse), so this
-      // is a real leak risk, not a vacuous check.
+      // prompt genuinely exists in the match table and is a real recommendation,
+      // so this is a live leak risk rather than a vacuous check. The precondition
+      // is "would be surfaced if cycle exclusion broke", which means any band
+      // other than new-response - not one specific band, which would couple this
+      // cycle-exclusion test to the scoring weights.
       const leakCandidate = snapshot!.matches.find((match) => match.essayId === essayBridgeId && match.promptId === previousCyclePromptIdA);
       expect(leakCandidate).toBeTruthy();
-      expect(leakCandidate?.recommendedAction).toBe("ready-to-reuse");
+      expect(leakCandidate?.recommendedAction).not.toBe("new-response");
 
       const groups = reuseOpportunities(snapshot!.essays, snapshot!.matches, snapshot!.prompts);
       const bridgeGroup = groups.find((group) => group.essay.id === essayBridgeId)!;

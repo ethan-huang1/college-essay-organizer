@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DEMO_SCHOOLS } from "@/lib/db/demo-workspace";
+import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { reuseOpportunities } from "@/lib/progress";
 import { canonicalPromptGroups, workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
@@ -170,7 +171,7 @@ export default async function Overview() {
                   <span>{match.promptTitle}</span>
                 </span>
                 <span className="reuse-action">{essay.title}</span>
-                <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.recommendedAction.replaceAll("-", " ")}</span>
+                <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
                 <form action={assignEssayAction}>
                   <input name="promptId" type="hidden" value={match.promptId} />
                   <input name="essayId" type="hidden" value={essay.id} />

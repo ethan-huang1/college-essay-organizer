@@ -137,24 +137,19 @@ function familyLinkRows(
 
 // Secondary themes, as internal matching signal. Nothing in the UI shows these.
 //
-// Two vocabularies arrive here: the review's tag names, which are already the
-// seeded display names, and the classifier's slugs for off-catalogue prompts.
-// TAG_DISPLAY_NAMES translates the latter; a name that is already a seeded tag
-// passes through unchanged.
+// One vocabulary on both sides: the review emits seeded tag names and so does
+// classifyText, so nothing needs translating here. It used to, and the mismatch
+// was invisible - the names simply never matched and the secondary-overlap
+// signal silently scored zero.
 function tagLinkRows(workspaceId: string, promptId: string, tags: readonly string[], tagIds: Map<string, string>) {
   return tags
-    .map((tag) => tagIds.get(TAG_DISPLAY_NAMES[tag] ?? tag))
+    .map((tag) => tagIds.get(tag))
     .filter((tagId): tagId is string => Boolean(tagId))
     .map((tagId) => ({ id: crypto.randomUUID(), workspaceId, promptId, tagId }));
 }
 
 // The tag rows seeded in taxonomy.ts use display names; the classifier emits
 // slugs.
-const TAG_DISPLAY_NAMES: Record<string, string> = {
-  "intellectual-curiosity": "intellectual curiosity",
-  "activities-impact": "activities & impact",
-  "values-meaning": "values & meaning",
-};
 
 async function loadTagIds(db: Pick<AppDatabase, "select">, workspaceId: string) {
   const rows = await db.select({ id: promptTags.id, name: promptTags.name })

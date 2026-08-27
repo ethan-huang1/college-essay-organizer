@@ -253,11 +253,31 @@ describe("local persistence foundation", () => {
 
     // Strong reuse, substantial adaptation, and a dangerous institution-
     // specific reuse case all have to be demonstrable (MVP_SPEC section 6).
+    //
+    // The top band (`reusable-slight-edits`, 70+) is NOT asserted, and the
+    // reason is a measured limitation rather than an oversight. With no
+    // embedding provider configured, semantic similarity scores its neutral 18
+    // of 35, so the best a clean pair can reach on the remaining evidence is
+    // 25 + 18 + 20 + 20 = 83 - and that needs three shared theme tags on the
+    // essay side. Essays are narrative: an essay about rebuilding a free
+    // library never uses the word "contribution", so keyword rules extract one
+    // tag from it where the prompt has three. Measured on this demo, the best
+    // clean pair scores 63.
+    //
+    // That is the honest state of the product without factor 2, and it is the
+    // concrete argument for building it: semantic similarity is the only factor
+    // that can see an essay answers a prompt when they share no vocabulary.
+    // Once it lands, this assertion should tighten to include the top band.
     const matches = await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID));
     const actions = new Set(matches.map((match) => match.recommendedAction));
-    expect(actions.has("ready-to-reuse")).toBe(true);
-    expect(actions.has("major-adaptation")).toBe(true);
+    expect(actions.has("reusable-edits")).toBe(true);
+    expect(actions.has("reusable-significant-edits")).toBe(true);
+    expect(actions.has("new-response")).toBe(true);
     expect(matches.some((match) => match.schoolSpecificityRisk === "high")).toBe(true);
+    // The strongest suggestion has to be a genuine recommendation, not merely
+    // the least-bad option: if this ever drops below the reuse floor the demo
+    // is no longer demonstrating reuse at all.
+    expect(Math.max(...matches.map((match) => match.score))).toBeGreaterThanOrEqual(60);
 
     const statuses = await connection.db.select({ status: prompts.status }).from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID));
     expect(statuses.some((row) => row.status === "complete")).toBe(true);
@@ -541,8 +561,14 @@ describe("local persistence foundation", () => {
     await recomputeWorkspaceMatches(connection.db, PERSONAL);
     const matches = await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL));
     expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatchObject({ essayId, promptId, recommendedAction: "ready-to-reuse" });
-    expect(matches[0].score).toBeGreaterThanOrEqual(80);
+    // Same primary category (25), in range so no length ceiling, semantic
+    // similarity unavailable so neutral (18), and an unassigned essay so the
+    // function factor is neutral too (10). 53 - a real recommendation, and
+    // honestly short of the top band, because two of the four factors have no
+    // evidence behind them.
+    expect(matches[0]).toMatchObject({ essayId, promptId, recommendedAction: "reusable-significant-edits" });
+    expect(matches[0].score).toBe(53);
+    expect(matches[0].wordCountDifference).toBeLessThan(0);
 
     // Recomputing again after nothing changed must not accumulate duplicate rows.
     await recomputeWorkspaceMatches(connection.db, PERSONAL);

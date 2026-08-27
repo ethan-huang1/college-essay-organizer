@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { reuseOpportunities, workState, type ReuseMatch } from "@/lib/progress";
+import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { canonicalPromptGroups, summarizeWorkloadFor, workspaceWorkload, type WorkloadSummary } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
@@ -816,7 +817,7 @@ function MatchRow({
         <span className="cell-school">{label}</span>
         <span>{match.promptTitle}</span>
       </span>
-      <span className="reuse-action">{match.recommendedAction.replaceAll("-", " ")}</span>
+      <span className="reuse-action">{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
       <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
       <form action={assignEssayAction}>
         <input name="promptId" type="hidden" value={match.promptId} />

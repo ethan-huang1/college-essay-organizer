@@ -107,13 +107,37 @@ describe("deterministic prompt/essay classification", () => {
       expect(classifyText("List five things that are important to you.").primarySlug).toBe("shorts");
     });
 
-    it("tags intellectual curiosity and activities without adding categories", () => {
+    // Tag names are the seeded display names, not slugs, and that is
+    // load-bearing rather than cosmetic. Prompt tags are stored by name; when
+    // this emitted slugs, an essay's derived tags and a prompt's reviewed tags
+    // could never intersect, so the secondary-overlap factor scored zero for
+    // every pair in the workspace and the whole factor was dead weight.
+    it("emits seeded tag names so essay and prompt tags share one vocabulary", () => {
       expect(classifyText("Tell us about a research question you fell down a rabbit hole exploring.").tags)
-        .toContain("intellectual-curiosity");
-      expect(classifyText("Describe your most meaningful extracurricular leadership responsibility.").tags)
-        .toContain("activities-impact");
+        .toContain("intellectual curiosity");
+      expect(classifyText("Describe your most meaningful extracurricular project and its impact.").tags)
+        .toContain("activities & impact");
       expect(classifyText("Reflect on a time you held an opposing view and changed your mind.").tags)
-        .toContain("values-meaning");
+        .toContain("disagreement");
+      expect(classifyText("What principle matters most to you and why?").tags).toContain("values & meaning");
+    });
+
+    it("covers the review's twelve tag secondaries, not only the original three", () => {
+      // An essay earns secondary signal only through these rules, so a tag the
+      // rules cannot produce is one the essay side can never match on.
+      const samples: [string, string][] = [
+        ["How will you contribute to and enrich our community?", "contribution"],
+        ["Describe your volunteer service in the community.", "service"],
+        ["Tell us about a time you led a team as captain.", "leadership"],
+        ["Describe how you express your creative side and design things.", "creativity"],
+        ["If you could teach a class, what course would it be?", "course"],
+        ["What are your career goals after graduating?", "goals & future"],
+        ["Describe a group project where you collaborated with a team.", "collaboration"],
+        ["Share any special circumstances that impacted your academic record.", "academic context"],
+      ];
+      for (const [text, tag] of samples) {
+        expect(classifyText(text).tags, text).toContain(tag);
+      }
     });
   });
 

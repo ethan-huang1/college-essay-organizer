@@ -12,14 +12,17 @@ const DONE_STATUSES = new Set(["complete", "submitted"]);
 // An essay is worth offering for an unanswered prompt when the deterministic
 // matcher already judged it reusable or nearly so - see matching.ts. Anything
 // weaker is a "write something new" case and is not counted as reuse.
-const REUSABLE_ACTIONS = new Set(["ready-to-reuse", "minor-adaptation"]);
+const REUSABLE_ACTIONS = new Set(["reusable-slight-edits", "reusable-edits"]);
 
-// The three user-facing reuse states. Content fit decides whether an essay is
-// a recommendation at all; school-specific material decides which of the two
-// recommending states it lands in. "Adapt this" is a recommendation, not a
-// refusal - a strong Stanford fit essay is a real starting point for Duke.
-const READY_ACTION = "ready-to-reuse";
-const WITH_EDITS_ACTIONS = new Set(["minor-adaptation", "major-adaptation"]);
+// The four user-facing reuse bands. Content fit decides the band; editing cost
+// - school-specific material, word count, a function mismatch - can only lower
+// it. "Adapt this" is a recommendation, not a refusal: a strong Stanford fit
+// essay is a real starting point for Duke.
+//
+// There is no "ready to reuse" band. Essentially every reused essay needs some
+// tailoring, so the top band is "slight edits" and READY_ACTION names it.
+const READY_ACTION = "reusable-slight-edits";
+const WITH_EDITS_ACTIONS = new Set(["reusable-edits", "reusable-significant-edits"]);
 
 export type ProgressPrompt = {
   status: string;

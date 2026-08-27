@@ -21,18 +21,18 @@ describe("workState", () => {
 
 describe("reuseCandidate", () => {
   it("offers the strongest reusable suggestion for an unanswered prompt", () => {
-    const candidate = reuseCandidate(prompt({ suggestedMatches: [suggestion("minor-adaptation")] }));
+    const candidate = reuseCandidate(prompt({ suggestedMatches: [suggestion("reusable-edits")] }));
     expect(candidate?.essayTitle).toBe("The Metronome");
   });
 
   it("ignores suggestions the matcher judged not worth reusing", () => {
-    expect(reuseCandidate(prompt({ suggestedMatches: [suggestion("major-adaptation"), suggestion("new-response")] }))).toBeNull();
+    expect(reuseCandidate(prompt({ suggestedMatches: [suggestion("reusable-significant-edits"), suggestion("new-response")] }))).toBeNull();
   });
 
   it("is not an opportunity once an essay is assigned", () => {
     expect(reuseCandidate(prompt({
       assignedEssay: { id: "essay-1", title: "The Metronome" },
-      suggestedMatches: [suggestion("ready-to-reuse")],
+      suggestedMatches: [suggestion("reusable-slight-edits")],
     }))).toBeNull();
   });
 });
@@ -44,7 +44,7 @@ describe("summarizePrompts", () => {
       prompt({ status: "submitted" }),
       prompt({ status: "in-progress" }),
       prompt(),
-      prompt({ suggestedMatches: [suggestion("ready-to-reuse")] }),
+      prompt({ suggestedMatches: [suggestion("reusable-slight-edits")] }),
       prompt({ status: "complete", isCurrentCycle: false }),
     ]);
 
@@ -86,7 +86,7 @@ describe("reuseOpportunities", () => {
   it("separates prompts the essay already answers from the ones it still could", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "ready-to-reuse"), match("p2", "minor-adaptation", 60), match("p3", "new-response", 20)],
+      [match("p1", "reusable-slight-edits"), match("p2", "reusable-edits", 60), match("p3", "new-response", 20)],
       [
         { id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-1" } },
         { id: "p2", isCurrentCycle: true, assignedEssay: null },
@@ -96,7 +96,7 @@ describe("reuseOpportunities", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0].inUse.map((row) => row.promptId)).toEqual(["p1"]);
-    // p2 is a minor-adaptation, which is now a "reusable with edits"
+    // p2 is in the second band, which is a "reusable with edits"
     // recommendation rather than sitting in the ready bucket.
     expect(groups[0].withEdits.map((row) => row.promptId)).toEqual(["p2"]);
     expect(groups[0].open).toEqual([]);
@@ -119,7 +119,7 @@ describe("reuseOpportunities", () => {
   it("keeps an institution-specific match recommended, in the with-edits state", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 80, "high"), match("p2", "ready-to-reuse")],
+      [match("p1", "reusable-significant-edits", 80, "high"), match("p2", "reusable-slight-edits")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }, { id: "p2", isCurrentCycle: true, assignedEssay: null }],
     );
 
@@ -130,7 +130,7 @@ describe("reuseOpportunities", () => {
   it("surfaces an essay whose only match needs school-specific edits", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 80, "high")],
+      [match("p1", "reusable-significant-edits", 80, "high")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
     );
 
@@ -142,7 +142,7 @@ describe("reuseOpportunities", () => {
   it("does not flag a risk on a prompt another essay already answers", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 30, "high")],
+      [match("p1", "reusable-significant-edits", 30, "high")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-9" } }],
     );
 
@@ -150,7 +150,7 @@ describe("reuseOpportunities", () => {
   });
 
   it("leaves out prompts another essay already answers", () => {
-    const groups = reuseOpportunities(essays, [match("p1", "ready-to-reuse")], [{ id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-9" } }]);
+    const groups = reuseOpportunities(essays, [match("p1", "reusable-slight-edits")], [{ id: "p1", isCurrentCycle: true, assignedEssay: { id: "essay-9" } }]);
     expect(groups).toHaveLength(0);
   });
 
@@ -182,7 +182,7 @@ describe("reuseOpportunities", () => {
   it("keeps a school-specific match out of the weaker-options list", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "major-adaptation", 80, "high")],
+      [match("p1", "reusable-significant-edits", 80, "high")],
       [{ id: "p1", isCurrentCycle: true, assignedEssay: null }],
     );
     expect(groups[0].withEdits.map((row) => row.promptId)).toEqual(["p1"]);
@@ -195,7 +195,7 @@ describe("reuseOpportunities", () => {
   it("never offers a previous-cycle prompt as a reuse opportunity", () => {
     const groups = reuseOpportunities(
       essays,
-      [match("p1", "ready-to-reuse"), match("p2", "ready-to-reuse")],
+      [match("p1", "reusable-slight-edits"), match("p2", "reusable-slight-edits")],
       [
         { id: "p1", isCurrentCycle: false, assignedEssay: null },
         { id: "p2", isCurrentCycle: true, assignedEssay: null },
@@ -207,7 +207,7 @@ describe("reuseOpportunities", () => {
   it("drops an essay whose only opportunity was a previous-cycle prompt", () => {
     expect(reuseOpportunities(
       essays,
-      [match("p1", "ready-to-reuse")],
+      [match("p1", "reusable-slight-edits")],
       [{ id: "p1", isCurrentCycle: false, assignedEssay: null }],
     )).toEqual([]);
   });
@@ -219,14 +219,14 @@ describe("reuseOpportunities", () => {
       ({ ...match(id, action, 80, risk), adaptationRequired: risk !== "low" });
 
     it("puts a clean strong match in ready, not with-edits", () => {
-      const g = reuseOpportunities(essays, [withRisk("p1", "ready-to-reuse", "low")],
+      const g = reuseOpportunities(essays, [withRisk("p1", "reusable-slight-edits", "low")],
         [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
       expect(g.open.map((r) => r.promptId)).toEqual(["p1"]);
       expect(g.withEdits).toEqual([]);
     });
 
     it("puts a strong match that names another school in with-edits, and still recommends it", () => {
-      const g = reuseOpportunities(essays, [withRisk("p1", "major-adaptation", "high")],
+      const g = reuseOpportunities(essays, [withRisk("p1", "reusable-significant-edits", "high")],
         [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
       expect(g.withEdits.map((r) => r.promptId)).toEqual(["p1"]);
       expect(g.open).toEqual([]);
@@ -234,7 +234,7 @@ describe("reuseOpportunities", () => {
     });
 
     it("counts with-edits as a genuine reuse opportunity", () => {
-      const g = reuseOpportunities(essays, [withRisk("p1", "minor-adaptation", "medium")],
+      const g = reuseOpportunities(essays, [withRisk("p1", "reusable-edits", "medium")],
         [{ id: "p1", isCurrentCycle: true, assignedEssay: null }])[0];
       expect(g.withEdits.map((r) => r.promptId)).toEqual(["p1"]);
     });

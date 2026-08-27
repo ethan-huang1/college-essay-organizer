@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { TOP_UNIVERSITIES } from "@/lib/top-universities";
+import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { reuseCandidate, workState } from "@/lib/progress";
 import type { WorkloadSummary } from "@/lib/workload";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
@@ -194,7 +195,7 @@ function ResponseBlock({ prompt }: { prompt: WorkspacePrompt }) {
               <li key={match.essayId}>
                 <span className="match-score">{match.score}</span>
                 <span className="suggestion-name">{match.essayTitle}</span>
-                <span className="suggestion-action">{match.recommendedAction.replaceAll("-", " ")}</span>
+                <span className="suggestion-action">{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
                 <button className="text-link" type="submit" name="essayId" value={match.essayId}>Use this</button>
               </li>
             ))}

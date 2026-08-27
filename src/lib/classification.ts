@@ -1,4 +1,4 @@
-import { DERIVED_CONCEPT_TAGS, LEGACY_FAMILY_SLUG_MAP } from "./db/taxonomy";
+import { LEGACY_FAMILY_SLUG_MAP } from "./db/taxonomy";
 
 // Deterministic, keyword-based classifier. No model calls, no network - see
 // MVP_SPEC.md §5: "do not require a paid API key... implement a
@@ -251,21 +251,71 @@ const RULES: { slug: string; patterns: RegExp[] }[] = [
 ];
 
 /**
- * Signal worth keeping for matching but not worth a category of its own. These
- * become internal tags; nothing in the UI shows them.
+ * Theme signal worth keeping for matching but not worth a category of its own.
+ *
+ * These become internal tags; nothing in the UI shows them. The vocabulary is
+ * the twelve tag secondaries the catalogue review uses (the other five of its
+ * seventeen are themselves categories, so they arrive as secondary family links
+ * instead).
+ *
+ * The tag names here are the *seeded display names*, not slugs, and that is
+ * deliberate. Prompt tags are stored by name; when this emitted slugs instead,
+ * an essay's derived tags and a prompt's reviewed tags could never intersect,
+ * so the secondary-overlap factor scored zero for every pair in the workspace
+ * and the whole factor was dead weight. One vocabulary, both sides.
+ *
+ * Matching an essay against these rules is how an essay earns secondary signal
+ * at all: a student picks only a primary category, so without this the essay
+ * side of the comparison is empty.
  */
-const TAG_RULES: { tag: (typeof DERIVED_CONCEPT_TAGS)[number]; patterns: RegExp[] }[] = [
+const TAG_RULES: { tag: string; patterns: RegExp[] }[] = [
   {
-    tag: "intellectual-curiosity",
-    patterns: [/\bintellectual\b/i, /\bcuriosity\b/i, /\bresearch\b/i, /\brabbit\s+hole\b/i, /\bnerd\b/i, /\bexplore\s+(?:a\s+)?(?:topic|idea)\b/i, /\bexcites\s+you\b/i],
+    tag: "intellectual curiosity",
+    patterns: [/\bintellectual\b/i, /\bcuriosity\b/i, /\bcurious\b/i, /\bresearch\b/i, /\brabbit\s+hole\b/i, /\bnerd/i, /\bexplore\s+(?:a\s+)?(?:topic|idea)\b/i, /\bexcites\s+you\b/i, /\bfascinat/i],
   },
   {
-    tag: "activities-impact",
-    patterns: [/\bextracurricular\b/i, /\bleadership\b/i, /\binitiative\b/i, /\bresponsibilit(?:y|ies)\b/i, /\bproject\b/i, /\bwork\s+experience\b/i, /\bemployment\b/i, /\bmade\s+a\s+difference\b/i, /\bimpact\b/i],
+    tag: "activities & impact",
+    patterns: [/\bextracurricular\b/i, /\binitiative\b/i, /\bresponsibilit(?:y|ies)\b/i, /\bproject\b/i, /\bwork\s+experience\b/i, /\bemployment\b/i, /\bmade\s+a\s+difference\b/i, /\bimpact\b/i, /\bachievement\b/i],
   },
   {
-    tag: "values-meaning",
-    patterns: [/\bvalues?\b/i, /\bbelief\b/i, /\bethical\b/i, /\bdisagree/i, /\bchanged\s+your\s+mind\b/i, /\bopposing\s+view\b/i, /\bwhat\s+matters\s+to\s+you\b/i, /\bprinciple\b/i, /\breconsider/i],
+    tag: "values & meaning",
+    patterns: [/\bvalues?\b/i, /\bbelief\b/i, /\bethical\b/i, /\bwhat\s+matters\s+to\s+you\b/i, /\bprinciple\b/i, /\bmeaningful\b/i, /\bpurpose\b/i, /\bmoral\b/i],
+  },
+  {
+    tag: "contribution",
+    patterns: [/\bcontribut/i, /\benrich\b/i, /\bwould\s+you\s+bring\b/i, /\bbring\s+to\s+(?:our|the|a)\b/i, /\badd\s+to\s+(?:our|the)\s+community\b/i, /\bmake\s+your\s+mark\b/i],
+  },
+  {
+    tag: "service",
+    patterns: [/\bservice\b/i, /\bvolunteer/i, /\bserve\b/i, /\bgiving\s+back\b/i, /\bcommon\s+good\b/i, /\bcivic\b/i],
+  },
+  {
+    tag: "leadership",
+    patterns: [/\bleader(?:ship|s)?\b/i, /\bled\s+/i, /\bcaptain\b/i, /\bfounded\b/i, /\bpresident\s+of\b/i, /\borganiz(?:ed|ing)\b/i],
+  },
+  {
+    tag: "disagreement",
+    patterns: [/\bdisagree/i, /\bopposing\s+view\b/i, /\bdiffer(?:ing|ent)\s+(?:view|opinion|perspective)/i, /\bchanged\s+your\s+mind\b/i, /\bdebate\b/i, /\bargu(?:ment|ed)\b/i, /\bviewpoint\b/i, /\bcommon\s+ground\b/i],
+  },
+  {
+    tag: "creativity",
+    patterns: [/\bcreativ/i, /\bdesign(?:ed|ing)?\b/i, /\bartist/i, /\bbuilt\b|\bbuild\b/i, /\binvent/i, /\bcompos(?:e|ed|er|ing)\b/i, /\bportfolio\b/i, /\bimagin/i],
+  },
+  {
+    tag: "course",
+    patterns: [/\bcourse\b/i, /\bclass(?:es)?\b/i, /\bteach\b/i, /\bassignment\b/i, /\bcurricul/i, /\bseminar\b/i, /\bsyllabus\b/i],
+  },
+  {
+    tag: "goals & future",
+    patterns: [/\bcareer\s+goals?\b/i, /\bfuture\s+(?:goals?|plans?)\b/i, /\bafter\s+graduat/i, /\baspirations?\b/i, /\bhope\s+to\s+achieve\b/i, /\bplans?\s+beyond\b/i, /\byears?\s+from\s+now\b/i, /\blife\s+goals?\b/i],
+  },
+  {
+    tag: "collaboration",
+    patterns: [/\bcollaborat/i, /\bteam(?:mate|work)?\b/i, /\basked?\s+for\s+help\b/i, /\bwork(?:ing|ed)?\s+(?:with|alongside)\b/i, /\bgroup\s+(?:effort|project)\b/i],
+  },
+  {
+    tag: "academic context",
+    patterns: [/\bacademic\s+(?:record|performance|preparation|context)\b/i, /\bspecial\s+circumstances\b/i, /\bschool\s+(?:setting|context)\b/i, /\bimpacted\s+your\b/i, /\breadiness\b/i],
   },
 ];
 

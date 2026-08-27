@@ -67,8 +67,10 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
       previousCyclePrompts: workspacePrompts.filter((prompt) => !isCurrentCyclePrompt(prompt)).length,
       essays: workspaceEssays.length,
       assignments: assignments.length,
-      // 80 is the ready-to-reuse cutoff in matching.ts; 75 matched no tier at all.
-      strongMatches: matches.filter((match) => match.score >= 80).length,
+      // 70 is the top band's floor in matching.ts (see docs/reuse-scoring.md).
+      // It was 80 while the top band was "ready to reuse"; that band no longer
+      // exists, because essentially every reused essay needs some tailoring.
+      strongMatches: matches.filter((match) => match.score >= 70).length,
     },
     schools: workspaceSchools.map((school) => {
       const schoolPrompts = workspacePrompts
