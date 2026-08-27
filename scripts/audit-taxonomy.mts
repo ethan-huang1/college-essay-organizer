@@ -131,6 +131,15 @@ const w = (line = "") => out.push(line);
 
 w("# Audit: is `Other` one category or several?");
 w();
+w("> **Read [reconciliation.md](reconciliation.md) first.** All 255 reviewed prompts");
+w("> carry exactly the primary and secondary assignments the owner's review gives");
+w("> them — 0 mismatches — so `Other` being 37% of the catalogue is what the review");
+w("> says, not a wiring failure. In particular **Activities & Impact and Creativity");
+w("> appear 0 times as a primary in the review** and 24 and 19 times as");
+w("> secondaries, exactly as stored. Nothing below is a restoration of a lost");
+w("> category; every proposal here would be a new one, and needs a product");
+w("> decision rather than a bug fix.");
+w();
 w(`\`Other\` holds **${others.length} of ${all.length}** catalogue prompts (${pct(others.length, all.length)}) and is the least`);
 w("reusable category in the evaluation. Every one of them was read; this report");
 w("tests whether the families I found in them are real or invented.");

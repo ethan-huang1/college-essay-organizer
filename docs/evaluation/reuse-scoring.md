@@ -203,6 +203,57 @@ floor nor its ceiling:
 | secondary | 81.6% | 18.3% | 0.1% |
 | function | 85.1% | 6.5% | 8.4% |
 
+### 3c. Distribution of the secondary and function factors
+
+Asked for directly: how often each factor lands on each of its possible values.
+
+**secondary**
+
+| Points | Pairs | Share |
+|---|---|---|
+| 0 | 53,045 | 81.6% |
+| 7 | 11,058 | 17.0% |
+| 14 | 865 | 1.3% |
+| 20 | 57 | 0.1% |
+
+**function**
+
+| Points | Pairs | Share |
+|---|---|---|
+| 0 | 55,356 | 85.1% |
+| 20 | 4,213 | 6.5% |
+| 25 | 5,456 | 8.4% |
+
+Both sides of every pair here are catalogue prompts, so both have a reviewed
+function - which is why the function factor never shows its neutral 10 in this
+table. A real essay has no function unless it is linked to a prompt, and that
+case is measured in recommendation-cases.md instead.
+
+### 3d. Does the 45-point cross-category ceiling still exist?
+
+Across 50,328 pairs whose primary categories differ, the highest score is
+**79** and **1,281** (2.5%) reach the reuse floor.
+
+The 45 ceiling was measured with real essays, where the function factor is a
+constant neutral 10 because an unassigned essay has no recorded function. Here
+both sides have one, so a cross-category pair can also earn the function's 20 -
+which is the whole reason capturing an essay's origin prompt matters.
+
+### 3e. Is there still a pile-up at exactly 70?
+
+| Score | Pairs |
+|---|---|
+| 72 | 279 |
+| 87 | 251 |
+| 80 | 226 |
+| 79 | 128 |
+| 76 | 86 |
+| 77 | 83 |
+| 70 | 56 |
+| 75 | 49 |
+
+**56** of 1,483 top-band scores sit exactly on 70 (3.8%).
+
 ### 4. Boundary examples
 
 **Around 70** — the top-band floor:

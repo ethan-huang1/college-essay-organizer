@@ -1,5 +1,14 @@
 # Audit: is `Other` one category or several?
 
+> **Read [reconciliation.md](reconciliation.md) first.** All 255 reviewed prompts
+> carry exactly the primary and secondary assignments the owner's review gives
+> them — 0 mismatches — so `Other` being 37% of the catalogue is what the review
+> says, not a wiring failure. In particular **Activities & Impact and Creativity
+> appear 0 times as a primary in the review** and 24 and 19 times as
+> secondaries, exactly as stored. Nothing below is a restoration of a lost
+> category; every proposal here would be a new one, and needs a product
+> decision rather than a bug fix.
+
 `Other` holds **94 of 255** catalogue prompts (36.9%) and is the least
 reusable category in the evaluation. Every one of them was read; this report
 tests whether the families I found in them are real or invented.

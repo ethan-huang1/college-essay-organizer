@@ -113,6 +113,37 @@ describe("semantic matching, end to end", () => {
     expect(bands).toContain("new-response");
   });
 
+  it("takes an essay's function from its earliest assignment, deterministically", async () => {
+    if (!available) return;
+    // Regression: the assignment query had no ORDER BY, so an essay assigned to
+    // several prompts drew its function from whichever row came back first. Two
+    // problems - the same data could score differently between recomputations,
+    // and a later assignment is a reuse *target*, so accepting a suggestion
+    // could redefine what the essay is.
+    const { assignedEssayResponses } = await import("./schema");
+    const rows = await connection.db.select().from(assignedEssayResponses)
+      .where(eq(assignedEssayResponses.workspaceId, DEMO_WORKSPACE_ID))
+      .orderBy(assignedEssayResponses.assignedAt);
+    const perEssay = new Map<string, number>();
+    for (const row of rows) perEssay.set(row.essayId, (perEssay.get(row.essayId) ?? 0) + 1);
+    // The demo has to actually exercise the multi-assignment case or this test
+    // is vacuous.
+    expect([...perEssay.values()].some((count) => count > 1)).toBe(true);
+
+    // Recomputing twice must produce identical scores.
+    const { recomputeWorkspaceMatches } = await import("../reuse");
+    const snapshot = async () => {
+      await recomputeWorkspaceMatches(connection.db, DEMO_WORKSPACE_ID);
+      const rowsNow = await connection.db.select().from(essayPromptMatches)
+        .where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID));
+      return rowsNow
+        .map((row) => `${row.essayId}|${row.promptId}|${row.score}|${row.recommendedAction}`)
+        .sort()
+        .join("\n");
+    };
+    expect(await snapshot()).toBe(await snapshot());
+  });
+
   it("does not recommend most pairs: 936 pairs, a handful of suggestions", async () => {
     if (!available) return;
     const { matchRows } = demo();

@@ -111,7 +111,10 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
       db.select().from(promptTags).where(eq(promptTags.workspaceId, workspaceId)).execute(),
       db.select().from(promptTagLinks).where(eq(promptTagLinks.workspaceId, workspaceId)).execute(),
       db.select().from(essayTagLinks).where(eq(essayTagLinks.workspaceId, workspaceId)).execute(),
-      db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.workspaceId, workspaceId)).execute(),
+      db.select().from(assignedEssayResponses)
+        .where(eq(assignedEssayResponses.workspaceId, workspaceId))
+        .orderBy(assignedEssayResponses.assignedAt)
+        .execute(),
     ]);
   const slugById = new Map(workspaceFamilies.map((family) => [family.id, family.slug]));
   const schoolNames = workspaceSchools.map((school) => school.name);
@@ -147,8 +150,18 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
    * asking what the student will contribute in future.
    */
   const essayFunctions = new Map<string, ReturnType<typeof functionOfPrompt>>();
+  // Earliest assignment first, which is why the query orders by assignedAt.
+  //
+  // Two bugs without that ordering. An essay assigned to several prompts took
+  // its function from whichever row Postgres happened to return first, so the
+  // same workspace could score differently between two recomputations of the
+  // same data. And once an essay has been reused, its later assignments are
+  // reuse *targets* - taking a function from one of those would let a
+  // suggestion the student accepted redefine what the essay is, which is
+  // circular. The earliest assignment is the closest thing to the prompt it was
+  // written for; essays.origin_prompt_id would say so outright.
   for (const assignment of assignments) {
-    if (essayFunctions.get(assignment.essayId)) continue;
+    if (essayFunctions.has(assignment.essayId)) continue;
     const fn = functionOfPrompt(assignment.promptId);
     if (fn) essayFunctions.set(assignment.essayId, fn);
   }

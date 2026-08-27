@@ -266,6 +266,57 @@ for (const key of ["primary", "semantic", "secondary", "function"] as const) {
 }
 w();
 
+w("### 3c. Distribution of the secondary and function factors");
+w();
+w("Asked for directly: how often each factor lands on each of its possible values.");
+w();
+for (const key of ["secondary", "function"] as const) {
+  const counts = new Map<number, number>();
+  for (const row of semantic.scored) counts.set(row.factors[key], (counts.get(row.factors[key]) ?? 0) + 1);
+  w(`**${key}**`);
+  w();
+  w("| Points | Pairs | Share |");
+  w("|---|---|---|");
+  for (const [points, n] of [...counts].sort((a, b) => a[0] - b[0])) {
+    w(`| ${points} | ${n.toLocaleString()} | ${pct(n, total)} |`);
+  }
+  w();
+}
+w("Both sides of every pair here are catalogue prompts, so both have a reviewed");
+w("function - which is why the function factor never shows its neutral 10 in this");
+w("table. A real essay has no function unless it is linked to a prompt, and that");
+w("case is measured in recommendation-cases.md instead.");
+w();
+
+w("### 3d. Does the 45-point cross-category ceiling still exist?");
+w();
+{
+  const crossPairs = semantic.scored.filter((r) => r.essay.primary !== r.prompt.primary);
+  const best = Math.max(...crossPairs.map((r) => r.score));
+  const above50 = crossPairs.filter((r) => r.score >= 50).length;
+  w(`Across ${crossPairs.length.toLocaleString()} pairs whose primary categories differ, the highest score is`);
+  w(`**${best}** and **${above50.toLocaleString()}** (${pct(above50, crossPairs.length)}) reach the reuse floor.`);
+  w();
+  w("The 45 ceiling was measured with real essays, where the function factor is a");
+  w("constant neutral 10 because an unassigned essay has no recorded function. Here");
+  w("both sides have one, so a cross-category pair can also earn the function's 20 -");
+  w("which is the whole reason capturing an essay's origin prompt matters.");
+  w();
+  const pileUp = new Map<number, number>();
+  for (const r of semantic.scored) pileUp.set(r.score, (pileUp.get(r.score) ?? 0) + 1);
+  const topBandScores = [...pileUp].filter(([score]) => score >= 70).sort((a, b) => b[1] - a[1]);
+  w("### 3e. Is there still a pile-up at exactly 70?");
+  w();
+  w("| Score | Pairs |");
+  w("|---|---|");
+  for (const [score, n] of topBandScores.slice(0, 8)) w(`| ${score} | ${n.toLocaleString()} |`);
+  const at70 = pileUp.get(70) ?? 0;
+  const atTop = semantic.scored.filter((r) => r.score >= 70).length;
+  w();
+  w(`**${at70.toLocaleString()}** of ${atTop.toLocaleString()} top-band scores sit exactly on 70 (${pct(at70, atTop)}).`);
+  w();
+}
+
 w("### 4. Boundary examples");
 w();
 for (const boundary of [70, 60, 50]) {
