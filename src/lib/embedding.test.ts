@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   DISABLE_ENV_VAR,
   EMBEDDING_DIMENSIONS,
+  EMBEDDING_MODEL,
   calibrate,
   cosine,
   decodeVector,
@@ -11,7 +12,7 @@ import {
   encodeVector,
   resetEmbeddingProviderForTests,
 } from "./embedding";
-import { PROMPT_VECTORS } from "./retrieval/prompt-vectors";
+import { PROMPT_VECTOR_MODEL, PROMPT_VECTORS } from "./retrieval/prompt-vectors";
 import { essayEmbeddingText, promptEmbeddingText } from "./semantic";
 
 // Pure maths, no model needed: these run everywhere.
@@ -75,6 +76,96 @@ describe("embedding text", () => {
   it("truncates an essay rather than letting the model silently drop its tail", () => {
     const text = essayEmbeddingText("T", "word ".repeat(1000));
     expect(text.length).toBeLessThanOrEqual(1200);
+  });
+});
+
+// The four properties Stage 5 depends on. If any of these fails, every similarity
+// in the product is quietly wrong, so they are asserted rather than assumed.
+describe("embedding stability", () => {
+  let available = false;
+  beforeAll(async () => {
+    delete process.env[DISABLE_ENV_VAR];
+    resetEmbeddingProviderForTests();
+    available = await embeddingsAvailable();
+  }, 180_000);
+
+  const A = "The little free library outside our building was empty for most of a year.";
+  const B = "Why do you want to study engineering at Princeton?";
+  const LONG = "A much longer passage. " + "It exists to force padding when batched with a short one. ".repeat(20);
+
+  it("is deterministic across repeated calls", async () => {
+    if (!available) return;
+    const first = await embedTexts([A]);
+    const second = await embedTexts([A]);
+    // Bit-identical, which is a stronger claim than a cosine tolerance and the
+    // one that actually matters. Note that cosine(v, v) is 0.99999967 rather
+    // than 1 for these vectors - the model normalises in float32 - so a cosine
+    // assertion tight enough to detect real drift would fail on arithmetic.
+    expect(second![0]).toEqual(first![0]);
+  }, 180_000);
+
+  it("does not depend on what else is being embedded", async () => {
+    // The bug this guards: batching pads every text to the longest and mean
+    // pooling then averages over the padding, so a text's vector depended on its
+    // neighbours - measured at cosine 0.991 between the same prompt in two
+    // different batches. Committed vectors and runtime essay vectors are
+    // produced in separate passes, so that error would have landed in every
+    // comparison the product makes.
+    if (!available) return;
+    const alone = (await embedTexts([A]))![0];
+    const withShort = (await embedTexts([A, B]))![0];
+    const withLong = (await embedTexts([A, LONG]))![0];
+    expect(withShort).toEqual(alone);
+    expect(withLong).toEqual(alone);
+  }, 180_000);
+
+  it("does not depend on processing order", async () => {
+    if (!available) return;
+    const forward = await embedTexts([A, B, LONG]);
+    const reversed = await embedTexts([LONG, B, A]);
+    expect(reversed![2]).toEqual(forward![0]);
+    expect(reversed![0]).toEqual(forward![2]);
+  }, 180_000);
+
+  it("keeps persisted and freshly generated vectors consistent", async () => {
+    if (!available) return;
+    const { lookupSchoolSource } = await import("./retrieval/registry");
+    // A spread of the catalogue rather than one row, since the failure mode
+    // being guarded (a stale generated file) would not affect all rows equally.
+    for (const index of [0, 60, 127, 200, 254]) {
+      const [school, ref, encoded] = PROMPT_VECTORS[index];
+      const prompt = lookupSchoolSource(school)?.prompts.find((candidate) => candidate.externalRef === ref);
+      const fresh = await embedTexts([promptEmbeddingText(prompt!.title, prompt!.promptText)]);
+      expect(cosine(fresh![0], decodeVector(encoded)), `${school} / ${ref}`).toBeGreaterThan(0.9995);
+    }
+  }, 180_000);
+
+  it("keeps quantisation inside tolerance across the whole catalogue", async () => {
+    // Not model-dependent, so this runs everywhere: decode, re-encode, compare.
+    const losses = PROMPT_VECTORS.map(([, , encoded]) => {
+      const vector = decodeVector(encoded);
+      return cosine(vector, decodeVector(encodeVector(vector)));
+    });
+    expect(Math.min(...losses)).toBeGreaterThan(0.9999);
+  });
+});
+
+describe("model/vector compatibility", () => {
+  it("ties the committed vectors to the model that produced them", () => {
+    // PROMPT_VECTOR_MODEL used to be generated and never read. Changing
+    // EMBEDDING_MODEL without regenerating would have compared vectors from two
+    // models: quietly wrong if the dimensions matched, and NaN-silent if not -
+    // and NaN loses every band comparison, so every pair in the workspace became
+    // "new response recommended" with nothing in the explanation to show it.
+    expect(PROMPT_VECTOR_MODEL).toBe(EMBEDDING_MODEL);
+    for (const [school, ref, encoded] of PROMPT_VECTORS) {
+      expect(decodeVector(encoded), `${school} / ${ref}`).toHaveLength(EMBEDDING_DIMENSIONS);
+    }
+  });
+
+  it("refuses to compare vectors of different lengths instead of returning NaN", () => {
+    expect(() => cosine(new Array(768).fill(0.03), new Array(384).fill(0.05)))
+      .toThrow(/768-dimensional vector with a 384-dimensional/);
   });
 });
 

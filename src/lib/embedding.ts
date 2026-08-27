@@ -54,6 +54,8 @@ let loading: Promise<Extractor | null> | null = null;
  */
 async function getExtractor(): Promise<Extractor | null> {
   loading ??= (async () => {
+    // Disabled on purpose is silent; failing to load is not. Those are very
+    // different situations and this used to treat them the same.
     if (process.env[DISABLE_ENV_VAR]) return null;
     try {
       const { env, pipeline } = await import("@huggingface/transformers");
@@ -62,9 +64,20 @@ async function getExtractor(): Promise<Extractor | null> {
       env.cacheDir = ".model-cache";
       const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: EMBEDDING_DTYPE });
       return extractor as unknown as Extractor;
-    } catch {
-      // Intentionally quiet: an absent provider is a supported configuration,
-      // not an error condition. Callers see null and score neutral.
+    } catch (error) {
+      // Loud, once. The fallback itself is a supported configuration - callers
+      // see null and the semantic factor scores neutral - but an *unintended*
+      // fallback degrades advice in a direction an operator would not guess:
+      // the neutral 18 of 35 is awarded to every pair including unrelated ones,
+      // so losing the model produces MORE recommendations, not fewer. Measured
+      // on a ten-college list, coverage at the reuse floor is 40.4% without the
+      // model against 36.2% with it. Silence here would read as "working".
+      console.error(
+        "[embedding] Semantic similarity is unavailable, so reuse suggestions will be scored " +
+        "on three factors instead of four and the fourth will score its neutral value. " +
+        `Set ${DISABLE_ENV_VAR} to make this deliberate and silence this message. Cause:`,
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   })();
@@ -112,8 +125,21 @@ export async function embedTexts(texts: string[]): Promise<number[][] | null> {
   return vectors;
 }
 
-/** Dot product, which is cosine similarity for unit-normalised vectors. */
+/**
+ * Dot product, which is cosine similarity for unit-normalised vectors.
+ *
+ * Throws on a length mismatch rather than returning NaN. Measured, the NaN path
+ * was silent all the way to the student: a 768-dimensional essay vector against
+ * a 384-dimensional prompt vector gave cosine NaN, which flowed through
+ * calibration into a NaN score, and every comparison in the band ladder is false
+ * against NaN - so every pair in the workspace resolved to "new response
+ * recommended" and the stored explanation showed nothing wrong. That is the
+ * shape of an incident, so it fails here instead.
+ */
 export function cosine(a: readonly number[], b: readonly number[]) {
+  if (a.length !== b.length) {
+    throw new Error(`Cannot compare a ${a.length}-dimensional vector with a ${b.length}-dimensional one. Re-run scripts/precompute-prompt-vectors.mts after changing EMBEDDING_MODEL.`);
+  }
   let sum = 0;
   for (let i = 0; i < a.length; i += 1) sum += a[i] * b[i];
   return sum;

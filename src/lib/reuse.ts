@@ -5,8 +5,8 @@ import { assignedEssayResponses, essayFamilyLinks, essayPromptMatches, essayTagL
 import { scoreMatch } from "./matching";
 import { categoryReview } from "./retrieval/category-review";
 import { classifyText } from "./classification";
-import { calibrate, cosine, decodeVector, embedTexts } from "./embedding";
-import { PROMPT_VECTORS } from "./retrieval/prompt-vectors";
+import { EMBEDDING_MODEL, calibrate, cosine, decodeVector, embedTexts } from "./embedding";
+import { PROMPT_VECTOR_MODEL, PROMPT_VECTORS } from "./retrieval/prompt-vectors";
 import { essayEmbeddingText } from "./semantic";
 import { detectSchoolMentionsIn } from "./school-mentions";
 import { wordCount } from "./essays";
@@ -23,6 +23,35 @@ let promptVectors: Map<string, number[]> | null = null;
 function catalogueVectors() {
   promptVectors ??= new Map(PROMPT_VECTORS.map(([school, ref, encoded]) => [`${school}|${ref}`, decodeVector(encoded)]));
   return promptVectors;
+}
+
+/**
+ * Refuses to compare vectors from two different models.
+ *
+ * An embedding is only meaningful against another from the same model, and
+ * nothing enforced that: PROMPT_VECTOR_MODEL was written into the generated file
+ * and never read. Changing EMBEDDING_MODEL without re-running the precompute
+ * script would have compared new essay vectors against old prompt vectors -
+ * quietly wrong if the dimensions happened to agree, and NaN-silent if they did
+ * not, which resolved every pair in the workspace to "new response" with nothing
+ * in the stored explanation to say so.
+ *
+ * Degrades to the no-provider path rather than throwing, because that path is
+ * already correct and supported, and taking the whole workspace's matching down
+ * over a stale generated file would be a worse failure than scoring one factor
+ * neutral. Loud once per process so it cannot pass unnoticed.
+ */
+let warnedAboutModelMismatch = false;
+function vectorsUsableWithCurrentModel() {
+  if (PROMPT_VECTOR_MODEL === EMBEDDING_MODEL) return true;
+  if (!warnedAboutModelMismatch) {
+    warnedAboutModelMismatch = true;
+    console.error(
+      `[reuse] Committed prompt vectors were produced by ${PROMPT_VECTOR_MODEL} but EMBEDDING_MODEL is ${EMBEDDING_MODEL}. ` +
+      "Semantic similarity is disabled until scripts/precompute-prompt-vectors.mts is re-run.",
+    );
+  }
+  return false;
 }
 
 /**
@@ -128,7 +157,9 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
   // the slow part and holding a transaction open across it would serialise
   // every other write in the workspace behind a model call.
   const essayTexts = new Map(workspaceEssays.map((essay) => [essay.id, essayEmbeddingText(essay.title, essay.currentContent)]));
-  const vectors = workspaceEssays.length > 0 ? await essayVectors([...essayTexts.values()]) : new Map<string, number[]>();
+  const vectors = workspaceEssays.length > 0 && vectorsUsableWithCurrentModel()
+    ? await essayVectors([...essayTexts.values()])
+    : new Map<string, number[]>();
   const vectorFor = (prompt: { schoolId: string; externalRef: string | null }) => {
     const school = workspaceSchools.find((candidate) => candidate.id === prompt.schoolId);
     return prompt.externalRef ? catalogueVectors().get(`${school?.name ?? ""}|${prompt.externalRef}`) : undefined;
