@@ -241,35 +241,47 @@ function schoolSpecificityRisk(promptPrimarySlug: string | null, promptSchoolNam
 function wordCountCeiling(essayWordCount: number, min: number | null, max: number | null) {
   if (max === null) return { ceiling: null, difference: 0, reason: null as string | null };
   const difference = essayWordCount - max;
-  const lowerBound = min ?? 0;
 
+  // Over length: keyed on retention, how much of the essay survives the cut.
+  //
+  // Boundaries chosen so that only genuinely extreme incompatibility caps the
+  // band. Cutting a 500-word essay to 300 or even 250 is ordinary editing and
+  // carries no ceiling; cutting it to 150 is substantial; cutting it to 50 is a
+  // different essay. The previous curve gave 500 -> 300 and 500 -> 50 the same
+  // -25, so it could not tell condensing from rewriting at all.
   if (essayWordCount > max) {
     const retention = max / Math.max(essayWordCount, 1);
-    if (retention < 0.2) return { ceiling: "reusable-significant-edits" as const, difference, reason: "needs cutting to a fraction of its length" };
-    if (retention < 0.45) return { ceiling: "reusable-edits" as const, difference, reason: "needs substantial cutting" };
+    if (retention < 0.15) return { ceiling: "reusable-significant-edits" as const, difference, reason: "would have to be cut to a fraction of its length" };
+    if (retention < 0.35) return { ceiling: "reusable-edits" as const, difference, reason: "needs substantial cutting" };
     return { ceiling: null, difference, reason: null };
   }
 
-  if (essayWordCount < lowerBound) {
-    return { ceiling: "reusable-edits" as const, difference, reason: "is under the stated minimum" };
-  }
-
-  // Only when the prompt states no minimum: if it states one and the essay
-  // clears it, the school itself has said the length is acceptable.
+  // Under length is treated more strictly than over length, because the two are
+  // not symmetric: you can cut 200 words from an essay you have written, but you
+  // cannot condense your way up to a length you have not.
   //
-  // The 0.40 boundary was moved down from 0.60 by measurement, not preference.
-  // At 0.60 this ceiling fired on most of the demo workspace - a 300-word essay
-  // against a 650-word maximum is a legitimate answer, since schools state a
-  // maximum rather than a target - and it was capping more pairs than the score
-  // itself was deciding. A ceiling doing that much work means the score has
-  // stopped mattering, which is the failure mode docs/reuse-scoring.md asks the
-  // evaluation to watch for.
-  if (min === null) {
-    const fill = essayWordCount / Math.max(max, 1);
-    if (fill < 0.25) return { ceiling: "new-response" as const, difference, reason: "is a fraction of the expected length" };
-    if (fill < 0.4) return { ceiling: "reusable-edits" as const, difference, reason: "is well under the expected length" };
+  // "More strictly" is not the same as "on a hair trigger", which is what the
+  // earlier thresholds amounted to. Schools state a maximum, not a target, so a
+  // 300-word essay against a 650-word maximum (fill 0.46) is a legitimate answer
+  // and gets no ceiling. Measured on the demo workspace, a 0.60 threshold fired
+  // on most pairs and was capping more of them than the score was deciding.
+  if (min !== null) {
+    // A small shortfall against a stated minimum is ordinary editing - adding a
+    // paragraph. Only a real shortfall is an adaptation cost.
+    if (essayWordCount < min * 0.75) {
+      return { ceiling: "reusable-edits" as const, difference, reason: "is well short of the stated minimum" };
+    }
+    return { ceiling: null, difference, reason: null };
   }
 
+  // No stated minimum, so there is no length the school has asked for - only the
+  // question of whether this is an essay yet. The 0.15 row preserves a defect
+  // this repo already fixed: a 15-word note scored 80 against a 650-word prompt
+  // and was recommended as ready to reuse. That essay is not shortened, it is
+  // not written, and no scoring change may quietly reintroduce it.
+  const fill = essayWordCount / Math.max(max, 1);
+  if (fill < 0.15) return { ceiling: "new-response" as const, difference, reason: "is a fraction of the expected length" };
+  if (fill < 0.3) return { ceiling: "reusable-edits" as const, difference, reason: "is well under the expected length" };
   return { ceiling: null, difference, reason: null };
 }
 

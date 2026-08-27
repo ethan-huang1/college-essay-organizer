@@ -1098,6 +1098,27 @@ describe("local persistence foundation", () => {
     // reading-list. Every existing production workspace is in that state, so
     // without this the migration would have been a silent no-op where it
     // mattered most.
+    // Generalised deliberately: the check is "does this workspace hold the
+    // complete current taxonomy", not "does it hold the three slugs that were
+    // new in one particular release". Any missing category has to be detected,
+    // or the next expansion reintroduces the same silent no-op.
+    it.each([
+      ["the three added in this release", ["challenge-growth", "roommate", "reading-list"]],
+      ["a single missing category", ["roommate"]],
+      ["a long-standing category deleted by hand", ["why-us"]],
+    ])("detects and repairs a workspace missing %s", async (_label, missing) => {
+      await connection.db.delete(promptFamilies).where(and(
+        eq(promptFamilies.workspaceId, PERSONAL),
+        inArray(promptFamilies.slug, missing),
+      ));
+      expect(await workspacesNeedingTaxonomyMigration(connection.db)).toContain(PERSONAL);
+      await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
+      const repaired = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
+      expect(repaired).toHaveLength(10);
+      for (const slug of missing) expect(repaired.map((family) => family.slug)).toContain(slug);
+      expect(await workspacesNeedingTaxonomyMigration(connection.db)).not.toContain(PERSONAL);
+    });
+
     it("adds missing categories to a workspace whose slugs are all still valid", async () => {
       const SEVEN = ["community", "shorts", "diversity", "why-major", "why-us", "personal-statement", "other"];
       await connection.db.delete(promptFamilies).where(and(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classifyText, mapLegacySlug } from "./classification";
-import { PROMPT_FAMILIES } from "./db/taxonomy";
+import { PROMPT_FAMILIES, SECONDARY_TAGS } from "./db/taxonomy";
 
 describe("deterministic prompt/essay classification", () => {
   it("only ever returns one of the seven categories", () => {
@@ -120,6 +120,24 @@ describe("deterministic prompt/essay classification", () => {
       expect(classifyText("Reflect on a time you held an opposing view and changed your mind.").tags)
         .toContain("disagreement");
       expect(classifyText("What principle matters most to you and why?").tags).toContain("values & meaning");
+    });
+
+    // The invariant behind the bug, rather than one of its symptoms. Prompt tags
+    // are stored as rows in prompt_tags keyed by name; an emitted tag that is
+    // not a seeded name resolves to no row, so the link is silently dropped and
+    // the secondary-overlap factor loses that signal with nothing failing.
+    it("only ever emits tag names that seedTaxonomy actually creates", () => {
+      const seeded = new Set<string>(SECONDARY_TAGS);
+      const samples = [
+        "Describe a challenge you have faced and how you overcame it, and what you learned about your values.",
+        "Tell us about a research question, a team project you led, and the course you would design.",
+        "How will you contribute to our community through service and creative work after graduating?",
+        "Share any special circumstances that impacted your academic record.",
+        "Reflect on a disagreement, a collaboration, and what brings you joy.",
+      ];
+      const emitted = new Set(samples.flatMap((text) => classifyText(text).tags));
+      expect(emitted.size).toBeGreaterThan(5);
+      for (const tag of emitted) expect(seeded, `"${tag}" is not a seeded tag`).toContain(tag);
     });
 
     it("covers the review's twelve tag secondaries, not only the original three", () => {

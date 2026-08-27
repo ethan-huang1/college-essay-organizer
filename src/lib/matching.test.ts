@@ -236,6 +236,9 @@ describe("deterministic essay-prompt match scoring", () => {
         expect(scoreMatch(p(max)).ceilings, `${max}w`).toEqual([]);
         expect(scoreMatch(p(max)).recommendedAction, `${max}w`).toBe("reusable-slight-edits");
       }
+      // 500 -> 200 is 60% cut and still ordinary; 150 is substantial; 50 is a
+      // different essay.
+      expect(scoreMatch(p(200)).ceilings).toEqual([]);
       expect(scoreMatch(p(150)).recommendedAction).toBe("reusable-edits");
       expect(scoreMatch(p(50)).recommendedAction).toBe("reusable-significant-edits");
     });
@@ -274,8 +277,39 @@ describe("deterministic essay-prompt match scoring", () => {
         essayFunction: "reflect",
         promptFunction: "reflect",
       });
-      expect(short.ceilings).toContain("length: is under the stated minimum");
+      expect(short.ceilings).toContain("length: is well short of the stated minimum");
       expect(short.recommendedAction).toBe("reusable-edits");
+    });
+
+    it("does not cap a small shortfall against a stated minimum", () => {
+      // 590 against a 600-word minimum is a paragraph, not an adaptation cost.
+      const nearly = scoreMatch({
+        ...base,
+        essayWordCount: 590,
+        promptMinWordCount: 600,
+        promptMaxWordCount: 650,
+        semanticZScore: 5,
+        essayFunction: "reflect",
+        promptFunction: "reflect",
+      });
+      expect(nearly.ceilings).toEqual([]);
+      expect(nearly.recommendedAction).toBe("reusable-slight-edits");
+    });
+
+    it("treats being well under a maximum as acceptable, not as a mismatch", () => {
+      // Schools state a maximum, not a target. A 300-word essay against a
+      // 650-word maximum is a legitimate answer.
+      const under = scoreMatch({
+        ...base,
+        essayWordCount: 300,
+        promptMinWordCount: null,
+        promptMaxWordCount: 650,
+        semanticZScore: 5,
+        essayFunction: "reflect",
+        promptFunction: "reflect",
+      });
+      expect(under.ceilings).toEqual([]);
+      expect(under.recommendedAction).toBe("reusable-slight-edits");
     });
 
     it("leaves a character-limited prompt alone: no word maximum to measure against", () => {
