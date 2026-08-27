@@ -288,9 +288,30 @@ by clicking through the running app.
 
 ## Blockers
 
-None active. The 36 `needs-review` outcomes are known data-source
-limitations with precise follow-up notes, not blockers to the application
-or to the completed one-outcome-per-school requirement.
+HUMAN-REQUIRED: authorize (or decline) the local ONNX embedding dependency for
+Stage 5 of the reuse-scoring objective. Everything else in that objective is
+complete and green. The evaluation
+([docs/evaluation/reuse-scoring.md](docs/evaluation/reuse-scoring.md)) shows a
+six-essay portfolio covering 40.4% of a ten-college list without semantic
+similarity and 89.4% with it, so this decision is what stands between the
+implemented work and a release worth shipping. Adding a dependency and
+downloading a model are outside what an autonomous run may do
+(OVERNIGHT_TASK.md rules 6 and 10).
+
+HUMAN-REQUIRED: read a sample of real recommendations. Part 2 of the evaluation
+uses catalogue prompts as stand-ins for essays, so every number in the report is
+a bound rather than a measurement. Judging real output by reading it is the only
+check that catches a formula which is internally consistent and practically
+useless, and no automated gate can substitute for it.
+
+Note for whoever runs `scripts/overnight_handoff.sh`: `validate_state` greps for
+`HUMAN-REQUIRED:` and fails preflight while these lines are present. That is
+intended - there is no further autonomous work on this objective - but it means
+these two lines must be resolved or removed before the pipeline will start on
+anything else.
+
+The 36 `needs-review` catalogue outcomes remain known data-source limitations
+with precise follow-up notes, not blockers.
 
 ## Tests/Verification Performed
 
@@ -419,141 +440,105 @@ none of this fixture data was committed):
 
 ## Overnight Run State
 
-- Disposition: continue
+- Disposition: complete
 - Objective: implement the reuse-scoring redesign in
-  [docs/reuse-scoring.md](docs/reuse-scoring.md). That document is the single
-  source of truth; [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) holds the five stages
-  and the rules.
-- Last verified commit: see below. Working tree clean, full gate green.
+  [docs/reuse-scoring.md](docs/reuse-scoring.md). **Stages 1-4 are done.**
+  Stage 5 needs a human decision - see Blockers.
+- Working tree clean, full canonical gate green (239 Vitest tests).
 
-### Where this objective came from
+### Completed
 
-A product-owner review of all 255 catalogue prompts
-(`Essay_Prompt_Category_Review_Claude.csv`, 207 rows) replaced the keyword
-classifier's output with hand judgements, and that changed the scoring problem
-rather than merely improving its inputs. The shipped formula gave a shared
-primary category 60 points, and `baseline 20 + 60 = 80` was exactly the
-"ready to reuse" threshold — so two prompts sharing a broad category were
-called ready to submit unchanged, with 106 of 255 prompts in one category and
-the essay text never read.
-
-### Completed in this run
-
-| Commit | What |
-|---|---|
-| `35870eb` | `docs/prompt-labels.md` — the worksheet the review was built from |
-| `2723d5c` | `src/lib/retrieval/category-review.ts` + test — the 255-prompt reviewed classification |
-| (this one) | `docs/reuse-scoring.md` — authoritative design; new objective and handoff |
-
-**`category-review.ts` is irreplaceable.** It was transcribed from a CSV pasted
-into a chat session, not from anything in the repo, and the CSV is not
-committed. It cannot be regenerated. `category-review.test.ts` guards it:
-255/255 prompts reviewed, no stale rows, no duplicate keys, no undeclared
-vocabulary, and the exact primary distribution.
-
-### The distribution that drives everything downstream
-
-| Primary | Prompts | Share |
+| Commit | Stage | What |
 |---|---|---|
-| **Other** | **94** | **36.9%** |
-| Why Major | 61 | 23.9% |
-| Background & Identity (`diversity`) | 30 | 11.8% |
-| Challenge & Growth | 23 | 9.0% |
-| Why Us | 22 | 8.6% |
-| Short Answer | 13 | 5.1% |
-| Community | 7 | 2.7% |
-| Personal Statement | 2 | 0.8% |
-| Roommate | 2 | 0.8% |
-| Reading List | 1 | 0.4% |
+| `35870eb` | — | `docs/prompt-labels.md`, the worksheet the owner's review was built from |
+| `2723d5c` | — | `category-review.ts` + test: the 255-prompt hand-reviewed classification |
+| `699b187` | — | `docs/reuse-scoring.md`, the authoritative design |
+| `1059465` | — | handoff synced to the pipeline's validation rules |
+| `8ca4ed7` | 1+2 | taxonomy 7 -> 10; review wired into the import path |
+| `4d2aa9f` | 3 | four-factor score, four bands, band ceilings, `Other` vector |
+| `7b5297a` | 4 | 65,025-pair evaluation + portfolio coverage report |
 
-### Exact next task
+Stages 1 and 2 were merged deliberately: the taxonomy exists to hold the
+review's categories, so splitting them would have churned the catalogue
+assertions twice for no gain.
 
-**Stage 1 — taxonomy expansion.** In `src/lib/db/taxonomy.ts`:
+### The finding that matters
 
-1. Add three primaries to `PROMPT_FAMILIES`: `challenge-growth`,
-   `reading-list`, `roommate`. Keep `other` last (its comment explains why).
-2. Rename two display names only: `Community & Contribution` → `Community`,
-   `Short Answers` → `Short Answer`. **Do not touch slugs** — they are join
-   keys referenced by `LEGACY_FAMILY_SLUG_MAP` and by
-   `essay_family_links.family_id`.
-3. Add five tags to `SECONDARY_TAGS`: `academic context`, `collaboration`,
-   `contribution`, `course`, `goals & future`. The review's other seven tag
-   secondaries already exist.
-4. Extend `src/lib/db/taxonomy-migration.ts` to re-expand 7 → 10 by
-   re-importing from `category-review.ts`, preserving every `source: "manual"`
-   link. The `manualFamilies` set at `taxonomy-migration.ts:89` is the existing
-   pattern — a previous defect there lost a student's hand classification by
-   choosing purely on `isPrimary`.
-5. `sortOrder` collides on re-seed. The migration already deletes **all**
-   family rows before reseeding for exactly this reason (see its comment); keep
-   that.
+[docs/evaluation/reuse-scoring.md](docs/evaluation/reuse-scoring.md), regenerated
+by `node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/evaluate-reuse-scoring.mts`.
 
-Then `./run_tests.sh` must be green before Stage 2.
+**A six-essay portfolio covers 40.4% of a ten-college list as shipped and 89.4%
+with semantic similarity available.** The spec's target is a substantial
+majority, so the shipped configuration misses it - and the entire gap is
+attributable to factor 2 being absent, not to the weights. Measuring only the
+shipped mode would have looked like grounds to retune the other three weights,
+which would have meant fitting the formula to a temporary absence.
 
-### Traps that have already cost time in this codebase
+**So: do not release these stages to students until factor 2 lands.** They are
+correct, tested, and safe to keep in the codebase; the advice a student would see
+is weaker than today's, for a reason already scheduled to be fixed.
 
-1. **Do not add a word-count penalty.** The design removes it entirely and
-   replaces it with band ceilings. But removing it without adding
-   `fill < 0.25 → new-response` reintroduces a fixed bug: a 15-word note scored
-   80 against a 650-word prompt and was recommended as ready to reuse
-   (`matching.ts:74-79`).
-2. **`Other` is 37% of the catalogue and `matching.ts:41` excludes it from
-   matching by construction** (`NOT_A_SHARED_THEME`). Importing the review
-   without the `Other` weight vector tells students 94 prompts match nothing
-   they have written. This is the single largest risk in the objective.
-3. **Drizzle `text(..., {enum:[...]})` emits plain `text` with no CHECK
-   constraint** (verified: `drizzle/0000:142-143`, `drizzle/0002:8`). Status and
-   action vocabularies grow by editing a TypeScript union — **no migration**.
-   The `RecommendedAction` rename therefore needs none, though stored values go
-   stale until the reimport recomputes them.
-4. **Three `why`-matching patterns once lacked the `i` flag**, so lowercase
-   "why" never matched "Why Davidson" and Why Us held 0 of 255 prompts. If a
-   classification count looks impossible, check regex flags first.
-5. **`prompt_tag_links` holds 0 rows in production** owing to an ordering defect
-   fixed in `e08247c`. Nothing can be recovered from it; re-import from
-   `category-review.ts` instead.
-6. **Scripts in `scripts/*.mts` need explicit file extensions** or a
-   `registerHooks` resolve hook — `node --experimental-strip-types` will not
-   resolve the repo's extensionless TS imports, and `node --check` does not
-   resolve imports at all, so it cannot prove a script runs.
+Three more results, all in the report:
 
-### Not authorized for an autonomous run
+- The function-mismatch ceiling changes the band on **8** pairs out of 65,025,
+  not the 45.7% a first pass suggested. Forfeiting the factor's 20 points
+  already drops mismatched pairs below 70. Kept anyway, because it makes the
+  owner's reflective-vs-future-contribution case impossible rather than merely
+  unlikely - but it is a guarantee, not a mechanism.
+- Ranking moved a long way: mean top-10 overlap with the old formula is 41.9%,
+  and the previously top-ranked suggestion survives in the top 10 for 34.9% of
+  prompts. Intended, and needs a release note.
+- Cross-category top-band pairs: 34 (0.1%), all Why Us / Why Major pairs about
+  named degree programmes. No evidence a 25-point factor 1 lets unrelated pairs
+  through.
 
-- **Stage 5 (semantic similarity).** It adds a dependency and downloads an ONNX
-  model. Record a `HUMAN-REQUIRED:` blocker and stop. Stages 1–4 must leave the
-  no-provider path working, which is what makes deferring it safe.
-- **Tuning weights to improve evaluation numbers.** If Part 1 shows `Other`
-  falling below the floor or false-positive top-band matches, that is a finding
-  to report, not a number to fix.
-- Anything in [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) rules 6 and 10: no push, no
-  deploy, no Neon/Vercel change, no API key.
+### Bugs found and fixed while implementing, not reported by anyone
 
-### Superseded — do not reimplement
+1. `migrateWorkspaceTaxonomy` asked only "is any slug retired?", so a workspace
+   already on the seven categories reported "already migrated" and would never
+   have gained the three new families. **Every existing production workspace is
+   in that state**, so the migration would have been a silent no-op precisely
+   where it mattered. Covered by a test now.
+2. Prompt tags are stored as seeded display names and `classifyText` emitted
+   slugs, so essay tags and prompt tags could never intersect and the
+   secondary-overlap factor scored zero for every pair in every workspace. One
+   vocabulary now, and the tag rules cover all twelve of the review's tag
+   secondaries rather than the original three.
+3. The function factor was neutral for every essay because nothing recorded what
+   an essay does. It now comes from a prompt the essay is already assigned to.
+4. The under-length ceiling at `fill < 0.60` fired on most of the demo
+   workspace. A 300-word essay against a 650-word maximum is a legitimate answer
+   - schools state maxima, not targets - and a ceiling capping more pairs than
+   the score decides means the score has stopped mattering. Moved to 0.40.
+5. My own `challenge-growth` keyword rule matched Stanford's "most significant
+   challenge that society faces". Narrowed, with both false positives pinned as
+   tests.
 
-The 60-point primary bonus · the 80-point Ready threshold · `ready-to-reuse` ·
-`minor-adaptation` · `major-adaptation` · the corroboration gate · `sizeFactor`
-and the static weight table · `confidenceFactor` · the rank/badge split · every
-word-count penalty. Acceptance criterion 9 is a grep assertion over `src/` so
-none of it can half-survive.
+### If you are picking this up
 
-- Test/build status: full canonical gate green — lint, strict typecheck,
-  **218 Vitest tests** (up from 211; +7 for the review data), production build,
-  103 orchestration assertions.
+Stage 5 (semantic similarity) is the only remaining stage and is **not
+authorized for an autonomous run** - it adds a dependency and downloads an ONNX
+model. Its shape is specified in docs/reuse-scoring.md; the no-provider path
+that stages 1-4 leave working is both its fallback and its rollback, and it is
+already exercised by every test in the suite.
+
+Do **not** retune the four weights to improve the coverage number. The
+evaluation already establishes that factor 2 accounts for the gap, and the
+owner's instruction was explicit: record findings, do not tune to make numbers
+look better.
+
+- Test/build status: full canonical gate green - lint, strict typecheck,
+  **239 Vitest tests**, production build, 103 orchestration assertions.
 - Last agent: Claude
 
 ## Last Verified Commit
 
-`699b187` — "docs: specify the reuse-scoring redesign and set it as the
-overnight objective". The full canonical gate (lint, strict typecheck, 218
-Vitest tests, production build, 103 orchestration assertions) passed immediately
-before this checkpoint. The working tree is clean.
+`7b5297a` — "feat: evaluate the four-factor scoring across all 65,025 catalogue
+pairs". The full canonical gate (lint, strict typecheck, 239 Vitest tests,
+production build, 103 orchestration assertions) passed immediately before this
+checkpoint, and before each of the four commits in this run. The working tree is
+clean.
 
-Note for whoever edits this next: `validate_state` in
-`scripts/overnight_handoff.sh` only tolerates post-checkpoint changes to
-AGENT_HANDOFF.md, OVERNIGHT_TASK.md, CLAUDE.md, AGENTS.md and MVP_SPEC.md.
-Anything under `docs/` counts as a non-doc change, so a commit touching
-`docs/` must be recorded here rather than left trailing the verified commit.
-
-Production is deployed from `09a9804` plus the reuse hotfixes through `2373f8f`;
-nothing in this run has been deployed, and nothing in it changes runtime
-behaviour yet — `category-review.ts` is committed data that no code path reads.
+Production is still deployed from `09a9804` plus the reuse hotfixes through
+`2373f8f`. **Nothing in this run has been deployed**, and the evaluation
+recommends against deploying it until Stage 5 lands.
