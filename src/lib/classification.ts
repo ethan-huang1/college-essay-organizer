@@ -1,4 +1,4 @@
-import { LEGACY_FAMILY_SLUG_MAP, RETIRED_FAMILY_TAGS } from "./db/taxonomy";
+import { DERIVED_CONCEPT_TAGS, LEGACY_FAMILY_SLUG_MAP } from "./db/taxonomy";
 
 // Deterministic, keyword-based classifier. No model calls, no network - see
 // MVP_SPEC.md §5: "do not require a paid API key... implement a
@@ -23,6 +23,30 @@ import { LEGACY_FAMILY_SLUG_MAP, RETIRED_FAMILY_TAGS } from "./db/taxonomy";
  * length words are common and purpose words are not.
  */
 const RULES: { slug: string; patterns: RegExp[] }[] = [
+  {
+    // First, and narrow. "Write a note to your future roommate" is a specific
+    // recurring prompt whose essay is reusable only against another roommate
+    // prompt. It used to match `shorts` on the bare word "roommates", which
+    // made a 250-word roommate note look interchangeable with a 50-word
+    // favourite-song answer.
+    slug: "roommate",
+    patterns: [
+      /\broommates?\b/i,
+      /\bwho\s+you'?re\s+living\s+with\b/i,
+    ],
+  },
+  {
+    // Requires a word about reading, not just "list five": "list five things
+    // that are important to you" is a Short Answer, and Wake Forest's "Top Ten
+    // List" is too. Only a books/reading framing belongs here.
+    slug: "reading-list",
+    patterns: [
+      /\bbooks?\s+(?:you|that|which)\b/i,
+      /\blist\s+(?:five|ten|\d+)\s+books\b/i,
+      /\breading\s+list\b/i,
+      /\bbooks?\s+(?:you'?ve|you\s+have)\s+read\b/i,
+    ],
+  },
   {
     // First, because a fit prompt often also mentions a major, a community, or
     // a programme - all of which would otherwise win.
@@ -74,6 +98,35 @@ const RULES: { slug: string; patterns: RegExp[] }[] = [
       /\bbachelor'?s\s+degree\b/i,
       /\bgeneralist\b/i,
       /\bgraduate\s+(?:school|study)\b/i,
+    ],
+  },
+  {
+    // After why-us and why-major, because a programme prompt often mentions
+    // "societal challenges" it wants you to solve - that is a Why Major prompt,
+    // not a prompt about an obstacle in your own life.
+    //
+    // Deliberately no bare /\bchallenge\b/: it matched Stanford's "most
+    // significant challenge that society faces" and Michigan's "challenge the
+    // present", neither of which is about the student overcoming anything.
+    slug: "challenge-growth",
+    patterns: [
+      // Requires a past-experience framing, not just the word next to "you".
+      // "the most significant challenge" alone matched Stanford's question
+      // about what challenge *society* faces, and a bare /challenge\s+you/
+      // would match "courses that challenge you" in a Why Us prompt.
+      /\bchallenge\s+(?:you\s+have|you'?ve|you\s+faced|that\s+you)\b/i,
+      /\bchallenge\s+that\s+(?:changed|shaped|tested)\s+you\b/i,
+      /\bovercome\b|\bovercame\b/i,
+      /\bsetback\b/i,
+      /\bobstacle\b/i,
+      /\badversity\b/i,
+      /\bfailure\b/i,
+      /\bbarrier\b/i,
+      /\bdidn'?t\s+expect\b/i,
+      /\bunexpected\s+(?:challenge|path|turn)\b/i,
+      /\bhow\s+did\s+you\s+manage\b/i,
+      /\bpersist(?:ed|ence)?\b/i,
+      /\bresilien/i,
     ],
   },
   {
@@ -179,7 +232,6 @@ const RULES: { slug: string; patterns: RegExp[] }[] = [
     // a short prompt with any purpose above keeps that purpose.
     slug: "shorts",
     patterns: [
-      /\broommates?\b/i,
       /\bfavou?rite\b/i,
       /\blist\s+(?:five|ten|\d+)\b/i,
       /\bshort\s+(?:answer|take)\b/i,
@@ -202,14 +254,10 @@ const RULES: { slug: string; patterns: RegExp[] }[] = [
  * Signal worth keeping for matching but not worth a category of its own. These
  * become internal tags; nothing in the UI shows them.
  */
-const TAG_RULES: { tag: (typeof RETIRED_FAMILY_TAGS)[number]; patterns: RegExp[] }[] = [
+const TAG_RULES: { tag: (typeof DERIVED_CONCEPT_TAGS)[number]; patterns: RegExp[] }[] = [
   {
     tag: "intellectual-curiosity",
     patterns: [/\bintellectual\b/i, /\bcuriosity\b/i, /\bresearch\b/i, /\brabbit\s+hole\b/i, /\bnerd\b/i, /\bexplore\s+(?:a\s+)?(?:topic|idea)\b/i, /\bexcites\s+you\b/i],
-  },
-  {
-    tag: "challenge-growth",
-    patterns: [/\bchallenge\b/i, /\bsetback\b/i, /\bobstacle\b/i, /\bfailure\b/i, /\bconflict\b/i, /\bresilien/i, /\bovercome|\bovercame\b/i, /\badversity\b/i, /\bmistake\b/i, /\bgrow\s+or\s+develop\b/i],
   },
   {
     tag: "activities-impact",

@@ -440,7 +440,7 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
 
   it("[point 4] taxonomy remap drops no links, creates no duplicate primaries, dedupes collapsed secondaries, and keeps manual provenance", async () => {
     const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, WS_A));
-    expect(families).toHaveLength(7);
+    expect(families).toHaveLength(10);
 
     const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, WS_A));
     const allPromptIds = [...LEGACY_FAMILIES.map(([slug]) => `${WS_A}:prompt:${slug}`), previousCyclePromptIdA];
@@ -462,10 +462,12 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
     expect(coreStoryLinks.find((link) => !link.isPrimary)?.familyId).toBe(otherFamilyIdA);
     expect(coreStoryLinks.find((link) => link.isPrimary)?.familyId).toBe(personalStatementFamilyIdA);
 
-    // The manually hand-classified prompt (challenge-growth -> other) keeps
-    // its manual provenance rather than reverting to deterministic.
+    // The manually hand-classified prompt keeps its manual provenance rather
+    // than reverting to deterministic - and now keeps its category too, because
+    // challenge-growth is a primary again and maps to itself instead of
+    // collapsing into Other.
     const manualLink = links.find((link) => link.promptId === challengeGrowthPromptId);
-    expect(manualLink).toMatchObject({ familyId: otherFamilyIdA, isPrimary: true, source: "manual" });
+    expect(manualLink).toMatchObject({ familyId: `${WS_A}:family:challenge-growth`, isPrimary: true, source: "manual" });
 
     // The manually classified essay link survives too.
     const essayLink = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayBridgeId)).then((r) => r[0]);
@@ -473,11 +475,15 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
 
     // The retired categories collapsed away as internal tags rather than
     // silently vanishing: one tag per (owner, retired concept) pair - the
-    // dedicated challenge-growth/intellectual-curiosity/activities-impact/
-    // values-meaning prompts (4) plus core-story's two collapsed secondaries,
-    // which are two DIFFERENT retired concepts on the SAME owner (2) = 6.
+    // dedicated intellectual-curiosity/activities-impact/values-meaning prompts
+    // (3) plus core-story's two collapsed secondaries, which are two DIFFERENT
+    // retired concepts on the SAME owner (2) = 5.
+    //
+    // Five, not six: the challenge-growth prompt no longer produces a tag,
+    // because it kept its own category. Recording the concept as both a
+    // category and a tag would let matching count one shared concept twice.
     const tagLinks = await connection.db.select().from(promptTagLinks).where(eq(promptTagLinks.workspaceId, WS_A));
-    expect(tagLinks).toHaveLength(6);
+    expect(tagLinks).toHaveLength(5);
     expect(tagLinks.filter((link) => link.promptId === coreStoryPromptId)).toHaveLength(2);
     // A link to a category that was NOT retired (personal-statement) produces no tag.
     const essayTags = await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.workspaceId, WS_A));

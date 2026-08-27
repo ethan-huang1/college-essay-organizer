@@ -4,7 +4,7 @@ import { CURRENT_CYCLE_LABEL } from "../cycle";
 import { TOP_UNIVERSITIES } from "../top-universities";
 import { classifyText } from "../classification";
 import { PROMPT_FAMILIES } from "../db/taxonomy";
-import { CLASSIFICATION_OVERRIDES, classificationOverride } from "./classification-overrides";
+import { categoryReview } from "./category-review";
 import { listCoveredSchoolNames, lookupSchoolSource } from "./registry";
 
 // A secondary-source (admissions-consultant-blog) domain must never be the
@@ -167,10 +167,19 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
     // Informational, but it must never grow silently past what is on file.
     expect(unresolvedConditionals).toBeLessThanOrEqual(60);
   });
-  // The old keyword set could not see a fit prompt: measured on this catalogue,
-  // zero of 255 prompts ever classified as why-school and 44% classified as
-  // nothing at all. Why Us is the one category you must NOT reuse across
-  // schools, so an empty Why Us made the reuse map quietly wrong.
+  // What this block asserts changed with the catalogue review. It used to check
+  // the keyword classifier's own output, because that output *was* the
+  // catalogue's classification. It no longer is: category-review.ts assigns all
+  // 255 by hand and the rules only classify prompts a student adds. So the
+  // interesting assertions are now about the review being wired in and about
+  // the rules still being sane on their own - not about the rules' accuracy on
+  // prompts they no longer decide.
+  //
+  // The rules' historical failure is still worth guarding: measured on this
+  // catalogue, zero of 255 prompts ever classified as why-school and 44%
+  // classified as nothing at all, because three `why` patterns lacked the `i`
+  // flag. Why Us is the one category you must NOT reuse across schools, so an
+  // empty Why Us made the reuse map quietly wrong.
   describe("classification coverage", () => {
     const classified = listCoveredSchoolNames().flatMap((name) => {
       const record = lookupSchoolSource(name);
@@ -178,48 +187,64 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
         school: name,
         prompt,
         result: classifyText(`${prompt.title} ${prompt.promptText}`),
-        override: classificationOverride(name, prompt.externalRef),
+        reviewed: categoryReview(name, prompt.externalRef),
       }));
     });
 
-    it("classifies Why Us prompts instead of leaving the category empty", () => {
-      const whyUs = classified.filter((row) => (row.override ?? row.result.primarySlug) === "why-us");
+    /** What the import path will actually store: review first, rules second. */
+    const effective = (row: (typeof classified)[number]) =>
+      row.reviewed?.[2] ?? row.result.primarySlug ?? "other";
+
+    it("takes its category from the review for every catalogue prompt", () => {
+      const fromRules = classified.filter((row) => !row.reviewed);
+      expect(fromRules.map((row) => `${row.school}: ${row.prompt.title}`)).toEqual([]);
+    });
+
+    it("still classifies Why Us prompts by keyword rather than leaving the category empty", () => {
+      // Asserted on the *rules*, not the review, because this is the regression
+      // that the missing `i` flags caused and it would otherwise go unguarded
+      // now that the rules no longer decide the catalogue.
+      const whyUs = classified.filter((row) => row.result.primarySlug === "why-us");
       expect(whyUs.length).toBeGreaterThan(20);
     });
 
-    it("leaves under 10% of the catalogue needing review", () => {
-      const needsReview = classified.filter((row) => !row.override && !row.result.primarySlug);
+    it("leaves under 10% of the catalogue needing review by keyword alone", () => {
+      const needsReview = classified.filter((row) => !row.result.primarySlug);
       const share = needsReview.length / classified.length;
-      console.log(`Needs review: ${needsReview.length}/${classified.length} (${Math.round(share * 100)}%)`);
+      console.log(`Rules alone would need review: ${needsReview.length}/${classified.length} (${Math.round(share * 100)}%)`);
       expect(share).toBeLessThan(0.1);
     });
 
-    it("never emits a category outside the seven", () => {
+    it("never emits a category outside the taxonomy", () => {
       const slugs = new Set(PROMPT_FAMILIES.map(([slug]) => slug as string));
       for (const row of classified) {
-        if (row.result.primarySlug) expect(slugs, `${row.school}: ${row.prompt.title}`).toContain(row.result.primarySlug);
-        if (row.override) expect(slugs, `${row.school}: ${row.prompt.title}`).toContain(row.override);
+        const where = `${row.school}: ${row.prompt.title}`;
+        if (row.result.primarySlug) expect(slugs, where).toContain(row.result.primarySlug);
+        expect(slugs, where).toContain(effective(row));
+        for (const slug of row.reviewed?.[3] ?? []) expect(slugs, `${where} secondary`).toContain(slug);
       }
     });
 
-    it("populates every category the catalogue can reach", () => {
-      const populated = new Set(classified.map((row) => row.override ?? row.result.primarySlug).filter(Boolean));
-      for (const slug of ["why-us", "why-major", "community", "diversity", "shorts", "personal-statement"]) {
+    it("populates every category the catalogue reaches", () => {
+      const populated = new Set(classified.map(effective));
+      for (const slug of [
+        "why-us", "why-major", "community", "diversity", "shorts",
+        "personal-statement", "challenge-growth", "roommate", "reading-list", "other",
+      ]) {
         expect(populated, slug).toContain(slug);
       }
+      // All ten. If this ever fails for `other`, check that the review still
+      // uses it as a real category rather than as a fallback.
+      expect(populated.size).toBe(10);
     });
 
-    // A stale override would silently do nothing, so every entry has to still
-    // name a prompt that exists.
-    it("keeps every hand-classified override pointing at a real prompt", () => {
-      for (const [schoolName, externalRef] of CLASSIFICATION_OVERRIDES) {
-        const record = lookupSchoolSource(schoolName);
-        expect(record, `${schoolName} is not in the registry`).toBeTruthy();
-        expect(
-          record?.prompts.some((prompt) => prompt.externalRef === externalRef),
-          `${schoolName} has no prompt "${externalRef}"`,
-        ).toBe(true);
-      }
+    it("reserves Personal Statement for genuinely open-topic prompts", () => {
+      const open = classified.filter((row) => effective(row) === "personal-statement");
+      expect(open.map((row) => `${row.school}: ${row.prompt.title}`).sort()).toEqual([
+        "Dartmouth College: Introduce yourself",
+        "Georgetown University: Personal or creative essay",
+      ]);
     });
   });
 });
+

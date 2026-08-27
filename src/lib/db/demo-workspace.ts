@@ -47,6 +47,10 @@ export const DEMO_SCHOOLS = [
   "University of Pennsylvania",
   "University of Southern California",
   "Vanderbilt University",
+  // Carries the catalogue's only Reading List prompt ("list five books that
+  // intrigued you"), so the demo demonstrates all ten categories rather than
+  // nine. Without it that category is unreachable from the example workspace.
+  "Wake Forest University",
   "Wellesley College",
   "Yale University",
 ] as const;
@@ -116,7 +120,7 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
   },
   {
     title: "Fixing the Free Library",
-    family: "Community & Contribution",
+    family: "Community",
     status: "draft",
     targetWordCount: 300,
     designation: "canonical",
@@ -152,7 +156,7 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
   },
   {
     title: "What I Would Bring to a Hall",
-    family: "Short Answers",
+    family: "Roommate",
     status: "ready",
     targetWordCount: 120,
     designation: "canonical",
@@ -295,9 +299,9 @@ export async function resetDemoWorkspace(db: AppDatabase): Promise<DemoWorkspace
   }
 
   const assignmentPlan: [string, string, number][] = [
-    ["What I Would Bring to a Hall", "Short Answers", 2],
+    ["What I Would Bring to a Hall", "Roommate", 2],
     ["The Metronome", "Personal Statement", 2],
-    ["Fixing the Free Library", "Community & Contribution", 2],
+    ["Fixing the Free Library", "Community", 2],
   ];
   // assignEssayToPrompt replaces whatever a prompt already had, so the seed
   // tracks what it has claimed and never assigns the same prompt twice.

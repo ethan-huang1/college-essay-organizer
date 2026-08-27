@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "./client";
 import { essayFamilyLinks, essayTagLinks, promptFamilies, promptFamilyLinks, promptTagLinks, promptTags } from "./schema";
@@ -6,13 +6,27 @@ import { LEGACY_FAMILY_SLUG_MAP, PROMPT_FAMILIES, RETIRED_FAMILY_SLUGS } from ".
 import { seedTaxonomy } from "./seed";
 
 /**
- * Moves one workspace from the ten-category taxonomy to the seven.
+ * Brings one workspace's taxonomy up to the current PROMPT_FAMILIES.
  *
  * Every existing link row is *repointed*, never deleted: a student who
  * classified thirty prompts by hand keeps all thirty classifications, remapped.
- * The four retired categories collapse into Other and additionally gain an
- * internal tag recording which concept they were, so the reuse signal those
- * four carried survives without becoming a user-facing category.
+ * Three retired categories collapse into Other and additionally gain an
+ * internal tag recording which concept they were, so the reuse signal they
+ * carried survives without becoming a user-facing category.
+ *
+ * Runs for two distinct starting points:
+ *
+ * - the original ten categories, where four slugs no longer exist; and
+ * - the intermediate seven, where no slug is wrong but three are missing
+ *   (challenge-growth, roommate, reading-list).
+ *
+ * Challenge & Growth is the interesting case in both. Going from ten it is
+ * *not* collapsed any more - it maps to itself, so a student on the original
+ * taxonomy keeps those classifications exactly. Going from seven its prompts
+ * are already sitting in Other and nothing in the data says which ones they
+ * were, because prompt_tag_links was never populated (the ordering defect fixed
+ * in e08247c). Those are recovered by re-importing the catalogue review, not by
+ * this function.
  *
  * Runs as one transaction per workspace. A partly-migrated taxonomy would break
  * classification and matching everywhere, so it either completes or does not
@@ -34,9 +48,18 @@ export async function migrateWorkspaceTaxonomy(db: AppDatabase, workspaceId: str
     const existing = await tx.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, workspaceId));
     if (existing.length === 0) return { migrated: false as const, reason: "no taxonomy" };
 
-    const targetSlugs = new Set(PROMPT_FAMILIES.map(([slug]) => slug));
-    const legacyRows = existing.filter((family) => !targetSlugs.has(family.slug as never));
-    if (legacyRows.length === 0) return { migrated: false as const, reason: "already migrated" };
+    const targetSlugs = new Set<string>(PROMPT_FAMILIES.map(([slug]) => slug));
+    const legacyRows = existing.filter((family) => !targetSlugs.has(family.slug));
+    // A workspace can need migrating for either of two reasons, and checking
+    // only the first was a bug: a workspace already on the seven categories has
+    // no legacy slugs at all, so it reported "already migrated" and never
+    // gained challenge-growth, roommate or reading-list. Every existing
+    // production workspace is in exactly that state.
+    const presentSlugs = new Set(existing.map((family) => family.slug));
+    const missingSlugs = [...targetSlugs].filter((slug) => !presentSlugs.has(slug));
+    if (legacyRows.length === 0 && missingSlugs.length === 0) {
+      return { migrated: false as const, reason: "already migrated" };
+    }
 
     const newFamilyId = (slug: string) => `${workspaceId}:family:${slug}`;
 
@@ -195,11 +218,33 @@ const RETIRED_TAG_NAMES: Record<string, string> = {
   "values-meaning": "values & meaning",
 };
 
-/** Reports the ids of every workspace still on a pre-seven taxonomy. */
+/**
+ * Reports the ids of every workspace whose taxonomy is not current.
+ *
+ * Two conditions, not one. Checking only for retired slugs missed every
+ * workspace on the intermediate seven categories, whose slugs are all still
+ * valid but which is missing three of the ten - and that is the state every
+ * existing production workspace is in.
+ *
+ * Reads all rows and groups in memory rather than expressing "missing a slug"
+ * in SQL: the table holds ten rows per workspace, so this is small, and a
+ * GROUP BY ... HAVING formulation of the same check was materially harder to
+ * read for no measurable gain.
+ */
 export async function workspacesNeedingTaxonomyMigration(db: AppDatabase) {
-  const targetSlugs = PROMPT_FAMILIES.map(([slug]) => slug);
-  const stale = await db.select({ workspaceId: promptFamilies.workspaceId })
-    .from(promptFamilies)
-    .where(inArray(promptFamilies.slug, Object.keys(LEGACY_FAMILY_SLUG_MAP).filter((slug) => !targetSlugs.includes(slug as never))));
-  return [...new Set(stale.map((row) => row.workspaceId))];
+  const targetSlugs = new Set<string>(PROMPT_FAMILIES.map(([slug]) => slug));
+  const rows = await db.select({ workspaceId: promptFamilies.workspaceId, slug: promptFamilies.slug }).from(promptFamilies);
+
+  const slugsByWorkspace = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const slugs = slugsByWorkspace.get(row.workspaceId) ?? new Set<string>();
+    slugs.add(row.slug);
+    slugsByWorkspace.set(row.workspaceId, slugs);
+  }
+
+  return [...slugsByWorkspace]
+    .filter(([, slugs]) =>
+      [...slugs].some((slug) => !targetSlugs.has(slug)) ||
+      [...targetSlugs].some((slug) => !slugs.has(slug)))
+    .map(([workspaceId]) => workspaceId);
 }

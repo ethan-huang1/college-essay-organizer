@@ -110,16 +110,16 @@ describe("local persistence foundation", () => {
     ]));
   });
 
-  it("seeds an editable seven-category taxonomy idempotently", async () => {
+  it("seeds an editable ten-category taxonomy idempotently", async () => {
 
     const families = await connection.db
       .select()
       .from(promptFamilies)
       .where(eq(promptFamilies.workspaceId, PERSONAL));
 
-    expect(families).toHaveLength(7);
+    expect(families).toHaveLength(10);
     expect(families.every((family) => family.isEditable)).toBe(true);
-    expect(families.map((family) => family.sortOrder)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(families.map((family) => family.sortOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   it("supports one primary and multiple secondary prompt families with manual override", async () => {
@@ -228,24 +228,28 @@ describe("local persistence foundation", () => {
       .innerJoin(promptFamilies, eq(promptFamilies.id, promptFamilyLinks.familyId))
       .where(and(eq(promptFamilyLinks.workspaceId, DEMO_WORKSPACE_ID), eq(promptFamilyLinks.isPrimary, true)));
     const demoFamilies = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, DEMO_WORKSPACE_ID));
-    expect(demoFamilies).toHaveLength(7);
+    expect(demoFamilies).toHaveLength(10);
 
-    // Every content category has to be demonstrated. Other is excluded on
-    // purpose: it is where a prompt lands when nothing recognises it, and after
-    // the classifier rewrite that is only ~4% of the catalogue. Requiring the
-    // demo to contain one would mean contriving a prompt the app cannot
-    // classify, which makes the example worse, not better.
+    // Every category has to be demonstrated, Other included.
+    //
+    // Other used to be excluded here, on the grounds that it was where a prompt
+    // landed when nothing recognised it and contriving one would make the
+    // example worse. The catalogue review changed that: Other now means a
+    // bespoke framing that genuinely fits no other category, and it is the
+    // largest category at 94 of 255 prompts. A demo that cannot show it is
+    // hiding a third of the catalogue.
+    //
+    // Reading List is the reason Wake Forest is in DEMO_SCHOOLS - it holds the
+    // catalogue's only prompt in that category.
     const populated = new Set(classified.map((row) => row.familyName));
-    const contentCategories = demoFamilies.filter((family) => family.slug !== "other");
-    expect(contentCategories).toHaveLength(6);
-    for (const family of contentCategories) {
+    for (const family of demoFamilies) {
       expect(populated, `${family.name} has no demo prompt`).toContain(family.name);
     }
 
-    // Other still has to exist, and sort last: it is a real seventh category,
-    // not a "needs attention" bucket.
+    // Other still has to sort last: a real category, not a "needs attention"
+    // bucket.
     const other = demoFamilies.find((family) => family.slug === "other");
-    expect(other?.sortOrder).toBe(7);
+    expect(other?.sortOrder).toBe(10);
 
     // Strong reuse, substantial adaptation, and a dangerous institution-
     // specific reuse case all have to be demonstrable (MVP_SPEC section 6).
@@ -884,7 +888,7 @@ describe("local persistence foundation", () => {
   // The only phase that rewrites existing rows, so this is the one that has to
   // prove nobody loses work: a student who classified prompts by hand under the
   // ten-category taxonomy keeps every one of those classifications, remapped.
-  describe("seven-category taxonomy migration", () => {
+  describe("taxonomy migration", () => {
     const LEGACY = [
       ["core-story", "Personal Statement / Core Story", 1],
       ["identity-background", "Identity & Background", 2],
@@ -942,8 +946,8 @@ describe("local persistence foundation", () => {
       expect(result.migrated).toBe(true);
 
       const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
-      expect(families).toHaveLength(7);
-      expect(families.map((family) => family.sortOrder).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(families).toHaveLength(10);
+      expect(families.map((family) => family.sortOrder).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
       // Not one prompt lost its primary category.
       const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, PERSONAL));
@@ -956,17 +960,26 @@ describe("local persistence foundation", () => {
         expect(links.filter((link) => link.promptId === promptId && link.isPrimary)).toHaveLength(1);
       }
 
-      // The four retired categories collapse into Other...
+      // Three retired categories collapse into Other - not four. Challenge &
+      // Growth is a category again, so it maps to itself and a student on the
+      // original ten keeps those classifications exactly where they were.
       const otherId = `${PERSONAL}:family:other`;
-      expect([...primaryByPrompt.values()].filter((id) => id === otherId)).toHaveLength(4);
+      expect([...primaryByPrompt.values()].filter((id) => id === otherId)).toHaveLength(3);
       // ...and each keeps its concept as an internal tag, so the reuse signal
       // survives without becoming a user-facing category.
       const tagLinks = await connection.db.select().from(promptTagLinks).where(eq(promptTagLinks.workspaceId, PERSONAL));
-      expect(tagLinks).toHaveLength(4);
+      expect(tagLinks).toHaveLength(3);
 
+      // The challenge prompt is the one that must NOT have collapsed.
+      const challengeId = `${PERSONAL}:family:challenge-growth`;
+      expect([...primaryByPrompt.values()].filter((id) => id === challengeId)).toHaveLength(1);
+
+      // Same for the essay, which was filed under Challenge & Growth by hand.
+      // It keeps its own category and gains no tag, because recording the
+      // concept twice would let matching count it as two signals.
       const essayLinks = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
-      expect(essayLinks.find((link) => link.isPrimary)?.familyId).toBe(otherId);
-      expect(await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.essayId, essayId))).toHaveLength(1);
+      expect(essayLinks.find((link) => link.isPrimary)?.familyId).toBe(challengeId);
+      expect(await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.essayId, essayId))).toHaveLength(0);
     });
 
     // Two of the retired categories can collapse onto the same new one for a
@@ -1032,13 +1045,16 @@ describe("local persistence foundation", () => {
 
       const school = await createSchool(connection.db, PERSONAL, { name: "Ordering University" });
       if (!school) throw new Error("Expected the school to be created.");
+      // Uses values-meaning, not challenge-growth: challenge-growth is a real
+      // category again, so it no longer produces a tag and cannot exercise the
+      // ordering defect this test exists for.
       const promptId = await createPrompt(connection.db, PERSONAL, {
         schoolId: school.id,
-        title: "A setback",
-        promptText: "Describe a significant challenge you faced and how you overcame it.",
+        title: "An opposing view",
+        promptText: "Reflect on a time you held an opposing view and what changed your mind.",
         requirement: "required",
         status: "not-started",
-        primaryFamilyId: `${PERSONAL}:family:challenge-growth`,
+        primaryFamilyId: `${PERSONAL}:family:values-meaning`,
       });
 
       await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
@@ -1047,13 +1063,59 @@ describe("local persistence foundation", () => {
       expect(tagLinks).toHaveLength(1);
       const tag = await connection.db.select().from(promptTags)
         .where(eq(promptTags.id, tagLinks[0].tagId)).then((rows) => rows[0]);
-      expect(tag?.name).toBe("challenge & growth");
+      expect(tag?.name).toBe("values & meaning");
+    });
+
+    // The bug this covers: a workspace already on the seven categories has no
+    // retired slug at all, so the "is anything legacy?" check reported
+    // "already migrated" and it never gained challenge-growth, roommate or
+    // reading-list. Every existing production workspace is in that state, so
+    // without this the migration would have been a silent no-op where it
+    // mattered most.
+    it("adds missing categories to a workspace whose slugs are all still valid", async () => {
+      const SEVEN = ["community", "shorts", "diversity", "why-major", "why-us", "personal-statement", "other"];
+      await connection.db.delete(promptFamilies).where(and(
+        eq(promptFamilies.workspaceId, PERSONAL),
+        inArray(promptFamilies.slug, ["challenge-growth", "roommate", "reading-list"]),
+      ));
+      expect(await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL))).toHaveLength(7);
+      expect(await workspacesNeedingTaxonomyMigration(connection.db)).toContain(PERSONAL);
+
+      const school = await createSchool(connection.db, PERSONAL, { name: "Seven University" });
+      if (!school) throw new Error("Expected the school to be created.");
+      const promptId = await createPrompt(connection.db, PERSONAL, {
+        schoolId: school.id,
+        title: "Kept by hand",
+        promptText: "A prompt the student filed themselves.",
+        requirement: "required",
+        status: "not-started",
+        primaryFamilyId: `${PERSONAL}:family:diversity`,
+      });
+      await connection.db.update(promptFamilyLinks).set({ source: "manual" })
+        .where(eq(promptFamilyLinks.promptId, promptId));
+
+      const result = await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
+      expect(result.migrated).toBe(true);
+
+      const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL));
+      expect(families).toHaveLength(10);
+      expect(families.map((family) => family.slug).sort()).toEqual([
+        "challenge-growth", "community", "diversity", "other", "personal-statement",
+        "reading-list", "roommate", "shorts", "why-major", "why-us",
+      ]);
+      // Every surviving slug kept its identity, and the hand classification
+      // kept both its category and its provenance.
+      for (const slug of SEVEN) expect(families.map((f) => f.slug)).toContain(slug);
+      const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.promptId, promptId));
+      expect(links).toHaveLength(1);
+      expect(links[0]).toMatchObject({ familyId: `${PERSONAL}:family:diversity`, isPrimary: true, source: "manual" });
+      expect(await workspacesNeedingTaxonomyMigration(connection.db)).not.toContain(PERSONAL);
     });
 
     it("is idempotent and leaves an already-migrated workspace alone", async () => {
       const first = await migrateWorkspaceTaxonomy(connection.db, PERSONAL);
       expect(first.migrated).toBe(false);
-      expect(await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL))).toHaveLength(7);
+      expect(await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, PERSONAL))).toHaveLength(10);
     });
 
     it("reports which workspaces still need migrating", async () => {

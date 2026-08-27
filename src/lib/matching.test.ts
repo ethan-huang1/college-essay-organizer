@@ -19,7 +19,7 @@ describe("deterministic essay-prompt match scoring", () => {
     const result = scoreMatch(base);
     expect(result.score).toBeGreaterThanOrEqual(80);
     expect(result.recommendedAction).toBe("ready-to-reuse");
-    expect(result.matchedThemes).toContain("Community & Contribution");
+    expect(result.matchedThemes).toContain("Community");
     expect(result.schoolSpecificityRisk).toBe("low");
   });
 

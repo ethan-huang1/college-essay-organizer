@@ -71,14 +71,40 @@ describe("deterministic prompt/essay classification", () => {
     expect(result.confidence).toBe(0);
   });
 
-  // The four retired categories are internal matching signal now, never a
-  // user-facing category. They must appear as tags and never as a slug.
-  describe("retired concepts as internal tags", () => {
-    it("records the concept as a tag, not a category", () => {
+  // Three concepts are internal matching signal, never a user-facing category.
+  // They must appear as tags and never as a slug. Challenge & Growth used to be
+  // in that group and is now a real category - the catalogue review files 23
+  // prompts there - so it is asserted the other way round: a category, and
+  // deliberately NOT also a tag, because recording it twice would let matching
+  // count one shared concept as two pieces of evidence.
+  describe("derived concepts as internal tags", () => {
+    it("treats challenge & growth as a category, not a tag", () => {
       const result = classifyText("Describe the most significant challenge you have faced and how you overcame it.");
-      expect(result.tags).toContain("challenge-growth");
-      expect(result.primarySlug).not.toBe("challenge-growth");
-      expect(PROMPT_FAMILIES.map(([slug]) => slug as string)).not.toContain("challenge-growth");
+      expect(result.primarySlug).toBe("challenge-growth");
+      expect(result.tags).not.toContain("challenge-growth");
+      expect(PROMPT_FAMILIES.map(([slug]) => slug as string)).toContain("challenge-growth");
+    });
+
+    it("does not let a societal-problem prompt become a personal challenge prompt", () => {
+      // The bare word "challenge" used to be enough. Stanford asks what
+      // challenge *society* faces and Michigan asks you to "challenge the
+      // present"; neither is about the student overcoming anything, and the
+      // review files both under Other.
+      expect(classifyText("What is the most significant challenge that society faces today?").primarySlug)
+        .not.toBe("challenge-growth");
+      expect(classifyText("Share how you are prepared to challenge the present and enrich the future.").primarySlug)
+        .not.toBe("challenge-growth");
+    });
+
+    it("separates a roommate note and a book list from short answers", () => {
+      // Both used to match `shorts` on a bare word, which made a 250-word
+      // roommate note look interchangeable with a 50-word favourite-song
+      // answer. A list of five *things* is still a short answer.
+      expect(classifyText("Write a note to your future roommate that reveals something about you.").primarySlug)
+        .toBe("roommate");
+      expect(classifyText("List five books you have read that have intrigued you.").primarySlug)
+        .toBe("reading-list");
+      expect(classifyText("List five things that are important to you.").primarySlug).toBe("shorts");
     });
 
     it("tags intellectual curiosity and activities without adding categories", () => {
@@ -91,7 +117,7 @@ describe("deterministic prompt/essay classification", () => {
     });
   });
 
-  it("maps every pre-seven slug onto one of the seven", () => {
+  it("maps every pre-existing slug onto a current category", () => {
     const slugs = new Set(PROMPT_FAMILIES.map(([slug]) => slug as string));
     for (const legacy of [
       "core-story", "identity-background", "community-contribution", "challenge-growth",

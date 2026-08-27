@@ -4,7 +4,7 @@ import { classifyText } from "./classification";
 import { CURRENT_CYCLE_LABEL } from "./cycle";
 import type { AppDatabase } from "./db/client";
 import { applicationCycles, assignedEssayResponses, promptChangeLog, promptFamilies, promptFamilyLinks, promptTagLinks, promptTags, prompts, schools } from "./db/schema";
-import { classificationOverride } from "./retrieval/classification-overrides";
+import { categoryReview } from "./retrieval/category-review";
 import { promptContentChanged } from "./retrieval/normalize";
 import { lookupSchoolSource } from "./retrieval/registry";
 import type { ApplicationPlatform, PromptGroup, RawPromptRecord, SchoolSourceRecord, VerificationStatus } from "./retrieval/types";
@@ -68,9 +68,17 @@ async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: strin
 /**
  * Turns a prompt into its category links, its internal tags, and a confidence.
  *
- * Three stages, all offline: a hand-reviewed override for the prompts the rules
- * cannot reach, then the keyword rules, then Other. Nothing here calls a model
- * or a network.
+ * Two tiers, both offline. Nothing here calls a model or a network.
+ *
+ * 1. The catalogue review (../retrieval/category-review.ts) - a hand-assigned
+ *    primary, secondary themes, and prompt function for all 255 committed
+ *    prompts. This is the source of truth, not a hint: it *replaces* the
+ *    keyword rules for those prompts rather than nudging them. 255 hand
+ *    judgements beat any set of regex patterns, and the rules were measurably
+ *    wrong on some of them - MIT's "field of study that appeals to you"
+ *    classified as Why Us because "appeals to you" fired first.
+ * 2. The keyword rules, for prompts a student adds that are not in the
+ *    catalogue. Then `other` if nothing matched.
  *
  * `Other` at confidence 0 is deliberately distinct from `Other` at a real
  * confidence: the first means "nothing recognised this", which is what the
@@ -81,12 +89,16 @@ function classifyPrompt(
   schoolName: string,
   raw: RawPromptRecord,
 ): { primarySlug: string; secondarySlugs: string[]; tags: string[]; confidence: number } {
-  const override = classificationOverride(schoolName, raw.externalRef);
-  const classification = classifyText(`${raw.title} ${raw.promptText}`);
-  if (override) {
-    // Reviewed by hand, so it outranks the rules and carries full confidence.
-    return { primarySlug: override, secondarySlugs: [], tags: classification.tags, confidence: 100 };
+  const reviewed = categoryReview(schoolName, raw.externalRef);
+  if (reviewed) {
+    const [, , primarySlug, secondaryFamilySlugs, secondaryTags] = reviewed;
+    // Reviewed by a person, so full confidence. The tags come from the review
+    // too rather than from classifyText: a reviewer's secondary themes are the
+    // whole point, and mixing in keyword-derived ones would put signal the
+    // review deliberately left out back into matching.
+    return { primarySlug, secondarySlugs: secondaryFamilySlugs, tags: secondaryTags, confidence: 100 };
   }
+  const classification = classifyText(`${raw.title} ${raw.promptText}`);
   return {
     primarySlug: classification.primarySlug ?? "other",
     secondarySlugs: classification.secondarySlugs,
@@ -123,21 +135,23 @@ function familyLinkRows(
   }));
 }
 
-// The retired taxonomy concepts, as internal matching signal. Nothing in the UI
-// shows these; they exist so collapsing ten categories into seven does not
-// throw away the reuse signal the extra four carried.
+// Secondary themes, as internal matching signal. Nothing in the UI shows these.
+//
+// Two vocabularies arrive here: the review's tag names, which are already the
+// seeded display names, and the classifier's slugs for off-catalogue prompts.
+// TAG_DISPLAY_NAMES translates the latter; a name that is already a seeded tag
+// passes through unchanged.
 function tagLinkRows(workspaceId: string, promptId: string, tags: readonly string[], tagIds: Map<string, string>) {
   return tags
-    .map((tag) => tagIds.get(RETIRED_TAG_NAMES[tag] ?? ""))
+    .map((tag) => tagIds.get(TAG_DISPLAY_NAMES[tag] ?? tag))
     .filter((tagId): tagId is string => Boolean(tagId))
     .map((tagId) => ({ id: crypto.randomUUID(), workspaceId, promptId, tagId }));
 }
 
 // The tag rows seeded in taxonomy.ts use display names; the classifier emits
 // slugs.
-const RETIRED_TAG_NAMES: Record<string, string> = {
+const TAG_DISPLAY_NAMES: Record<string, string> = {
   "intellectual-curiosity": "intellectual curiosity",
-  "challenge-growth": "challenge & growth",
   "activities-impact": "activities & impact",
   "values-meaning": "values & meaning",
 };

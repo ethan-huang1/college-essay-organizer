@@ -8,10 +8,15 @@
 // accuracy problem this data solves. `classifyText` remains the classifier for
 // prompts a student adds that are not in the catalogue.
 //
-// Static reviewed data, exactly like ./classification-overrides.ts: no model
-// runs, no network request, no API key. Keyed by (schoolName, externalRef)
-// because that pair is stable across re-imports, unlike the title or the
-// prompt text.
+// Static reviewed data: no model runs, no network request, no API key. Keyed by
+// (schoolName, externalRef) because that pair is stable across re-imports,
+// unlike the title or the prompt text.
+//
+// This replaced classification-overrides.ts, a ten-entry table of the prompts
+// the keyword rules could not reach. The review covers all 255 and disagrees
+// with it in places - it files Bowdoin's "Offer of the College" under Other
+// rather than Personal Statement - so keeping both would have left two tables
+// contradicting each other with precedence deciding the winner.
 //
 // The seven prompts appearing identically across the UC campuses are stored
 // once per campus rather than once per system, so no consumer needs to know
@@ -346,9 +351,9 @@ export const CATEGORY_REVIEW: CategoryReviewRow[] = [
   ["Yale University", "short-take-not-elsewhere", "shorts", [], [], "describe"],
   ["Yale University", "short-take-teach-write-create", "shorts", [], ["course", "creativity"], "describe"],];
 
-// Same printable separator as ./classification-overrides.ts: school names
-// contain spaces and commas, externalRefs are kebab-case, so "|" cannot appear
-// in either half.
+// A printable separator that cannot appear in either half: school names contain
+// spaces and commas, externalRefs are kebab-case. A control character here once
+// made git treat a source file as binary and hid it from diff review entirely.
 const BY_KEY = new Map<string, CategoryReviewRow>(
   CATEGORY_REVIEW.map((row) => [`${row[0]}|${row[1]}`, row]),
 );

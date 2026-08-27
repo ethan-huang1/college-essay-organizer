@@ -76,7 +76,7 @@ describe("reuseOpportunities", () => {
       schoolName: "Brown University",
       schoolSpecificityRisk,
       missingRequirements: [],
-    matchedThemes: ["Community & Contribution"],
+    matchedThemes: ["Community"],
     wordCountDifference: 0,
     promptMaxWordCount: 350,
     essayWordCount: 300,
