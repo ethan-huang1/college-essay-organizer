@@ -385,6 +385,13 @@ none of this fixture data was committed):
 
 ## Next Steps
 
+> **Current objective supersedes the list below.** The active work is the
+> reuse-scoring redesign in [docs/reuse-scoring.md](docs/reuse-scoring.md);
+> the exact next task and its traps are under **Overnight Run State**. The items
+> below remain accurate as the wider P0 backlog and should be picked up only
+> after Stages 1–4 of the current objective are done or explicitly blocked.
+
+
 0. **Open decisions for a human:** (a) 390 px was never directly verified —
    see above. (b) **The classifier cannot recognise real "why us" prompts.**
    `FAMILY_KEYWORDS["why-school"]` matches organizer-side phrasing that no
@@ -412,120 +419,135 @@ none of this fixture data was committed):
 
 ## Overnight Run State
 
-- Disposition: **complete for this run.** Every phase in the approved plan is
-  committed and green, including both stretch phases. What remains is listed
-  under Human Follow-Up and Deliberately Not Done.
-- Objective: make the MVP trustworthy for student testing.
-- Completed phases, in plan order:
-  | Phase | Commit | What it fixed |
-  |---|---|---|
-  | 0 baseline | `48bc303` (tag `pre-trust-run`) | rollback point, gate verified green |
-  | 1 essay editor | `a6d8ed3` | the 176x48px writing box |
-  | 2 zero-prompt colleges | `c18a796` | colleges vanishing; prose-derived state |
-  | 3 workload engine | `4f3e1c7` | counting rows instead of required essays |
-  | 4 catalogue encoding | `0c3872f` | group/program rules that lived only in prose |
-  | 5 reuse correctness | `3c9e56a` | four defects making reuse advice wrong |
-  | 6a family slugs | `315dfab` | a rename silently collapsing every score |
-  | 6b seven categories | `d4b888d` | ten overlapping categories; empty Why Us |
-  | 7 pending states | `c4afeaf` | ~10s actions with no feedback at all |
-  | 8 two responsive fixes | `17ffc7e` | clipped Reuse tab; collapsed input |
+- Disposition: **continue.**
+- Objective: implement the reuse-scoring redesign in
+  [docs/reuse-scoring.md](docs/reuse-scoring.md). That document is the single
+  source of truth; [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) holds the five stages
+  and the rules.
+- Last verified commit: see below. Working tree clean, full gate green.
 
-### Measured effect, on real catalogue data
+### Where this objective came from
 
-| Measure | Before | After |
+A product-owner review of all 255 catalogue prompts
+(`Essay_Prompt_Category_Review_Claude.csv`, 207 rows) replaced the keyword
+classifier's output with hand judgements, and that changed the scoring problem
+rather than merely improving its inputs. The shipped formula gave a shared
+primary category 60 points, and `baseline 20 + 60 = 80` was exactly the
+"ready to reuse" threshold — so two prompts sharing a broad category were
+called ready to submit unchanged, with 106 of 255 prompts in one category and
+the essay text never read.
+
+### Completed in this run
+
+| Commit | What |
+|---|---|
+| `35870eb` | `docs/prompt-labels.md` — the worksheet the review was built from |
+| `2723d5c` | `src/lib/retrieval/category-review.ts` + test — the 255-prompt reviewed classification |
+| (this one) | `docs/reuse-scoring.md` — authoritative design; new objective and handoff |
+
+**`category-review.ts` is irreplaceable.** It was transcribed from a CSV pasted
+into a chat session, not from anything in the repo, and the CSV is not
+committed. It cannot be regenerated. `category-review.test.ts` guards it:
+255/255 prompts reviewed, no stale rows, no duplicate keys, no undeclared
+vocabulary, and the exact primary distribution.
+
+### The distribution that drives everything downstream
+
+| Primary | Prompts | Share |
 |---|---|---|
-| Essay writing box at 1440px | 176x48px | 1087x320px |
-| Whole catalogue: prompt rows -> required essays | 255 counted as work | 207 canonical rows, **94 required** |
-| Seven UC campuses | 56 rows, 0 required, 100% unreachable | **8 rendered rows, 4 required** |
-| Demo workspace (19 schools) | 112 counted as work | **51 required essays** |
-| Prompts classified as Why Us | **0 of 255** | 39 of 255 |
-| Catalogue unclassified / needs review | 112 (44%) | **0 (0%)** |
-| Previous-cycle prompts leaking into reuse | yes | zero |
-| 15-word essay vs a 650-word prompt | scored 80, "ready to reuse" | penalised, not reusable |
-| Vitest tests | 95 | **170** |
+| **Other** | **94** | **36.9%** |
+| Why Major | 61 | 23.9% |
+| Background & Identity (`diversity`) | 30 | 11.8% |
+| Challenge & Growth | 23 | 9.0% |
+| Why Us | 22 | 8.6% |
+| Short Answer | 13 | 5.1% |
+| Community | 7 | 2.7% |
+| Personal Statement | 2 | 0.8% |
+| Roommate | 2 | 0.8% |
+| Reading List | 1 | 0.4% |
 
-### Human follow-up required (not blockers)
+### Exact next task
 
-1. **Apply the migrations and redeploy.** `drizzle/0002_broken_prima.sql`
-   (additive: 9 ADD COLUMN, 2 indexes, 1 check) and
-   `drizzle/0003_premium_tana_nile.sql` (adds `prompt_families.slug`, nullable
-   -> backfilled -> NOT NULL). Both were read before accepting; drizzle-kit
-   emitted a bare `ADD COLUMN ... NOT NULL` for 0003, which fails on a table
-   with rows, so it was hand-edited. Neither Neon nor Vercel was touched during
-   this run (OVERNIGHT_TASK.md rules 6 and 10).
-2. **Then run `scripts/reimport-catalogue.mts`.** It migrates each workspace's
-   taxonomy and re-imports every college, in that order - the order matters,
-   because the import classifies against the new slugs. Human-run only, refuses
-   to start without `DATABASE_URL`, and goes through the ordinary import path.
-   Try `--dry-run` first.
-3. **Authenticated end-to-end and responsive verification at
-   1440/1024/768/390px is unperformed**, by deliberate instruction: there is no
-   local Postgres or Docker on this machine, so a signed-in session would have
-   meant using the production database. Only one datapoint was captured before
-   that instruction landed (the essay textarea, above). Everything else was
-   verified through PGlite integration tests, the full canonical gate, strict
-   typecheck, lint, and the production build.
-4. **A throwaway account `qa-local@example.com` exists in production Neon.** It
-   was created moments before the no-production instruction arrived - user row
-   and empty personal workspace only, no college, prompt, or essay. Left in
-   place rather than issuing another production write. Safe to delete; cascade
-   deletion is covered by tests.
+**Stage 1 — taxonomy expansion.** In `src/lib/db/taxonomy.ts`:
 
-### Deliberately not done, with reasons
+1. Add three primaries to `PROMPT_FAMILIES`: `challenge-growth`,
+   `reading-list`, `roommate`. Keep `other` last (its comment explains why).
+2. Rename two display names only: `Community & Contribution` → `Community`,
+   `Short Answers` → `Short Answer`. **Do not touch slugs** — they are join
+   keys referenced by `LEGACY_FAMILY_SLUG_MAP` and by
+   `essay_family_links.family_id`.
+3. Add five tags to `SECONDARY_TAGS`: `academic context`, `collaboration`,
+   `contribution`, `course`, `goals & future`. The review's other seven tag
+   secondaries already exist.
+4. Extend `src/lib/db/taxonomy-migration.ts` to re-expand 7 → 10 by
+   re-importing from `category-review.ts`, preserving every `source: "manual"`
+   link. The `manualFamilies` set at `taxonomy-migration.ts:89` is the existing
+   pattern — a previous defect there lost a student's hand classification by
+   choosing purely on `isPrimary`.
+5. `sortOrder` collides on re-seed. The migration already deletes **all**
+   family rows before reseeding for exactly this reason (see its comment); keep
+   that.
 
-- **54 conditional prompts across 16 schools are still unencoded.** They render
-  as *unresolved* - visible, excluded from required, never silently counted.
-  `coverage.test.ts` names the encoded schools explicitly, so a half-finished
-  file cannot pass quietly, and prints the outstanding count.
-- **Duke, Northwestern, Bowdoin and W&L's optional prompt sets are not
-  grouped.** The plan listed Duke, Northwestern and Bowdoin as group files, but
-  that was an error in the plan rather than a gap in the work: Duke's,
-  Northwestern's and W&L's sets are genuinely "you may answer one of these", so a
-  required group would overstate the work, and Bowdoin publishes two optional
-  essays with no choose-N rule at all. Their required counts are already right;
-  only the optional tally reads "3" rather than "up to 1 of 3".
-- **The rest of Phase 8's responsive and density polish.** Judgement-based
-  visual work, and authenticated browser verification was unavailable - a CSS
-  change nobody can see is where a regression hides. The two defects with
-  precisely located causes were fixed; the rest is untouched.
+Then `./run_tests.sh` must be green before Stage 2.
 
-### Decisions worth knowing before changing this code
+### Traps that have already cost time in this codebase
 
-- **Canonical siblings share response state.** Prompts sharing a `canonical_key`
-  are one question. Assignment and status writes fan out across siblings, inside
-  `lib/assignments.ts` and `lib/prompts.ts` rather than the Server Actions, so
-  every caller inherits it. That invariant is what lets every read path pick any
-  instance, and why removing one UC campus cannot orphan a shared assignment.
-  A new campus inherits its siblings' state on import.
-- **`workload.ts` is the only place required work is counted**, and
-  `canonicalPromptGroups` the only place aggregate collections are built. Seven
-  count sites and four render sites route through them; that is what stops the
-  sidebar, school headers and overview disagreeing.
-- **Omitting `secondaryFamilyIds` means "keep them", `[]` means "clear them".**
-  The picker is gone from both forms, so a save carries no secondaries and must
-  not wipe importer-derived links.
-- **`Other` is a real seventh category, never a queue.** Needs-review is a
-  separate signal, from `classificationConfidence`. The four retired concepts
-  are internal tags in `prompt_tag_links` / `essay_tag_links` with no UI.
-- **Family identity is the slug, never the display name.** Names are
-  user-editable; joining on them collapsed every score in the workspace.
-- **A conditional prompt resolves three ways, not two.** Unresolved is a real
-  state and must stay visible.
+1. **Do not add a word-count penalty.** The design removes it entirely and
+   replaces it with band ceilings. But removing it without adding
+   `fill < 0.25 → new-response` reintroduces a fixed bug: a 15-word note scored
+   80 against a 650-word prompt and was recommended as ready to reuse
+   (`matching.ts:74-79`).
+2. **`Other` is 37% of the catalogue and `matching.ts:41` excludes it from
+   matching by construction** (`NOT_A_SHARED_THEME`). Importing the review
+   without the `Other` weight vector tells students 94 prompts match nothing
+   they have written. This is the single largest risk in the objective.
+3. **Drizzle `text(..., {enum:[...]})` emits plain `text` with no CHECK
+   constraint** (verified: `drizzle/0000:142-143`, `drizzle/0002:8`). Status and
+   action vocabularies grow by editing a TypeScript union — **no migration**.
+   The `RecommendedAction` rename therefore needs none, though stored values go
+   stale until the reimport recomputes them.
+4. **Three `why`-matching patterns once lacked the `i` flag**, so lowercase
+   "why" never matched "Why Davidson" and Why Us held 0 of 255 prompts. If a
+   classification count looks impossible, check regex flags first.
+5. **`prompt_tag_links` holds 0 rows in production** owing to an ordering defect
+   fixed in `e08247c`. Nothing can be recovered from it; re-import from
+   `category-review.ts` instead.
+6. **Scripts in `scripts/*.mts` need explicit file extensions** or a
+   `registerHooks` resolve hook — `node --experimental-strip-types` will not
+   resolve the repo's extensionless TS imports, and `node --check` does not
+   resolve imports at all, so it cannot prove a script runs.
 
-- **Pre-production verification complete.** See [DEPLOYMENT.md](DEPLOYMENT.md)
-  for the verdict, the migration rehearsal results, the exact production
-  sequence, the invariants to check at each step, and the rollback constraints.
-  Five real defects were found and repaired (one blocker: `updatePrompt` did not
-  fan status out to canonical siblings). Verdict: READY WITH SPECIFIED MANUAL
-  CHECKS.
-- Test/build status: full canonical gate green - lint, strict typecheck,
-  **191 Vitest tests**, production build, 103 orchestration assertions.
+### Not authorized for an autonomous run
+
+- **Stage 5 (semantic similarity).** It adds a dependency and downloads an ONNX
+  model. Record a `HUMAN-REQUIRED:` blocker and stop. Stages 1–4 must leave the
+  no-provider path working, which is what makes deferring it safe.
+- **Tuning weights to improve evaluation numbers.** If Part 1 shows `Other`
+  falling below the floor or false-positive top-band matches, that is a finding
+  to report, not a number to fix.
+- Anything in [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) rules 6 and 10: no push, no
+  deploy, no Neon/Vercel change, no API key.
+
+### Superseded — do not reimplement
+
+The 60-point primary bonus · the 80-point Ready threshold · `ready-to-reuse` ·
+`minor-adaptation` · `major-adaptation` · the corroboration gate · `sizeFactor`
+and the static weight table · `confidenceFactor` · the rank/badge split · every
+word-count penalty. Acceptance criterion 9 is a grep assertion over `src/` so
+none of it can half-survive.
+
+- Test/build status: full canonical gate green — lint, strict typecheck,
+  **218 Vitest tests** (up from 211; +7 for the review data), production build,
+  103 orchestration assertions.
 - Last agent: Claude
 
 ## Last Verified Commit
 
-`17ffc7e` — "fix: stop the nav clipping Reuse and the add-college input
-collapsing". Every commit in this run is independently green; the full canonical
-gate (lint, strict typecheck, 170 Vitest tests, production build, 103
-orchestration assertions) passed immediately before each checkpoint and again at
-this one. The working tree is clean.
+`2723d5c` — "feat: commit the hand-reviewed classification for all 255
+catalogue prompts". The full canonical gate (lint, strict typecheck, 218 Vitest
+tests, production build, 103 orchestration assertions) passed immediately before
+this checkpoint. The working tree is clean.
+
+Production is deployed from `09a9804` plus the reuse hotfixes through `2373f8f`;
+nothing in this run has been deployed, and nothing in it changes runtime
+behaviour yet — `category-review.ts` is committed data that no code path reads.

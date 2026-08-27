@@ -7,29 +7,50 @@ this once at the start of a session and follow it for the whole run.
 
 ## Objective
 
-Build the College Essay Organizer MVP. The full product spec — mission,
-prompt-family taxonomy, data model, UX, matching/suggestion architecture,
-demo workspace, tech/visual direction, phased priorities, and the P0
-Definition of Done — lives in [MVP_SPEC.md](MVP_SPEC.md). Read it completely
-before starting or resuming work; this file only holds the rules for *how*
-to work, not *what* to build.
+Implement the reuse-scoring redesign specified in
+[docs/reuse-scoring.md](docs/reuse-scoring.md). Read that document completely
+before starting or resuming; it is the single source of truth for the formula,
+the four bands, the band ceilings, the `Other` weight vector, the evaluation
+requirements, and the acceptance criteria. [MVP_SPEC.md](MVP_SPEC.md) still
+holds the wider product spec and its constraints continue to apply — in
+particular §5: deterministic, no paid API key, no model call.
 
-The automated run uses **Claude as primary, a tightly bounded Codex reserve,
-and one bounded Claude retry when work remains** (see [CLAUDE.md](CLAUDE.md)).
-Claude should keep working normally until the objective is complete or a
-real terminal condition occurs; elapsed time alone is not a handoff reason.
-The sequence is finite and resumable, and is not expected to reach the full
-P0 Definition of Done in every run. Make as much verified progress as the
-bounded phases allow, checkpoint, and leave
-[AGENT_HANDOFF.md](AGENT_HANDOFF.md) accurate for the next agent.
+The hand-reviewed classification this depends on is already committed as
+`src/lib/retrieval/category-review.ts` (255 prompts, guarded by
+`category-review.test.ts`). **Do not regenerate or re-derive it** — it came from
+a product-owner review that is not reproducible from the repo.
 
-(This replaces a staged-but-never-run Layer 3 pipeline smoke-test objective
-— `scripts/layer3_smoke.py`, multiply/divide — which never got a real run
-and never produced a `scripts/layer3_smoke.py` file; there is nothing to
-clean up for it. The earlier Layer 2 handoff-test objective —
-`scripts/handoff_check.py` with `add`/`subtract` — did run for real, passed,
-and was cleaned up by human authorization; its commits remain in git
-history for reference.)
+Work the stages in order. Each is an independent, revertible checkpoint, and
+none may start before the previous one is green under `./run_tests.sh`:
+
+- **Stage 1 — taxonomy expansion.** Primaries 7 → 10 (`challenge-growth`,
+  `reading-list`, `roommate`), two display-name renames, five new secondary
+  tags. Slugs are join keys and must not be renamed. Extend
+  `taxonomy-migration.ts` to re-import from `category-review.ts` while
+  preserving every `source: "manual"` link.
+- **Stage 2 — import the review.** Wire `category-review.ts` into
+  `classifyPrompt` ahead of the keyword rules, carrying secondaries and
+  function. Reviewed prompts are full confidence. Assert 255/255 imported.
+- **Stage 3 — the four-factor score and the four bands.** Factors 1, 3 and 4
+  only; factor 2 scores its neutral value. Includes the `RecommendedAction`
+  rename, the band ceilings, the `Other` vector, and **deleting** every
+  superseded scoring path (acceptance criterion 9 is a grep assertion).
+- **Stage 4 — evaluation.** Both parts of docs/reuse-scoring.md's evaluation
+  section, written to `docs/evaluation/` as committed reports. Part 1 is a
+  script; Part 2 requires reading recommendations and judging them. **If Part 1
+  shows the `Other` prompts falling below the floor en masse, or shows
+  false-positive top-band matches, record it and stop — do not tune weights to
+  make the numbers look better.**
+- **Stage 5 — semantic similarity (factor 2).** A local ONNX embedding model.
+  **This stage adds a dependency and downloads a model, so it is NOT authorized
+  for an autonomous run.** Record a `HUMAN-REQUIRED:` blocker and stop rather
+  than adding it. Stages 1–4 must leave the no-provider path working, which is
+  what makes deferring it safe.
+
+Word-count handling is a trap worth stating twice: the penalty is removed
+entirely and replaced by ceilings. Removing the penalty **without** adding the
+`fill < 0.25 → new-response` ceiling reintroduces a bug the repo already fixed
+(a 15-word note scoring 80 against a 650-word prompt).
 
 ## Rules
 
@@ -108,10 +129,13 @@ history for reference.)
 
 ## Definition of Done
 
-- [ ] MVP_SPEC.md's P0 Definition of Done is reached, OR the gap between
-      current state and P0 is accurately recorded in AGENT_HANDOFF.md
-      (tonight's run is not expected to finish P0 in one Codex+Claude
-      round — see the Objective above).
+- [ ] Stages 1–4 of the Objective are complete and verified, OR the gap is
+      accurately recorded in AGENT_HANDOFF.md with the exact next step. The run
+      is not expected to finish all four stages in one round.
+- [ ] Every acceptance criterion in docs/reuse-scoring.md that the completed
+      stages cover is an executable assertion, not a claim in prose.
+- [ ] No superseded scoring identifier survives in `src/` once Stage 3 is done.
+- [ ] Stage 5 was NOT attempted (it needs a human decision on the dependency).
 - [ ] All tests pass, and no unrelated tests were weakened or removed.
 - [ ] No unrelated code was changed or reverted.
 - [ ] [AGENT_HANDOFF.md](AGENT_HANDOFF.md) is up to date and reflects the
