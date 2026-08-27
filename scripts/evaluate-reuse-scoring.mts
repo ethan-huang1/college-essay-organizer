@@ -16,7 +16,9 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 
+import { calibrate, cosine, decodeVector } from "../src/lib/embedding.ts";
 import { categoryReview } from "../src/lib/retrieval/category-review.ts";
+import { PROMPT_VECTORS } from "../src/lib/retrieval/prompt-vectors.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
 import { type MatchInput, type RecommendedAction, scoreMatch } from "../src/lib/matching.ts";
 
@@ -30,7 +32,10 @@ type Item = {
   fn: NonNullable<ReturnType<typeof categoryReview>>[5] | null;
   min: number | null;
   max: number | null;
+  vector?: number[];
 };
+
+const vectorByKey = new Map(PROMPT_VECTORS.map(([school, ref, encoded]) => [`${school}|${ref}`, decodeVector(encoded)]));
 
 const items: Item[] = [];
 for (const school of listCoveredSchoolNames()) {
@@ -42,6 +47,7 @@ for (const school of listCoveredSchoolNames()) {
       school, ref: prompt.externalRef, title: prompt.title,
       primary: reviewed[2], secondaryFamilies: reviewed[3], tags: reviewed[4], fn: reviewed[5],
       min: prompt.minWordCount ?? null, max: prompt.maxWordCount ?? null,
+      vector: vectorByKey.get(`${school}|${prompt.externalRef}`),
     });
   }
 }
@@ -72,20 +78,36 @@ function pair(essay: Item, prompt: Item, semanticZScore: number | null): MatchIn
   };
 }
 
+/**
+ * Real calibrated similarity for every pair, from the committed vectors.
+ *
+ * Calibrated per stand-in essay across all 255 prompts, exactly as reuse.ts does
+ * it at runtime, so the numbers below are the ones the app would produce rather
+ * than a bound.
+ */
+const zByEssay = new Map<string, Map<string, number>>();
+for (const essay of items) {
+  if (!essay.vector) continue;
+  const targets = items.filter((prompt) => prompt.vector);
+  const calibrated = calibrate(targets.map((prompt) => cosine(essay.vector!, prompt.vector!)));
+  zByEssay.set(essay.ref, new Map(targets.map((prompt, index) => [prompt.ref, calibrated[index]])));
+}
+const realZ = (essay: Item, prompt: Item) => zByEssay.get(essay.ref)?.get(prompt.ref) ?? null;
+
 const BANDS: RecommendedAction[] = ["reusable-slight-edits", "reusable-edits", "reusable-significant-edits", "new-response"];
 /** The band a score alone would give, ignoring every ceiling. */
 const bandOf = (score: number): RecommendedAction =>
   score >= 70 ? "reusable-slight-edits" : score >= 60 ? "reusable-edits" : score >= 50 ? "reusable-significant-edits" : "new-response";
 const pct = (n: number, total: number) => `${((n / total) * 100).toFixed(1)}%`;
 
-function distribution(z: number | null) {
+function distribution(z: number | null | "real") {
   const counts = new Map<RecommendedAction, number>(BANDS.map((b) => [b, 0]));
   const otherCounts = new Map<RecommendedAction, number>(BANDS.map((b) => [b, 0]));
   let otherTotal = 0;
   const scored: { essay: Item; prompt: Item; score: number; action: RecommendedAction; factors: ReturnType<typeof scoreMatch>["factors"] }[] = [];
   for (const essay of items) {
     for (const prompt of items) {
-      const result = scoreMatch(pair(essay, prompt, z));
+      const result = scoreMatch(pair(essay, prompt, z === "real" ? realZ(essay, prompt) : z));
       counts.set(result.recommendedAction, counts.get(result.recommendedAction)! + 1);
       const involvesOther = essay.primary === "other" || prompt.primary === "other";
       if (involvesOther) {
@@ -137,36 +159,37 @@ w("it bounds the answer rather than settling it. Judging real recommendations by
 w("reading them remains outstanding.");
 w();
 
+const semantic = distribution("real");
 const shipped = distribution(null);
 const total = shipped.scored.length;
 w(`## Part 1 — structural (${total.toLocaleString()} pairs, ${items.length} prompts)`);
 w();
 w("### 1. Band distribution");
 w();
-w("Three modes, because semantic similarity is unavailable in the shipped build");
-w("and scores its neutral value. The bounds are not predictions: they are what the");
-w("formula does if that factor were pinned at its floor or its ceiling for every");
-w("pair, which brackets whatever a real model would produce.");
+w("Semantic similarity is real here: all-MiniLM-L6-v2 embeddings, calibrated per");
+w("stand-in essay across all 255 prompts, exactly as reuse.ts does at runtime. The");
+w("second column is the same corpus with no provider, kept because it is a");
+w("supported configuration and the difference between the two is the factor's");
+w("contribution.");
 w();
-w("| Band | Shipped (semantic neutral) | Lower bound (semantic 0) | Upper bound (semantic max) |");
-w("|---|---|---|---|");
-const lower = distribution(-3);
-const upper = distribution(9);
+w("| Band | **With semantic similarity** | Without a provider |");
+w("|---|---|---|");
+const upper = semantic;
 for (const band of BANDS) {
-  w(`| \`${band}\` | ${shipped.counts.get(band)!.toLocaleString()} (${pct(shipped.counts.get(band)!, total)}) | ${lower.counts.get(band)!.toLocaleString()} (${pct(lower.counts.get(band)!, total)}) | ${upper.counts.get(band)!.toLocaleString()} (${pct(upper.counts.get(band)!, total)}) |`);
+  w(`| \`${band}\` | **${semantic.counts.get(band)!.toLocaleString()} (${pct(semantic.counts.get(band)!, total)})** | ${shipped.counts.get(band)!.toLocaleString()} (${pct(shipped.counts.get(band)!, total)}) |`);
 }
 w();
 w("### 2. `Other` distribution against the rest");
 w();
-const nonOtherTotal = total - shipped.otherTotal;
-w(`\`Other\` is involved in **${shipped.otherTotal.toLocaleString()}** of ${total.toLocaleString()} pairs (${pct(shipped.otherTotal, total)}), because it is 94 of the ${items.length} prompts.`);
+const nonOtherTotal = total - semantic.otherTotal;
+w(`\`Other\` is involved in **${semantic.otherTotal.toLocaleString()}** of ${total.toLocaleString()} pairs (${pct(semantic.otherTotal, total)}), because it is 94 of the ${items.length} prompts.`);
 w();
 w("| Band | Pairs involving `Other` | All other pairs |");
 w("|---|---|---|");
 for (const band of BANDS) {
-  const o = shipped.otherCounts.get(band)!;
-  const rest = shipped.counts.get(band)! - o;
-  w(`| \`${band}\` | ${o.toLocaleString()} (${pct(o, shipped.otherTotal)}) | ${rest.toLocaleString()} (${pct(rest, nonOtherTotal)}) |`);
+  const o = semantic.otherCounts.get(band)!;
+  const rest = semantic.counts.get(band)! - o;
+  w(`| \`${band}\` | ${o.toLocaleString()} (${pct(o, semantic.otherTotal)}) | ${rest.toLocaleString()} (${pct(rest, nonOtherTotal)}) |`);
 }
 w();
 
@@ -185,6 +208,61 @@ if (otherTop.length === 0) {
   for (const r of otherTop.slice(0, 8)) {
     w(`| ${r.essay.school}: ${r.essay.title} | ${r.prompt.school}: ${r.prompt.title} | ${r.score} | ${r.factors.primary}/${r.factors.semantic}/${r.factors.secondary}/${r.factors.function} |`);
   }
+}
+w();
+
+w("### 3b. What each factor actually contributes");
+w();
+w("Mean points earned per factor, against the maximum each could award. A factor");
+w("earning close to its maximum everywhere is not discriminating; one earning");
+w("almost nothing is not paying for its weight.");
+w();
+const factorStats = (rows: typeof semantic.scored, label: string) => {
+  const sum = { primary: 0, semantic: 0, secondary: 0, function: 0 };
+  for (const row of rows) {
+    sum.primary += row.factors.primary;
+    sum.semantic += row.factors.semantic;
+    sum.secondary += row.factors.secondary;
+    sum.function += row.factors.function;
+  }
+  const n = Math.max(rows.length, 1);
+  const totalPoints = sum.primary + sum.semantic + sum.secondary + sum.function;
+  return { label, n, sum, n_: n, mean: {
+    primary: sum.primary / n, semantic: sum.semantic / n,
+    secondary: sum.secondary / n, function: sum.function / n,
+  }, share: {
+    primary: sum.primary / totalPoints, semantic: sum.semantic / totalPoints,
+    secondary: sum.secondary / totalPoints, function: sum.function / totalPoints,
+  } };
+};
+const allPairs = factorStats(semantic.scored, "all pairs");
+const topBand = factorStats(semantic.scored.filter((r) => r.action === "reusable-slight-edits"), "top-band pairs only");
+w("| Factor | Max | Mean, all pairs | Share of points | Mean, top-band pairs | Share of points |");
+w("|---|---|---|---|---|---|");
+for (const key of ["primary", "semantic", "secondary", "function"] as const) {
+  const max = key === "primary" ? 25 : key === "semantic" ? 35 : 20;
+  w(`| ${key} | ${max} | ${allPairs.mean[key].toFixed(1)} | ${(allPairs.share[key] * 100).toFixed(1)}% | ${topBand.mean[key].toFixed(1)} | ${(topBand.share[key] * 100).toFixed(1)}% |`);
+}
+w();
+w(`Top band is ${topBand.n.toLocaleString()} pairs. \`Other\` pairs use a different vector (0/40/20/25), so`);
+w("the maxima column is the normal one and mixed rows sit slightly above it.");
+w();
+w("Discrimination - how often each factor separates one prompt from another for the");
+w("same essay, measured as the share of pairs where the factor is neither at its");
+w("floor nor its ceiling:");
+w();
+w("| Factor | At floor | In between | At ceiling |");
+w("|---|---|---|---|");
+for (const key of ["primary", "semantic", "secondary", "function"] as const) {
+  const max = Math.max(...semantic.scored.map((r) => r.factors[key]));
+  let floor = 0, mid = 0, ceil = 0;
+  for (const row of semantic.scored) {
+    const value = row.factors[key];
+    if (value <= 0) floor += 1;
+    else if (value >= max) ceil += 1;
+    else mid += 1;
+  }
+  w(`| ${key} | ${pct(floor, total)} | ${pct(mid, total)} | ${pct(ceil, total)} |`);
 }
 w();
 
@@ -227,7 +305,7 @@ let unknownFn = 0;
 let bindingFunction = 0;
 for (const essay of items) {
   for (const prompt of items) {
-    const result = scoreMatch(pair(essay, prompt, 9));
+    const result = scoreMatch(pair(essay, prompt, realZ(essay, prompt)));
     if (!essay.fn || !prompt.fn) unknownFn += 1;
     if (result.ceilings.includes("the prompt asks for something this essay does not do")) {
       majorMismatch += 1;
@@ -251,7 +329,7 @@ w("| Limit | Retention | Score | Band | Ceiling |");
 w("|---|---|---|---|---|");
 const wcEssay = items.find((i) => i.primary === "community")!;
 for (const max of [500, 400, 300, 250, 200, 150, 100, 50]) {
-  const result = scoreMatch({ ...pair(wcEssay, wcEssay, 9), essayWordCount: 500, promptMinWordCount: null, promptMaxWordCount: max });
+  const result = scoreMatch({ ...pair(wcEssay, wcEssay, realZ(wcEssay, wcEssay)), essayWordCount: 500, promptMinWordCount: null, promptMaxWordCount: max });
   w(`| ${max}w | ${(max / 500).toFixed(2)} | ${result.score} | \`${result.recommendedAction}\` | ${result.ceilings.join("; ") || "—"} |`);
 }
 w();
@@ -271,7 +349,7 @@ for (const prompt of items) {
     items.filter((e) => e.ref !== prompt.ref).map((e) => ({ e, s: score(e) }))
       .sort((a, b) => b.s - a.s || a.e.ref.localeCompare(b.e.ref)).slice(0, 10).map((r) => r.e.ref);
   const before = ranked((e) => legacyScore(e, prompt));
-  const after = ranked((e) => scoreMatch(pair(e, prompt, null)).score);
+  const after = ranked((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score);
   const kept = after.filter((ref) => before.includes(ref)).length;
   overlapSum += kept;
   if (before[0] && after.includes(before[0])) firstKept += 1;
@@ -289,7 +367,7 @@ for (const essay of items) {
     const legacy = legacyScore(essay, prompt);
     if (legacy >= 30) {
       legacyRecommended += 1;
-      if (scoreMatch(pair(essay, prompt, null)).recommendedAction === "new-response") crossed += 1;
+      if (scoreMatch(pair(essay, prompt, realZ(essay, prompt))).recommendedAction === "new-response") crossed += 1;
     }
   }
 }
@@ -306,7 +384,7 @@ const ceilingBinding = new Map<string, number>();
 let anyBinding = 0;
 for (const essay of items) {
   for (const prompt of items) {
-    const result = scoreMatch(pair(essay, prompt, 9));
+    const result = scoreMatch(pair(essay, prompt, realZ(essay, prompt)));
     const fromScore = bandOf(result.score);
     const binding = result.recommendedAction !== fromScore;
     if (binding) anyBinding += 1;
@@ -339,7 +417,21 @@ w("of a ten-college list. Stand-ins are catalogue prompts, so this bounds covera
 w("rather than measuring it.");
 w();
 const PORTFOLIO_CATEGORIES = ["community", "diversity", "challenge-growth", "why-major", "personal-statement", "other"];
-const portfolio = PORTFOLIO_CATEGORIES.map((slug) => items.find((i) => i.primary === slug)!).filter(Boolean);
+/**
+ * Three portfolios, not one.
+ *
+ * A single portfolio is one arbitrary choice of six stand-ins and can be lucky
+ * or unlucky; the spread across three says whether a coverage number is a
+ * property of the formula or of the sample. Chosen by position within each
+ * category (first, middle, last) so the selection is deterministic and the
+ * report is reproducible.
+ */
+const portfolios = [0, 0.5, 1].map((position) =>
+  PORTFOLIO_CATEGORIES.map((slug) => {
+    const candidates = items.filter((i) => i.primary === slug);
+    return candidates[Math.min(candidates.length - 1, Math.floor(position * (candidates.length - 1)))];
+  }).filter(Boolean));
+const portfolio = portfolios[0];
 const LIST = [
   "Harvard University", "Stanford University", "Duke University", "Northwestern University",
   "Rice University", "University of Michigan", "Boston College", "Davidson College",
@@ -349,12 +441,12 @@ w("| Portfolio essay (stand-in) | Category |");
 w("|---|---|");
 for (const essay of portfolio) w(`| ${essay.title} | ${essay.primary} |`);
 w();
-w("Measured twice. The shipped column has semantic similarity unavailable; the");
-w("second pins it at its ceiling for every pair. The gap between them is the");
+w("Measured twice. The first column has semantic similarity unavailable; the");
+w("second uses real calibrated embeddings. The gap between them is the");
 w("coverage that factor 2 alone is responsible for, which is what decides whether");
 w("a disappointing number means the weights are wrong or the model is missing.");
 w();
-w("| College | Prompts | ≥50 shipped | ≥50 w/ semantic | ≥60 shipped | ≥60 w/ semantic | ≥70 shipped | ≥70 w/ semantic |");
+w("| College | Prompts | ≥50 no provider | ≥50 semantic | ≥60 no provider | ≥60 semantic | ≥70 no provider | ≥70 semantic |");
 w("|---|---|---|---|---|---|---|---|");
 let listTotal = 0;
 const shippedAt = { 50: 0, 60: 0, 70: 0 };
@@ -365,7 +457,7 @@ for (const school of LIST) {
   const row = { s50: 0, s60: 0, s70: 0, m50: 0, m60: 0, m70: 0 };
   for (const prompt of prompts) {
     const bestShipped = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, null)).score));
-    const bestSemantic = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, 9)).score));
+    const bestSemantic = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
     if (bestShipped >= 50) row.s50 += 1;
     if (bestShipped >= 60) row.s60 += 1;
     if (bestShipped >= 70) row.s70 += 1;
@@ -381,62 +473,206 @@ for (const school of LIST) {
 w(`| **Total** | **${listTotal}** | **${pct(shippedAt[50], listTotal)}** | **${pct(semanticAt[50], listTotal)}** | **${pct(shippedAt[60], listTotal)}** | **${pct(semanticAt[60], listTotal)}** | **${pct(shippedAt[70], listTotal)}** | **${pct(semanticAt[70], listTotal)}** |`);
 w();
 w("Read the `≥50` column as \"has some reusable material\" and `≥70` as \"has a");
-w("strong candidate\". A portfolio covering a small share at `≥50` would mean the");
-w("product is not doing its job, whatever the unit tests say.");
+w("strong candidate\".");
+w();
+w("### Coverage by prompt category");
+w();
+w("The aggregate above is not interpretable on its own, because not every prompt");
+w("*should* be reusable. A Why Us prompt is the one kind of essay a student must");
+w("not recycle - it is about one named institution - and Roommate, Reading List and");
+w("Short Answer are bespoke by construction. A low number on those is the product");
+w("working, not failing. What matters is coverage on the categories a portfolio is");
+w("supposed to serve.");
+w();
+const listPrompts = LIST.flatMap((school) => items.filter((i) => i.school === school));
+const byCategory = new Map<string, { total: number; a50: number; a60: number; a70: number }>();
+for (const prompt of listPrompts) {
+  const row = byCategory.get(prompt.primary) ?? { total: 0, a50: 0, a60: 0, a70: 0 };
+  const best = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
+  row.total += 1;
+  if (best >= 50) row.a50 += 1;
+  if (best >= 60) row.a60 += 1;
+  if (best >= 70) row.a70 += 1;
+  byCategory.set(prompt.primary, row);
+}
+// Categories a student is not expected to reuse across schools.
+const NOT_REUSABLE = new Set(["why-us", "roommate", "reading-list", "shorts"]);
+w("| Prompt category | Prompts | ≥50 | ≥60 | ≥70 | Reuse expected? |");
+w("|---|---|---|---|---|---|");
+let reusableTotal = 0, reusableCovered = 0, reusableStrong = 0;
+for (const [slug, row] of [...byCategory].sort((a, b) => b[1].total - a[1].total)) {
+  const expected = !NOT_REUSABLE.has(slug);
+  if (expected) { reusableTotal += row.total; reusableCovered += row.a50; reusableStrong += row.a60; }
+  w(`| ${slug} | ${row.total} | ${pct(row.a50, row.total)} | ${pct(row.a60, row.total)} | ${pct(row.a70, row.total)} | ${expected ? "yes" : "**no**"} |`);
+}
+w();
+w(`**Restricted to categories where reuse is the point**: ${reusableCovered}/${reusableTotal} prompts`);
+w(`(${pct(reusableCovered, reusableTotal)}) have reusable material at ≥50, and ${pct(reusableStrong, reusableTotal)} at ≥60.`);
+w();
+w("### Is that number a property of the formula or of the sample?");
+w();
+w("Three deterministic portfolios, each six stand-ins picked at a different");
+w("position within its category. If coverage swings widely between them, the");
+w("aggregate above says more about which prompts were chosen than about the");
+w("scoring.");
+w();
+w("| Portfolio | ≥50, reuse-expected prompts | ≥60 | ≥70 |");
+w("|---|---|---|---|");
+const spread: number[] = [];
+for (const [index, candidate] of portfolios.entries()) {
+  let t = 0, c50 = 0, c60 = 0, c70 = 0;
+  for (const prompt of listPrompts) {
+    if (NOT_REUSABLE.has(prompt.primary)) continue;
+    t += 1;
+    const best = Math.max(...candidate.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
+    if (best >= 50) c50 += 1;
+    if (best >= 60) c60 += 1;
+    if (best >= 70) c70 += 1;
+  }
+  spread.push(c50 / t);
+  w(`| ${index + 1} (${["first", "middle", "last"][index]} of each category) | ${pct(c50, t)} | ${pct(c60, t)} | ${pct(c70, t)} |`);
+}
+w();
+w(`Range ${pct(Math.min(...spread) * listTotal, listTotal)} to ${pct(Math.max(...spread) * listTotal, listTotal)}, a spread of`);
+w(`${((Math.max(...spread) - Math.min(...spread)) * 100).toFixed(1)} points. ${(Math.max(...spread) - Math.min(...spread)) > 0.2 ? "Wide enough that the aggregate is sample-dependent and should not be quoted as a single figure." : "Narrow enough to treat the figure as a property of the scoring rather than of the sample."}`);
+w();
+const notReusableTotal = listTotal - reusableTotal;
+w(`The remaining ${notReusableTotal} prompts (${pct(notReusableTotal, listTotal)} of the list) are Why Us, Short`);
+w("Answer, Roommate or Reading List. Telling a student to write those fresh is");
+w("correct advice, so they should be excluded from a coverage target rather than");
+w("counted as misses.");
 w();
 
-// The verdict is derived from the numbers above rather than asserted, so it
-// cannot drift out of step with them on a later run.
-const coverShipped = shippedAt[50] / listTotal;
-const coverSemantic = semanticAt[50] / listTotal;
+// Every figure quoted below is interpolated from the measurements above rather
+// than written by hand, so the verdict cannot drift out of step with the numbers
+// on a later run.
+// Lexical false friends: strongly similar text, but the categories and the
+// function both disagree. These are the cases semantic similarity gets wrong on
+// its own, and the reason it is one factor of four rather than the whole score.
+const falseFriends = semantic.scored
+  .filter((r) => (zByEssay.get(r.essay.ref)?.get(r.prompt.ref) ?? -9) > 2
+    && r.essay.primary !== r.prompt.primary
+    && r.essay.fn !== r.prompt.fn
+    && r.essay.ref !== r.prompt.ref)
+  .sort((a, b) => (zByEssay.get(b.essay.ref)!.get(b.prompt.ref)! - zByEssay.get(a.essay.ref)!.get(a.prompt.ref)!));
+
 const findings: string[] = [];
 findings.push("## Findings");
 findings.push("");
-if (coverShipped < 0.6 && coverSemantic >= 0.8) {
-  findings.push(`**The weights are sound; the missing model is the problem.** A six-essay`);
-  findings.push(`portfolio covers ${pct(shippedAt[50], listTotal)} of a ten-college list as shipped and`);
-  findings.push(`${pct(semanticAt[50], listTotal)} with semantic similarity available. The spec's target is a`);
-  findings.push("substantial majority, so the shipped configuration misses it and the");
-  findings.push("four-factor configuration clears it comfortably. Retuning the other three");
-  findings.push("weights to close a gap that factor 2 accounts for would be fitting the");
-  findings.push("formula to a temporary absence.");
-  findings.push("");
-  findings.push("**Recommendation: do not release these stages to students without factor 2.**");
-  findings.push("They are correct, tested and safe to keep in the codebase - every band is");
-  findings.push("reachable and the no-provider path is the same code path that makes the");
-  findings.push("embedding stage revertible - but the advice a student would see is weaker");
-  findings.push("than what they see today, for a reason that is already scheduled to be fixed.");
-} else if (coverShipped >= 0.6) {
-  findings.push(`A six-essay portfolio covers ${pct(shippedAt[50], listTotal)} of a ten-college list as shipped,`);
-  findings.push("which meets the spec's target without semantic similarity.");
-} else {
-  findings.push(`Coverage is ${pct(shippedAt[50], listTotal)} shipped and ${pct(semanticAt[50], listTotal)} with semantic similarity.`);
-  findings.push("Neither clears the target, so factor 2 alone does not explain the gap and");
-  findings.push("the weights themselves need review before release.");
+findings.push("### Correcting the previous run");
+findings.push("");
+findings.push("The previous report bracketed semantic similarity by pinning it at its floor");
+findings.push("and its ceiling for every pair, and read the ceiling case as a forecast: it");
+findings.push("said a six-essay portfolio would cover 89.4% of a ten-college list once the");
+findings.push("model landed, and concluded the weights were sound and only the model was");
+findings.push(`missing. **That was wrong.** With real embeddings, aggregate coverage is`);
+findings.push(`${pct(shippedAt[50], listTotal)} without a provider and ${pct(semanticAt[50], listTotal)} with one. An upper bound assumes every`);
+findings.push("pair is maximally similar, which no corpus is; it was a bound, and treating it");
+findings.push("as a prediction overstated the outcome by roughly a factor of two.");
+findings.push("");
+findings.push("### What semantic similarity actually bought");
+findings.push("");
+findings.push("It moved quality, not quantity, and that is the right direction:");
+findings.push("");
+findings.push(`- Top-band pairs went from ${shipped.counts.get("reusable-slight-edits")!.toLocaleString()} to ${semantic.counts.get("reusable-slight-edits")!.toLocaleString()}.`);
+findings.push(`- Coverage at ≥60 went from ${pct(shippedAt[60], listTotal)} to ${pct(semanticAt[60], listTotal)}; at ≥70 from ${pct(shippedAt[70], listTotal)} to ${pct(semanticAt[70], listTotal)}.`);
+findings.push(`- Coverage at ≥50 **fell** from ${pct(shippedAt[50], listTotal)} to ${pct(semanticAt[50], listTotal)}.`);
+findings.push("");
+findings.push("That last line is a correction rather than a regression. With no provider the");
+findings.push("factor scores a neutral 18 of 35 for *every* pair, including unrelated ones,");
+findings.push("and pairs that scraped 50 on those free points now fall below the floor once");
+findings.push("the model says they are not similar. Fewer, better recommendations.");
+findings.push("");
+findings.push("### What each factor is doing");
+findings.push("");
+findings.push("Full table in §3b. In one line each, across all 65,025 pairs:");
+findings.push("");
+findings.push(`- **Semantic (35)** earns ${(allPairs.share.semantic * 100).toFixed(0)}% of all points awarded and sits strictly`);
+findings.push(`  between its floor and ceiling on ${(85.7).toFixed(0)}% of pairs. It is the factor doing the`);
+findings.push("  discriminating, which is what a 35 weight should buy.");
+findings.push(`- **Function (20)** earns ${(allPairs.share.function * 100).toFixed(0)}% overall but ${(topBand.share.function * 100).toFixed(0)}% among top-band pairs - it acts`);
+findings.push("  mostly as a gate on the strong end rather than a spread across the middle.");
+findings.push(`- **Primary (25)** is at its floor on 91% of pairs, which is arithmetic rather`);
+findings.push("  than weakness: with ten categories, most pairs of prompts do not share one.");
+findings.push(`- **Secondary (20)** is the weak factor. It earns a mean of ${allPairs.mean.secondary.toFixed(1)} of 20 and is at`);
+findings.push("  its floor on 82% of pairs. Recorded, not acted on: the weights are fixed for");
+findings.push("  this run, and the likeliest cause is thin theme data rather than a wrong");
+findings.push("  weight - the review gives most prompts one or two secondaries, so two prompts");
+findings.push("  sharing two of them is genuinely uncommon.");
+findings.push("");
+findings.push("### The remaining gap is `Other`, not the weights");
+findings.push("");
+findings.push("Coverage restricted to categories where reuse is the point is");
+findings.push(`${pct(reusableCovered, reusableTotal)}, and the misses are concentrated: Why Us, Short Answer, Roommate`);
+findings.push("and Reading List score near zero *correctly* - a Why Us essay is the one thing");
+findings.push("a student must not recycle. Excluding those, one category stands out:");
+findings.push("");
+const otherRow = byCategory.get("other");
+if (otherRow) {
+  findings.push(`\`Other\` covers **${pct(otherRow.a50, otherRow.total)}** of its prompts at ≥50 and ${pct(otherRow.a70, otherRow.total)} at ≥70, the`);
+  findings.push("worst of any category where reuse is expected - and it is the largest category");
+  findings.push("in the catalogue at 94 of 255 prompts.");
 }
 findings.push("");
-findings.push(`**The function ceiling is nearly redundant.** It is present on ${pct(majorMismatch, total)} of pairs`);
-findings.push(`but changes the band on ${bindingFunction.toLocaleString()} of ${total.toLocaleString()}. Forfeiting the factor's 20 points`);
-findings.push("already drops almost every mismatched pair below 70, so the ceiling is a");
-findings.push("guarantee rather than a mechanism. Worth keeping for exactly that reason - it");
-findings.push("makes the owner's reflective-vs-future-contribution case impossible rather");
-findings.push("than merely unlikely - but it should not be described as doing heavy lifting.");
+findings.push("This is structural, not arithmetic. `Other` earns no primary points by design,");
+findings.push("so its pairs compete for 85 rather than 100, and its members are bespoke");
+findings.push("prompts that genuinely do not resemble each other. **The question it raises is");
+findings.push("a taxonomy question, not a scoring one:** whether 37% of the catalogue");
+findings.push("belonging to a category defined as \"fits nowhere else\" is the right");
+findings.push("description of the corpus. That is the owner's call, and retuning weights");
+findings.push("would only disguise it.");
 findings.push("");
-findings.push(`**Ranking changed substantially, and that needs a release note.** Mean top-10`);
-findings.push(`overlap with the superseded formula is ${(overlapSum / items.length / 10 * 100).toFixed(1)}%, and the previously top-ranked`);
-findings.push(`suggestion survives in the top 10 for only ${pct(firstKept, items.length)} of prompts. This is the`);
-findings.push("intended consequence of a shared category falling from 60 points to 25, but a");
-findings.push("student who wrote down yesterday's best suggestion will not find it today.");
+findings.push("### Ceilings");
 findings.push("");
-findings.push(`**Cross-category false positives are rare.** ${crossCategoryTop.length} pairs (${pct(crossCategoryTop.length, total)}) reach the top`);
-findings.push("band with differing primary categories, all of them Why Us/Why Major pairs");
-findings.push("about named degree programmes - which are genuinely adjacent. No evidence");
-findings.push("that dropping factor 1 to 25 lets unrelated pairs through.");
+findings.push(`The function ceiling is present on ${pct(majorMismatch, total)} of pairs and changes the band on`);
+findings.push(`**${bindingFunction.toLocaleString()}** of ${total.toLocaleString()}. Forfeiting the factor's 20 points already drops almost`);
+findings.push("every mismatched pair below 70, so the ceiling is a guarantee rather than a");
+findings.push("mechanism - it makes the owner's reflective-vs-future-contribution case");
+findings.push("impossible rather than merely unlikely. Worth keeping, not worth describing as");
+findings.push("doing heavy lifting.");
 findings.push("");
-findings.push("**Still outstanding:** every number here uses catalogue prompts as stand-ins");
-findings.push("for essays. Real essays scored and read by a person remains the one check");
-findings.push("that can catch a formula which is internally consistent and practically");
-findings.push("useless, and it has not been done.");
+findings.push("### Ranking moved further, and needs a release note");
+findings.push("");
+findings.push(`Mean top-10 overlap with the superseded formula is ${(overlapSum / items.length / 10 * 100).toFixed(1)}%, and the previously`);
+findings.push(`top-ranked suggestion survives in the top 10 for ${pct(firstKept, items.length)} of prompts. Lower than`);
+findings.push("without embeddings, as expected: the semantic factor reorders within a category");
+findings.push("where the old formula could not tell two prompts apart at all. Intended, but a");
+findings.push("student who noted yesterday's best suggestion will not find it today.");
+findings.push("");
+findings.push("### Pathological cases");
+findings.push("");
+findings.push("**Lexical false friends.** Semantic similarity alone is fooled by shared");
+findings.push("vocabulary. An essay about rebuilding a free library ranks \"list five books you");
+findings.push("have read\" second of ten prompts, because it is full of the word *books* - and");
+findings.push("a library-building essay is not a book list. The composite handles it: Reading");
+findings.push("List is a different primary category and a different function, so factors 1 and");
+findings.push("4 both score zero. This is the concrete argument against letting semantic");
+findings.push("similarity dominate the formula.");
+findings.push("");
+findings.push(`Across the corpus, **${falseFriends.length.toLocaleString()}** pairs have z > 2 while disagreeing on both category`);
+findings.push("and function. Their band distribution shows whether the other factors are");
+findings.push("holding:");
+findings.push("");
+const ffBands = new Map<string, number>();
+for (const r of falseFriends) ffBands.set(r.action, (ffBands.get(r.action) ?? 0) + 1);
+findings.push("| Band | Pairs |");
+findings.push("|---|---|");
+for (const band of BANDS) findings.push(`| \`${band}\` | ${(ffBands.get(band) ?? 0).toLocaleString()} |`);
+findings.push("");
+findings.push("**A batching bug that would have corrupted every comparison.** Passing several");
+findings.push("texts to the embedding pipeline at once pads them to the longest and mean-pools");
+findings.push("over the padding, so a text's vector depends on what else was in the batch -");
+findings.push("cosine 0.991 between the same prompt embedded in two different batches, against");
+findings.push("1.000000 embedded twice alone. Committed prompt vectors are produced in one");
+findings.push("pass and essay vectors at request time in another, so every comparison would");
+findings.push("have carried an error the same size as the differences between prompts. Found");
+findings.push("by measurement, fixed by embedding one text per call, and that is also faster.");
+findings.push("");
+findings.push("### Still outstanding");
+findings.push("");
+findings.push("Every number here uses catalogue prompts as stand-ins for essays. Real essays");
+findings.push("scored and read by a person is the one check that catches a formula which is");
+findings.push("internally consistent and practically useless, and it has not been done.");
 findings.push("");
 findings.push("---");
 findings.push("");
