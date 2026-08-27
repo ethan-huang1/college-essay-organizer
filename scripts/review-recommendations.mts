@@ -22,7 +22,10 @@ import { detectSchoolMentionsIn } from "../src/lib/school-mentions.ts";
 import { essayEmbeddingText } from "../src/lib/semantic.ts";
 import { wordCount } from "../src/lib/essays.ts";
 
-const slugByName = new Map(PROMPT_FAMILIES.map(([slug, name]) => [name, slug]));
+// Widened explicitly: PROMPT_FAMILIES is `as const`, so an inferred Map would
+// only accept the ten literal display names as keys, and the demo essays type
+// their family as a plain string.
+const slugByName = new Map<string, string>(PROMPT_FAMILIES.map(([slug, name]) => [name, slug]));
 const vectorByKey = new Map(PROMPT_VECTORS.map(([s, r, e]) => [`${s}|${r}`, decodeVector(e)]));
 
 type Prompt = { school: string; ref: string; title: string; text: string; primary: string; families: string[]; tags: string[]; fn: string; min: number | null; max: number | null; vector?: number[] };
