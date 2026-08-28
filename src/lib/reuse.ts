@@ -7,6 +7,7 @@ import { categoryReview } from "./retrieval/category-review";
 import { classifyText } from "./classification";
 import { EMBEDDING_MODEL, calibrate, cosine, decodeVector, embedTexts } from "./embedding";
 import { PROMPT_VECTOR_MODEL, PROMPT_VECTORS } from "./retrieval/prompt-vectors";
+import { inferPromptFunction } from "./prompt-function";
 import { essayEmbeddingText } from "./semantic";
 import { detectSchoolMentionsIn } from "./school-mentions";
 import { wordCount } from "./essays";
@@ -149,22 +150,65 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
    * exists for: keeping a reflective essay out of the top band for a prompt
    * asking what the student will contribute in future.
    */
+  /**
+   * What each essay does, by a fixed order of authority.
+   *
+   * 1. An explicit catalogue origin prompt. A person said which prompt this was
+   *    written for and that prompt has a reviewed function, so nothing beats it.
+   * 2. An explicit pasted origin prompt, classified from its text. Still the
+   *    student's own statement of what the essay answers; only the function is
+   *    inferred, at ~77% measured precision.
+   * 3. The earliest assignment, for essays predating origin capture. Ordered by
+   *    assignedAt so it is deterministic, and earliest so that accepting a reuse
+   *    suggestion cannot redefine the essay - a later assignment is a reuse
+   *    *target*, and letting one supply the function would make the suggestion
+   *    evidence for itself.
+   * 4. The essay's own text. Weakest tier by some distance: the rules were built
+   *    for prompts, and an essay is not a prompt.
+   * 5. Unknown, which matching scores neutral rather than as a mismatch.
+   *
+   * Every tier below the first two is a fallback for legacy essays. Once an
+   * origin is recorded, tiers 3 and 4 can never override it.
+   */
   const essayFunctions = new Map<string, ReturnType<typeof functionOfPrompt>>();
-  // Earliest assignment first, which is why the query orders by assignedAt.
-  //
-  // Two bugs without that ordering. An essay assigned to several prompts took
-  // its function from whichever row Postgres happened to return first, so the
-  // same workspace could score differently between two recomputations of the
-  // same data. And once an essay has been reused, its later assignments are
-  // reuse *targets* - taking a function from one of those would let a
-  // suggestion the student accepted redefine what the essay is, which is
-  // circular. The earliest assignment is the closest thing to the prompt it was
-  // written for; essays.origin_prompt_id would say so outright.
+  const originSource = new Map<string, "origin-prompt" | "pasted-origin" | "assignment" | "essay-text">();
+
+  for (const essay of workspaceEssays) {
+    if (essay.originPromptId) {
+      const fn = functionOfPrompt(essay.originPromptId);
+      if (fn) {
+        essayFunctions.set(essay.id, fn);
+        originSource.set(essay.id, "origin-prompt");
+        continue;
+      }
+    }
+    if (essay.originPromptText) {
+      const fn = inferPromptFunction(essay.originPromptTitle ?? "", essay.originPromptText);
+      if (fn) {
+        essayFunctions.set(essay.id, fn);
+        originSource.set(essay.id, "pasted-origin");
+      }
+    }
+  }
+
   for (const assignment of assignments) {
     if (essayFunctions.has(assignment.essayId)) continue;
     const fn = functionOfPrompt(assignment.promptId);
-    if (fn) essayFunctions.set(assignment.essayId, fn);
+    if (fn) {
+      essayFunctions.set(assignment.essayId, fn);
+      originSource.set(assignment.essayId, "assignment");
+    }
   }
+
+  for (const essay of workspaceEssays) {
+    if (essayFunctions.has(essay.id)) continue;
+    const fn = inferPromptFunction(essay.title, essay.currentContent);
+    if (fn) {
+      essayFunctions.set(essay.id, fn);
+      originSource.set(essay.id, "essay-text");
+    }
+  }
+  void originSource;
 
   // Semantic similarity, computed before the transaction because embedding is
   // the slow part and holding a transaction open across it would serialise

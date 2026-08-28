@@ -41,6 +41,12 @@ function essayMetadataInput(formData: FormData): EssayMetadataInput {
       .map((phrase) => phrase.trim())
       .filter(Boolean),
     primaryFamilyId: field(formData, "primaryFamilyId") || null,
+    // The prompt this essay was written for. Selecting a catalogue prompt wins;
+    // normalizeOrigin clears the pasted pair in that case, so a student who
+    // picks a prompt after pasting one does not leave two answers behind.
+    originPromptId: field(formData, "originPromptId") || null,
+    originPromptTitle: field(formData, "originPromptTitle") || null,
+    originPromptText: field(formData, "originPromptText") || null,
     // The essay form no longer offers a secondary-category picker, so omitting
     // the key tells updateEssayMetadata to keep the importer's links.
     secondaryFamilyIds: formData.has("secondaryFamilyIds")

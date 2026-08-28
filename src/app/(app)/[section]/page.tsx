@@ -588,8 +588,49 @@ function EssayFields({ snapshot, essay, omitTitle }: { snapshot: WorkspaceSnapsh
       <label className="field-wide">School-specific phrases <span>comma-separated, e.g. school names to flag</span>
         <input name="schoolSpecificPhrases" defaultValue={essay?.schoolSpecificPhrases.join(", ") ?? ""} placeholder="Stanford, the Farm" />
       </label>
+      <OriginPromptFields snapshot={snapshot} essay={essay} />
       <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={essay?.notes ?? ""} placeholder="Context, ideas, or reminders" /></label>
     </div>
+  );
+}
+
+/**
+ * Which prompt this essay was originally written for.
+ *
+ * Two ways in, because both are common: pick one from the college list, or paste
+ * the prompt for something not in it - a college not added yet, a scholarship, a
+ * class assignment. Selecting a prompt wins over pasted text, so a student who
+ * does both does not leave two answers behind.
+ *
+ * This is what tells the matcher what the essay *does*, which is otherwise
+ * guessed from the finished essay. Leaving it blank is fine and is what every
+ * essay written before this existed will carry: matching then treats the function
+ * as unknown and scores it neutral rather than as a mismatch.
+ */
+function OriginPromptFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?: WorkspaceEssay }) {
+  const schoolName = new Map(snapshot.schools.map((school) => [school.id, school.name]));
+  const bySchool = new Map<string, { id: string; title: string }[]>();
+  for (const prompt of snapshot.prompts) {
+    const name = schoolName.get(prompt.schoolId) ?? "Unknown college";
+    bySchool.set(name, [...(bySchool.get(name) ?? []), { id: prompt.id, title: prompt.title }]);
+  }
+  return (
+    <>
+      <label className="field-wide">Originally written for <span>the prompt this essay answers — used to judge reuse</span>
+        <select name="originPromptId" defaultValue={essay?.originPromptId ?? ""}>
+          <option value="">Not from a prompt in my list</option>
+          {[...bySchool].sort(([a], [b]) => a.localeCompare(b)).map(([school, prompts]) => (
+            <optgroup key={school} label={school}>
+              {prompts.map((prompt) => <option key={prompt.id} value={prompt.id}>{prompt.title}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <label>Or paste its title<input name="originPromptTitle" maxLength={200} defaultValue={essay?.originPromptTitle ?? ""} placeholder="Common App personal essay" /></label>
+      <label className="field-wide">Or paste the original prompt <span>for a college, scholarship, or class not in your list</span>
+        <textarea name="originPromptText" rows={2} maxLength={4000} defaultValue={essay?.originPromptText ?? ""} placeholder="Describe a topic, idea, or concept you find captivating…" />
+      </label>
+    </>
   );
 }
 

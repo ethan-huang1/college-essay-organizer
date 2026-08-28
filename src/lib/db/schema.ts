@@ -256,6 +256,27 @@ export const essays = pgTable(
     adaptedFromEssayId: text("adapted_from_essay_id"),
     notes: text("notes"),
     schoolSpecificPhrases: jsonb("school_specific_phrases").$type<string[]>().notNull().default([]),
+    /**
+     * The prompt this essay was originally written for.
+     *
+     * Nullable, and `on delete set null`: an essay outlives the prompt record it
+     * came from, so removing a college from the list must not delete the essay
+     * or its version history.
+     *
+     * Deliberately distinct from assignedEssayResponses, which records "I am
+     * using this essay here" and is many-to-many. Origin is one prompt and does
+     * not change when a student accepts a reuse suggestion. Conflating the two
+     * let a later assignment redefine what the essay was, which is circular -
+     * the suggestion the student accepted would become the evidence for itself.
+     */
+    originPromptId: text("origin_prompt_id").references(() => prompts.id, { onDelete: "set null" }),
+    /**
+     * The original prompt as free text, for an essay written for something not
+     * in the catalogue: a college not yet added, a scholarship, a class
+     * assignment. Carries the same signal as originPromptId for those essays.
+     */
+    originPromptTitle: text("origin_prompt_title"),
+    originPromptText: text("origin_prompt_text"),
     lastEditedAt: stamp("last_edited_at"),
     createdAt: stamp("created_at"),
   },

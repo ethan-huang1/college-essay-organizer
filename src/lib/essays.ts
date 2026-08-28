@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 
 import type { AppDatabase } from "./db/client";
-import { essayFamilyLinks, essays, essayVersions, promptFamilies } from "./db/schema";
+import { essayFamilyLinks, essays, essayVersions, promptFamilies, prompts } from "./db/schema";
 
 export type EssayStatus = "idea" | "outline" | "draft" | "revising" | "ready" | "submitted";
 export type EssayDesignation = "canonical" | "school-adaptation";
@@ -15,7 +15,38 @@ export type EssayMetadataInput = {
   schoolSpecificPhrases?: string[];
   primaryFamilyId?: string | null;
   secondaryFamilyIds?: string[];
+  /**
+   * The prompt this essay was written for. One of the two forms, or neither.
+   *
+   * `originPromptId` for a prompt in the student's catalogue; the pasted pair
+   * for anything else - a college not yet added, a scholarship, a class
+   * assignment. Existing essays stay null, which is why every field is optional
+   * and why matching treats an unknown origin as neutral rather than as a
+   * mismatch.
+   */
+  originPromptId?: string | null;
+  originPromptTitle?: string | null;
+  originPromptText?: string | null;
 };
+
+/**
+ * Normalises the origin pair.
+ *
+ * Selecting a catalogue prompt clears any pasted text, because keeping both
+ * would leave two answers to one question and no rule for which wins. Pasted
+ * text with no title is accepted - the text is the part that carries the
+ * function - but a title alone is not, since a bare title cannot be classified.
+ */
+function normalizeOrigin(input: EssayMetadataInput) {
+  const originPromptId = input.originPromptId?.trim() || null;
+  if (originPromptId) return { originPromptId, originPromptTitle: null, originPromptText: null };
+  const originPromptText = input.originPromptText?.trim() || null;
+  const originPromptTitle = input.originPromptTitle?.trim() || null;
+  if (!originPromptText) return { originPromptId: null, originPromptTitle: null, originPromptText: null };
+  if (originPromptText.length > 4000) throw new Error("Original prompt text must be 4,000 characters or fewer.");
+  if (originPromptTitle && originPromptTitle.length > 200) throw new Error("Original prompt title must be 200 characters or fewer.");
+  return { originPromptId: null, originPromptTitle, originPromptText };
+}
 
 function cleanTitle(value: string) {
   const trimmed = value.trim().replace(/\s+/g, " ");
@@ -99,9 +130,20 @@ async function validateMetadata(db: AppDatabase, workspaceId: string, input: Ess
   const schoolSpecificPhrases = [...new Set((input.schoolSpecificPhrases ?? []).map((phrase) => phrase.trim()).filter(Boolean))].slice(0, 20);
   const families = normalizeFamilies(input);
   await validateFamilies(db, workspaceId, families.primaryFamilyId, families.secondaryFamilyIds);
+  const origin = normalizeOrigin(input);
+  if (origin.originPromptId) {
+    // Scoped to the workspace, like every other id the forms accept: a prompt id
+    // from another workspace would otherwise cross the isolation boundary and
+    // silently supply an origin from someone else's college list.
+    const prompt = await db.select({ id: prompts.id }).from(prompts)
+      .where(and(eq(prompts.id, origin.originPromptId), eq(prompts.workspaceId, workspaceId)))
+      .then((rows) => rows[0]);
+    if (!prompt) throw new Error("The original prompt is not in this workspace.");
+  }
 
   return {
     ...families,
+    ...origin,
     title: cleanTitle(input.title),
     targetWordCount,
     notes: input.notes?.trim() || null,
@@ -125,6 +167,9 @@ export async function createEssay(db: AppDatabase, workspaceId: string, input: E
       designation: input.designation,
       notes: validated.notes,
       schoolSpecificPhrases: validated.schoolSpecificPhrases,
+      originPromptId: validated.originPromptId,
+      originPromptTitle: validated.originPromptTitle,
+      originPromptText: validated.originPromptText,
       lastEditedAt: new Date(),
     });
     await tx.insert(essayVersions).values({
@@ -157,6 +202,9 @@ export async function updateEssayMetadata(db: AppDatabase, workspaceId: string, 
       designation: input.designation,
       notes: validated.notes,
       schoolSpecificPhrases: validated.schoolSpecificPhrases,
+      originPromptId: validated.originPromptId,
+      originPromptTitle: validated.originPromptTitle,
+      originPromptText: validated.originPromptText,
     }).where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)));
     await replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
   });

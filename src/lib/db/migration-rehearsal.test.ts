@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { type AppDatabase, MIGRATIONS_FOLDER, openTestDatabase } from "./client";
@@ -67,6 +67,26 @@ function buildPreTaxonomyMigrationsFolder() {
     fs.copyFileSync(path.join(MIGRATIONS_FOLDER, `${entry.tag}.sql`), path.join(dir, `${entry.tag}.sql`));
   }
   return dir;
+}
+
+/**
+ * Inserts an essay with raw SQL, naming only the columns migrations 0000-0001
+ * created.
+ *
+ * The Drizzle schema describes the *current* essays table, so an ORM insert
+ * lists every column it knows about - including ones a later migration adds -
+ * and fails against this fixture's older schema. Naming the columns explicitly
+ * is the point: it is what makes this a rehearsal of legacy data rather than of
+ * today's data.
+ */
+async function insertLegacyEssay(
+  db: AppDatabase,
+  row: { id: string; workspaceId: string; title: string; content: string },
+) {
+  await db.execute(sql`
+    insert into "essays" ("id", "workspace_id", "title", "current_content", "status", "designation")
+    values (${row.id}, ${row.workspaceId}, ${row.title}, ${row.content}, 'draft', 'canonical')
+  `);
 }
 
 type LegacyFamilySeed = readonly [slug: string, name: string, sortOrder: number];
@@ -283,10 +303,9 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
     ]);
 
     essayBridgeId = `${WS_A}:essay:bridge`;
-    await db.insert(essays).values({
+    await insertLegacyEssay(db, {
       id: essayBridgeId, workspaceId: WS_A, title: "The Bridge",
-      currentContent: "The second draft of the bridge essay, revised for clarity.",
-      status: "draft", designation: "canonical",
+      content: "The second draft of the bridge essay, revised for clarity.",
     });
     await db.insert(essayVersions).values([
       { id: crypto.randomUUID(), workspaceId: WS_A, essayId: essayBridgeId, versionNumber: 1, content: "The first draft of the bridge essay.", wordCount: 7 },
@@ -317,7 +336,7 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
       { id: crypto.randomUUID(), workspaceId: WS_B, promptId: previousCyclePromptIdB, familyId: `${WS_B}:family:identity-background`, isPrimary: true, source: "deterministic" },
     ]);
     essayRootsId = `${WS_B}:essay:roots`;
-    await db.insert(essays).values({ id: essayRootsId, workspaceId: WS_B, title: "Roots", currentContent: "An essay about where I come from.", status: "draft", designation: "canonical" });
+    await insertLegacyEssay(db, { id: essayRootsId, workspaceId: WS_B, title: "Roots", content: "An essay about where I come from." });
     await db.insert(essayVersions).values({ id: crypto.randomUUID(), workspaceId: WS_B, essayId: essayRootsId, versionNumber: 1, content: "An essay about where I come from.", wordCount: 7 });
     await db.insert(essayFamilyLinks).values({ id: crypto.randomUUID(), workspaceId: WS_B, essayId: essayRootsId, familyId: `${WS_B}:family:community-contribution`, isPrimary: true, source: "deterministic" });
     await db.insert(assignedEssayResponses).values({ id: crypto.randomUUID(), workspaceId: WS_B, promptId: ridgelineCurrentPromptId, essayId: essayRootsId });

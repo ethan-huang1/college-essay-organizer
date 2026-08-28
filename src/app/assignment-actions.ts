@@ -59,6 +59,12 @@ export async function draftEssayForPromptAction(formData: FormData) {
     designation: "school-adaptation",
     primaryFamilyId: prompt.primaryFamily?.id ?? null,
     secondaryFamilyIds: prompt.secondaryFamilies.map((family) => family.id),
+    // This essay is being started *from* a prompt, so its origin is known
+    // exactly and needs no inference. Recording it here is what makes the
+    // difference between the matcher knowing what the essay does and guessing
+    // from finished prose - and it must be the origin rather than the
+    // assignment, so later reuse cannot redefine it.
+    originPromptId: promptId,
     content: "",
   });
   await assignEssayToPrompt(db, snapshot.workspace.id, promptId, essayId);

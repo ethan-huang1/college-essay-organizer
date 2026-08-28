@@ -149,6 +149,87 @@ describe("semantic matching, end to end", () => {
     expect(await snapshot()).toBe(await snapshot());
   });
 
+  // Origin is the point of the whole precedence chain: an explicit origin must
+  // outrank every assignment, and accepting a reuse suggestion must not be able
+  // to redefine what the essay is.
+  it("lets an explicit origin prompt outrank any assignment, and keeps it stable", async () => {
+    if (!available) return;
+    const { createEssay, updateEssayMetadata } = await import("../essays");
+    const { assignEssayToPrompt } = await import("../assignments");
+    const { recomputeWorkspaceMatches } = await import("../reuse");
+    const { essays: essaysTable, prompts: promptsTable, schools: schoolsTable } = await import("./schema");
+
+    const promptRows = await connection.db.select().from(promptsTable).where(eq(promptsTable.workspaceId, DEMO_WORKSPACE_ID));
+    const schoolRows = await connection.db.select().from(schoolsTable).where(eq(schoolsTable.workspaceId, DEMO_WORKSPACE_ID));
+    const name = new Map(schoolRows.map((row) => [row.id, row.name]));
+    const { categoryReview } = await import("../retrieval/category-review");
+    const fnOf = (promptId: string) => {
+      const prompt = promptRows.find((row) => row.id === promptId)!;
+      return categoryReview(name.get(prompt.schoolId) ?? "", prompt.externalRef)?.[5] ?? null;
+    };
+    // Two prompts whose reviewed functions differ, so "which one supplied the
+    // function" is observable rather than a coin flip.
+    const origin = promptRows.find((row) => fnOf(row.id) === "reflect")!;
+    const other = promptRows.find((row) => fnOf(row.id) === "connect-to-school")!;
+    expect(origin).toBeTruthy();
+    expect(other).toBeTruthy();
+
+    const essayId = await createEssay(connection.db, DEMO_WORKSPACE_ID, {
+      title: "Origin precedence fixture",
+      content: "A short synthetic essay used only to check which prompt supplies the function.",
+      status: "draft",
+      designation: "canonical",
+      originPromptId: origin.id,
+    });
+    const stored = await connection.db.select().from(essaysTable).where(eq(essaysTable.id, essayId)).then((r) => r[0]);
+    expect(stored.originPromptId).toBe(origin.id);
+
+    const scoresAgainst = async (promptId: string) => {
+      await recomputeWorkspaceMatches(connection.db, DEMO_WORKSPACE_ID);
+      const rows = await connection.db.select().from(essayPromptMatches)
+        .where(eq(essayPromptMatches.workspaceId, DEMO_WORKSPACE_ID));
+      return rows.find((row) => row.essayId === essayId && row.promptId === promptId)!.score;
+    };
+
+    const beforeOrigin = await scoresAgainst(origin.id);
+    const beforeOther = await scoresAgainst(other.id);
+
+    // Accepting a reuse suggestion for a differently-functioned prompt.
+    await assignEssayToPrompt(connection.db, DEMO_WORKSPACE_ID, other.id, essayId);
+    expect(await scoresAgainst(origin.id)).toBe(beforeOrigin);
+    expect(await scoresAgainst(other.id)).toBe(beforeOther);
+
+    // And repeated recomputation is stable.
+    expect(await scoresAgainst(origin.id)).toBe(beforeOrigin);
+
+    // A pasted origin supplies a function too, for a prompt outside the list.
+    const pastedId = await createEssay(connection.db, DEMO_WORKSPACE_ID, {
+      title: "Pasted origin fixture",
+      content: "Another short synthetic essay.",
+      status: "draft",
+      designation: "canonical",
+      originPromptText: "Reflect on a community you belong to. Why is this community meaningful to you?",
+      originPromptTitle: "A meaningful community",
+    });
+    const pasted = await connection.db.select().from(essaysTable).where(eq(essaysTable.id, pastedId)).then((r) => r[0]);
+    expect(pasted.originPromptText).toContain("Reflect on a community");
+    expect(pasted.originPromptId).toBeNull();
+
+    // Choosing a catalogue prompt later clears the pasted pair rather than
+    // leaving two answers to one question.
+    await updateEssayMetadata(connection.db, DEMO_WORKSPACE_ID, pastedId, {
+      title: "Pasted origin fixture",
+      status: "draft",
+      designation: "canonical",
+      originPromptId: origin.id,
+      originPromptText: "Reflect on a community you belong to.",
+    });
+    const switched = await connection.db.select().from(essaysTable).where(eq(essaysTable.id, pastedId)).then((r) => r[0]);
+    expect(switched.originPromptId).toBe(origin.id);
+    expect(switched.originPromptText).toBeNull();
+    expect(switched.originPromptTitle).toBeNull();
+  });
+
   it("does not recommend most pairs: 936 pairs, a handful of suggestions", async () => {
     if (!available) return;
     const { matchRows } = demo();
