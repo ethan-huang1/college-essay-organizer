@@ -26,6 +26,7 @@ import { openDatabase } from "../src/lib/db/client.ts";
 import { schools, workspaces } from "../src/lib/db/schema.ts";
 import { importCollege } from "../src/lib/college-import.ts";
 import { migrateWorkspaceTaxonomy } from "../src/lib/db/taxonomy-migration.ts";
+import { recomputeWorkspaceMatches } from "../src/lib/reuse.ts";
 
 const dryRun = process.argv.includes("--dry-run");
 
@@ -40,7 +41,7 @@ try {
   const allWorkspaces = await db.select({ id: workspaces.id, name: workspaces.name }).from(workspaces);
   console.log(`${allWorkspaces.length} workspace(s) to visit${dryRun ? " (dry run)" : ""}.`);
 
-  const totals = { schools: 0, created: 0, updated: 0, unchanged: 0, flagged: 0, failed: 0 };
+  const totals = { schools: 0, created: 0, updated: 0, unchanged: 0, flagged: 0, failed: 0, recomputed: 0 };
 
   for (const workspace of allWorkspaces) {
     if (!dryRun) {
@@ -74,6 +75,27 @@ try {
         // One bad school must not abandon the rest half-done.
         totals.failed += 1;
         console.error(`  FAILED ${school.name} (${workspace.name}):`, error instanceof Error ? error.message : error);
+      }
+    }
+
+    // Recompute the whole workspace's matches, once, after its schools are in.
+    //
+    // Mandatory rather than tidy-up. essay_prompt_matches stores a score and a
+    // recommendedAction, and both are outputs of code that this deployment
+    // changes: the four-factor weights, and a renamed set of band values. Left
+    // alone, every stored row would hold an action string the current
+    // ACTION_LABELS map has no key for, and the reuse UI would render a blank
+    // where the recommendation should be - not a crash, which is worse, because
+    // nothing would report it.
+    //
+    // Skipped in a dry run, which is why the dry run cannot prove this step.
+    if (!dryRun) {
+      try {
+        await recomputeWorkspaceMatches(db, workspace.id);
+        totals.recomputed += 1;
+      } catch (error) {
+        totals.failed += 1;
+        console.error(`  FAILED recompute (${workspace.name}):`, error instanceof Error ? error.message : error);
       }
     }
   }
