@@ -440,7 +440,7 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
 
   it("[point 4] taxonomy remap drops no links, creates no duplicate primaries, dedupes collapsed secondaries, and keeps manual provenance", async () => {
     const families = await connection.db.select().from(promptFamilies).where(eq(promptFamilies.workspaceId, WS_A));
-    expect(families).toHaveLength(10);
+    expect(families).toHaveLength(11);
 
     const links = await connection.db.select().from(promptFamilyLinks).where(eq(promptFamilyLinks.workspaceId, WS_A));
     const allPromptIds = [...LEGACY_FAMILIES.map(([slug]) => `${WS_A}:prompt:${slug}`), previousCyclePromptIdA];
@@ -453,14 +453,20 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
     // Total distinct prompt owners holding a link is unchanged (11 prompts).
     expect(new Set(links.map((link) => link.promptId)).size).toBe(allPromptIds.length);
 
-    // The core-story prompt's two secondary links (intellectual-curiosity,
-    // activities-impact) both collapsed into "other" and must have deduped to
-    // exactly one secondary row, not two, and not violated the pair-unique
-    // index in the process (already implied by the transaction succeeding).
+    // The core-story prompt carries two secondaries, intellectual-curiosity and
+    // activities-impact. They used to collapse into the same "other" family and
+    // had to dedupe to one row; now that Activities & Impact is a category
+    // again, only intellectual-curiosity collapses and the other keeps its own
+    // identity - so three links, and the student's classification survives
+    // instead of being merged away. The pair-unique index is still respected,
+    // which the transaction succeeding already implies.
     const coreStoryLinks = links.filter((link) => link.promptId === coreStoryPromptId);
-    expect(coreStoryLinks).toHaveLength(2);
-    expect(coreStoryLinks.find((link) => !link.isPrimary)?.familyId).toBe(otherFamilyIdA);
+    expect(coreStoryLinks).toHaveLength(3);
     expect(coreStoryLinks.find((link) => link.isPrimary)?.familyId).toBe(personalStatementFamilyIdA);
+    const coreStorySecondaries = coreStoryLinks.filter((link) => !link.isPrimary).map((link) => link.familyId).sort();
+    expect(coreStorySecondaries).toHaveLength(2);
+    expect(coreStorySecondaries).toContain(`${WS_A}:family:activities-impact`);
+    expect(coreStorySecondaries).toContain(otherFamilyIdA);
 
     // The manually hand-classified prompt keeps its manual provenance rather
     // than reverting to deterministic - and now keeps its category too, because
@@ -475,16 +481,17 @@ describe("migration rehearsal: legacy production data through 0002 + 0003", () =
 
     // The retired categories collapsed away as internal tags rather than
     // silently vanishing: one tag per (owner, retired concept) pair - the
-    // dedicated intellectual-curiosity/activities-impact/values-meaning prompts
-    // (3) plus core-story's two collapsed secondaries, which are two DIFFERENT
-    // retired concepts on the SAME owner (2) = 5.
-    //
-    // Five, not six: the challenge-growth prompt no longer produces a tag,
-    // because it kept its own category. Recording the concept as both a
-    // category and a tag would let matching count one shared concept twice.
+    // dedicated intellectual-curiosity and values-meaning prompts (2) plus
+    // core-story's collapsed secondaries. Neither challenge-growth nor
+    // activities-impact produces a tag any more, because each kept its own
+    // category - recording a concept as both a category and a tag would let
+    // matching count one shared concept twice.
     const tagLinks = await connection.db.select().from(promptTagLinks).where(eq(promptTagLinks.workspaceId, WS_A));
-    expect(tagLinks).toHaveLength(5);
-    expect(tagLinks.filter((link) => link.promptId === coreStoryPromptId)).toHaveLength(2);
+    expect(tagLinks.length).toBeGreaterThan(0);
+    expect(tagLinks).toHaveLength(3);
+    // One, not two: core-story's other collapsed secondary was activities-impact,
+    // which now keeps its own family link instead of becoming a tag.
+    expect(tagLinks.filter((link) => link.promptId === coreStoryPromptId)).toHaveLength(1);
     // A link to a category that was NOT retired (personal-statement) produces no tag.
     const essayTags = await connection.db.select().from(essayTagLinks).where(eq(essayTagLinks.workspaceId, WS_A));
     expect(essayTags).toHaveLength(0);

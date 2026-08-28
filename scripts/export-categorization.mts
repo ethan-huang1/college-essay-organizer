@@ -20,6 +20,7 @@ const REVIEW_NAME: Record<string, string> = {
   "why-major": "Why Major", "challenge-growth": "Challenge & Growth",
   "personal-statement": "Personal Statement", shorts: "Short Answer",
   other: "Other", "reading-list": "Reading List", roommate: "Roommate",
+  "activities-impact": "Activities & Impact",
 };
 const SECONDARY_NAME: Record<string, string> = {
   "academic context": "Academic Context", "activities & impact": "Activities & Impact",
@@ -29,6 +30,7 @@ const SECONDARY_NAME: Record<string, string> = {
   "goals & future": "Goals & Future", "intellectual curiosity": "Intellectual Curiosity",
   leadership: "Leadership", service: "Service", "values & meaning": "Values",
   "why-major": "Why Major", "why-us": "Why Us",
+  "activities-impact": "Activities & Impact",
 };
 const FUNCTION_NAME: Record<string, string> = {
   describe: "describe", reflect: "reflect", "explain-impact": "explain impact",

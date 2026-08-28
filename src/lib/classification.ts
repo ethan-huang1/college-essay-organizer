@@ -130,6 +130,30 @@ const RULES: { slug: string; patterns: RegExp[] }[] = [
     ],
   },
   {
+    // After challenge-growth, before community: an activities prompt often names
+    // a community as the setting ("what have you done for your community"), and
+    // the review keeps those as Community or Other with Activities & Impact as a
+    // secondary. What makes this the *primary* is the prompt centrally asking
+    // for an activity, role, job, responsibility or project - not merely
+    // mentioning impact, contribution, service or talent, all of which the
+    // review deliberately leaves to other categories.
+    slug: "activities-impact",
+    patterns: [
+      /\bextracurricular\b/i,
+      /\bactivit(?:y|ies)\b/i,
+      /\bleadership\s+(?:experience|role)\b/i,
+      /\ba\s+job\s+you\b/i,
+      /\bemployment\b/i,
+      /\bwork\s+experience\b/i,
+      /\bresponsibilit(?:y|ies)\s+(?:you|for)\b/i,
+      /\bsustained\s+involvement\b/i,
+      /\bmost\s+involved\b/i,
+      /\binvolvement\s+(?:has|have)\b/i,
+      /\blearned\s+by\s+doing\b/i,
+      /\btangible\s+steps\b/i,
+    ],
+  },
+  {
     slug: "community",
     patterns: [
       /\bcommunit(?:y|ies)\b/i,
@@ -272,10 +296,6 @@ const TAG_RULES: { tag: string; patterns: RegExp[] }[] = [
   {
     tag: "intellectual curiosity",
     patterns: [/\bintellectual\b/i, /\bcuriosity\b/i, /\bcurious\b/i, /\bresearch\b/i, /\brabbit\s+hole\b/i, /\bnerd/i, /\bexplore\s+(?:a\s+)?(?:topic|idea)\b/i, /\bexcites\s+you\b/i, /\bfascinat/i],
-  },
-  {
-    tag: "activities & impact",
-    patterns: [/\bextracurricular\b/i, /\binitiative\b/i, /\bresponsibilit(?:y|ies)\b/i, /\bproject\b/i, /\bwork\s+experience\b/i, /\bemployment\b/i, /\bmade\s+a\s+difference\b/i, /\bimpact\b/i, /\bachievement\b/i],
   },
   {
     tag: "values & meaning",

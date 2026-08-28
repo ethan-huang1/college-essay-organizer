@@ -102,9 +102,16 @@ export type MatchInput = {
  * the 80-point "ready to reuse" threshold - so two prompts sharing a broad
  * category were called ready to submit unchanged, with 106 of 255 prompts in
  * one category and nothing in the score reading the essay.
+ *
+ * Five points moved from function to semantic in both vectors. Function keeps
+ * its band ceiling, which is where most of its value was: measured, the ceiling
+ * changes an outcome on pairs the points had already decided, while semantic is
+ * the factor that lies strictly between its floor and ceiling on 86% of pairs
+ * and so does the actual discriminating. Both totals are unchanged - 100 for
+ * the normal vector, 85 for `Other` - so no band threshold moves.
  */
 const WEIGHTS = {
-  normal: { primary: 25, semantic: 35, secondary: 20, function: 20 },
+  normal: { primary: 25, semantic: 40, secondary: 20, function: 15 },
   /**
    * `Other` means "no meaningful reusable primary category exists", so sharing
    * that label is weak evidence - two bespoke prompts are not the same essay
@@ -116,7 +123,7 @@ const WEIGHTS = {
    * `Other` is 94 of 255 catalogue prompts, so a blanket prohibition would tell
    * students that 37% of their prompts match nothing they have ever written.
    */
-  other: { primary: 0, semantic: 40, secondary: 20, function: 25 },
+  other: { primary: 0, semantic: 45, secondary: 20, function: 20 },
 } as const;
 
 // "Other" is a real category but never a shared theme: two prompts landing
@@ -164,8 +171,15 @@ function primaryPoints(essayPrimary: string | null, promptPrimary: string | null
  * provider configured, or an essay whose function was never captured, every
  * match would read as "nothing you have written fits". Half the weight says
  * "assume average" without inventing confidence.
+ *
+ * Deliberately not rounded. A 15-point function factor makes neutral 7.5, and
+ * rounding it here to 8 would push the neutral case half a point above true
+ * half-credit on every single pair that has one - which is most of them, since
+ * an essay has no recorded function until it is linked to a prompt. The total is
+ * rounded once instead, in scoreMatch, so the stored integer score is exact
+ * while the factor keeps the half-credit relationship exactly.
  */
-const neutral = (weight: number) => Math.round(weight / 2);
+const neutral = (weight: number) => weight / 2;
 
 /** Maps a calibrated z-score onto points. z >= +2 saturates, z <= -1 is zero. */
 function semanticPoints(z: number | null | undefined, weight: number) {
@@ -344,7 +358,10 @@ export function scoreMatch(input: MatchInput): MatchResult {
   const words = wordCountCeiling(input.essayWordCount, input.promptMinWordCount, input.promptMaxWordCount);
   const missing = missingRequirements(input.promptPrimaryFamilySlug, input.promptSecondaryFamilySlugs, input.essayPrimaryFamilySlug, input.essaySecondaryFamilySlugs);
 
-  const contentFitScore = Math.max(0, Math.min(100, primary.points + semantic + secondary.points + fn.points));
+  // Rounded once, here, rather than per factor: see `neutral` above. Factor
+  // values may be fractional; the score is an integer because that is what the
+  // band ladder and the stored column are defined on.
+  const contentFitScore = Math.max(0, Math.min(100, Math.round(primary.points + semantic + secondary.points + fn.points)));
 
   // Ceilings compose: the band is the lowest any of them allows.
   let action = bandFromScore(contentFitScore);

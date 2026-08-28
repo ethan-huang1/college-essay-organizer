@@ -77,10 +77,11 @@ describe("category review coverage", () => {
     const counts = new Map<string, number>();
     for (const [, , primary] of CATEGORY_REVIEW) counts.set(primary, (counts.get(primary) ?? 0) + 1);
     expect(Object.fromEntries([...counts].sort())).toEqual({
+      "activities-impact": 14,
       "challenge-growth": 23,
       community: 7,
       diversity: 30,
-      other: 94,
+      other: 80,
       "personal-statement": 2,
       "reading-list": 1,
       roommate: 2,

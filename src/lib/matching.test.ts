@@ -26,6 +26,28 @@ describe("deterministic essay-prompt match scoring", () => {
     expect(scoreMatch(base)).toEqual(scoreMatch(base));
   });
 
+  // A weight change that leaves the maximum anywhere but 100 silently reshifts
+  // every band boundary, since the bands are absolute scores.
+  it("keeps a perfect score at exactly 100, and Other's ceiling at 85", () => {
+    const perfect = scoreMatch({
+      ...base,
+      essaySecondaryFamilySlugs: [],
+      essayTags: ["contribution", "service", "leadership"],
+      promptTags: ["contribution", "service", "leadership"],
+      semanticZScore: 5,
+      essayFunction: "reflect",
+      promptFunction: "reflect",
+    });
+    expect(perfect.factors).toEqual({ primary: 25, semantic: 40, secondary: 20, function: 15 });
+    expect(perfect.contentFitScore).toBe(100);
+
+    // `as const` on WEIGHTS narrows the values to literal unions, so summing
+    // them needs an explicit number accumulator.
+    const sum = (weights: Record<string, number>) => Object.values(weights).reduce<number>((a, b) => a + b, 0);
+    expect(sum(SCORING.WEIGHTS.normal)).toBe(100);
+    expect(sum(SCORING.WEIGHTS.other)).toBe(85);
+  });
+
   // The whole point of the redesign. The previous formula gave a shared primary
   // 60 points on top of a 20 baseline, landing exactly on the 80-point "ready
   // to reuse" threshold - so two prompts sharing a broad category were called
@@ -37,7 +59,8 @@ describe("deterministic essay-prompt match scoring", () => {
     });
 
     it("cannot reach the top band on category and perfect semantic fit alone", () => {
-      // 25 + 35 + 0 shared themes + 0 (functions differ across groups) = 60.
+      // 25 + 40 + 0 shared themes + 0 (functions differ across groups) = 65,
+      // and the cross-group mismatch caps the band regardless.
       const result = scoreMatch({
         ...base,
         essaySecondaryFamilySlugs: [],
@@ -45,8 +68,8 @@ describe("deterministic essay-prompt match scoring", () => {
         essayFunction: "reflect",
         promptFunction: "discuss-future-contribution",
       });
-      expect(result.factors.semantic).toBe(35);
-      expect(result.contentFitScore).toBe(60);
+      expect(result.factors.semantic).toBe(40);
+      expect(result.contentFitScore).toBe(65);
       expect(result.recommendedAction).toBe("reusable-edits");
     });
   });
@@ -97,7 +120,10 @@ describe("deterministic essay-prompt match scoring", () => {
 
     it("treats an unknown function as neutral, never as a mismatch", () => {
       const unknown = scoreMatch({ ...duke, essayFunction: null, promptFunction: "discuss-future-contribution" });
-      expect(unknown.factors.function).toBe(10);
+      // Exactly half of 15, unrounded. Rounding the factor to 8 would put every
+      // unknown-function pair half a point above true half credit, and that is
+      // most pairs, since an essay has no function until it is linked.
+      expect(unknown.factors.function).toBe(7.5);
       expect(unknown.ceilings).not.toContain("the prompt asks for something this essay does not do");
       // Neutral has to sit strictly between a mismatch and a match, or an essay
       // with no recorded function is either punished or flattered.
@@ -174,36 +200,36 @@ describe("deterministic essay-prompt match scoring", () => {
         essayFunction: "reflect",
         promptFunction: "reflect",
       });
-      expect(best.factors).toEqual({ primary: 0, semantic: 40, secondary: 20, function: 25 });
+      expect(best.factors).toEqual({ primary: 0, semantic: 45, secondary: 20, function: 20 });
       expect(best.contentFitScore).toBe(85);
       expect(best.recommendedAction).toBe("reusable-slight-edits");
     });
 
     it("applies when either side is Other, not only both", () => {
-      expect(scoreMatch({ ...base, promptPrimaryFamilySlug: "other", semanticZScore: 5 }).factors.semantic).toBe(40);
-      expect(scoreMatch({ ...base, essayPrimaryFamilySlug: "other", semanticZScore: 5 }).factors.semantic).toBe(40);
+      expect(scoreMatch({ ...base, promptPrimaryFamilySlug: "other", semanticZScore: 5 }).factors.semantic).toBe(45);
+      expect(scoreMatch({ ...base, essayPrimaryFamilySlug: "other", semanticZScore: 5 }).factors.semantic).toBe(45);
     });
 
     it("does not reweight a pair whose categories merely differ", () => {
       // "No category exists" and "the categories disagree" are different
       // situations. Reweighting the second would reward genuine mismatch.
       const mismatch = scoreMatch({ ...base, promptPrimaryFamilySlug: "why-major", semanticZScore: 5 });
-      expect(mismatch.factors.semantic).toBe(35);
+      expect(mismatch.factors.semantic).toBe(40);
       expect(mismatch.factors.primary).toBe(0);
     });
   });
 
   describe("semantic similarity", () => {
     it("scores neutral, not zero, when no provider is configured", () => {
-      expect(scoreMatch(base).factors.semantic).toBe(18);
-      expect(scoreMatch({ ...base, semanticZScore: null }).factors.semantic).toBe(18);
+      expect(scoreMatch(base).factors.semantic).toBe(20);
+      expect(scoreMatch({ ...base, semanticZScore: null }).factors.semantic).toBe(20);
     });
 
     it("reads a calibrated z-score, saturating at both ends", () => {
       expect(scoreMatch({ ...base, semanticZScore: -3 }).factors.semantic).toBe(0);
-      expect(scoreMatch({ ...base, semanticZScore: 0 }).factors.semantic).toBe(12);
-      expect(scoreMatch({ ...base, semanticZScore: 2 }).factors.semantic).toBe(35);
-      expect(scoreMatch({ ...base, semanticZScore: 9 }).factors.semantic).toBe(35);
+      expect(scoreMatch({ ...base, semanticZScore: 0 }).factors.semantic).toBe(13);
+      expect(scoreMatch({ ...base, semanticZScore: 2 }).factors.semantic).toBe(40);
+      expect(scoreMatch({ ...base, semanticZScore: 9 }).factors.semantic).toBe(40);
     });
   });
 
@@ -395,7 +421,7 @@ describe("deterministic essay-prompt match scoring", () => {
         essaySecondaryFamilySlugs: [],
         essayFunction: "reflect",
         promptFunction: "reflect",
-        semanticZScore: zFor(points - 25 - 20),
+        semanticZScore: zFor(points - 25 - 15),
       });
       expect(at(70).recommendedAction).toBe("reusable-slight-edits");
       expect(at(69).recommendedAction).toBe("reusable-edits");

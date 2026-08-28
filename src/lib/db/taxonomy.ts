@@ -28,6 +28,7 @@ export const PROMPT_FAMILIES = [
   ["community", "Community", "A community or group you belong to, how it shaped you, and what you would bring to a new one.", "#59644d"],
   ["diversity", "Identity & Background", "Culture, family, upbringing, identity, lived experience, and formative environment.", "#9a6048"],
   ["challenge-growth", "Challenge & Growth", "A concrete obstacle, barrier, setback, or unexpected path, and what you did about it.", "#7d5a3c"],
+  ["activities-impact", "Activities & Impact", "An activity, role, job, or sustained involvement: what you did, and what came of it.", "#4d6273"],
   ["why-major", "Why Major", "Academic interests, intended field of study, and reasons for pursuing it.", "#56617a"],
   ["why-us", "Why Us", "Institutional fit: specific programs, resources, culture, location, and intended contribution.", "#8a493f"],
   ["personal-statement", "Personal Statement", "Genuinely open-topic prompts: you choose what to write about. Rare, and not a fallback.", "#7b403c"],
@@ -41,14 +42,17 @@ export const PROMPT_FAMILIES = [
 // into. The classifier derives them from text and the import path records them
 // as internal tags. There is no UI for these.
 //
-// `challenge-growth` used to be in this list and is not any more: it is a
-// primary category again (see PROMPT_FAMILIES). Leaving it here as well would
-// have recorded the same fact in two places, and matching would then have
-// double-counted a challenge prompt - once as a shared category and again as a
-// shared tag.
+// `challenge-growth` and `activities-impact` both used to be in this list and
+// are not any more: each is a primary category (see PROMPT_FAMILIES). Leaving
+// one here as well would record the same fact in two places, and matching would
+// then double-count it - once as a shared category and again as a shared tag.
+//
+// Being a primary does not stop a concept being someone else's *secondary*.
+// Activities & Impact is the secondary on nine prompts whose central request is
+// something else, and those are stored as non-primary family links, exactly as
+// Community and Why Us already are.
 export const DERIVED_CONCEPT_TAGS = [
   "intellectual-curiosity",
-  "activities-impact",
   "values-meaning",
 ] as const;
 
@@ -57,7 +61,6 @@ export const DERIVED_CONCEPT_TAGS = [
 // classification; the three that collapse into `other` also gain the tag above.
 export const RETIRED_FAMILY_SLUGS: Record<string, (typeof DERIVED_CONCEPT_TAGS)[number]> = {
   "intellectual-curiosity": "intellectual-curiosity",
-  "activities-impact": "activities-impact",
   "values-meaning": "values-meaning",
 };
 
@@ -73,7 +76,10 @@ export const LEGACY_FAMILY_SLUG_MAP: Record<string, string> = {
   // Challenge & Growth classifications intact rather than having them
   // collapsed and then rebuilt from the catalogue review.
   "challenge-growth": "challenge-growth",
-  "activities-impact": "other",
+  // Not "other" any more, for the same reason as challenge-growth above: a
+  // workspace still on the original ten keeps its Activities & Impact
+  // classifications where they are instead of having them collapsed and rebuilt.
+  "activities-impact": "activities-impact",
   "values-meaning": "other",
 };
 
@@ -102,10 +108,10 @@ export const SECONDARY_TAGS = [
   // Internal matching signal only. No UI exposes these; the import path writes
   // them and matching reads them.
   //
-  // "challenge & growth" stays in this list even though Challenge & Growth is
-  // a primary category again, because production workspaces already hold rows
-  // with that name and dropping it from the seed would orphan them. Nothing
-  // writes it any more.
+  // "challenge & growth" and "activities & impact" stay in this list even
+  // though both are primary categories again, because production workspaces
+  // already hold rows with those names and dropping them from the seed would
+  // orphan them. Nothing writes either any more.
   "intellectual curiosity",
   "challenge & growth",
   "activities & impact",

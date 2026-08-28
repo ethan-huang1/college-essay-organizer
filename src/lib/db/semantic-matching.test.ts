@@ -88,8 +88,13 @@ describe("semantic matching, end to end", () => {
     // material, which is a band ceiling rather than a score penalty.
     const elsewhere = ranked.filter((row) => row.prompt.school !== "Brown University" && row.schoolSpecificityRisk === "high");
     expect(elsewhere.length).toBeGreaterThan(0);
+    // The guarantee is a ceiling, so the assertion is "never better than this"
+    // rather than "exactly this". A ceiling only lowers a band: a high-risk pair
+    // whose score is already under the reuse floor is correctly new-response,
+    // and asserting an exact band would couple this to the scoring weights.
+    const capped = new Set(["reusable-significant-edits", "new-response"]);
     for (const row of elsewhere) {
-      expect(row.recommendedAction, `${row.prompt.school}: ${row.prompt.title}`).toBe("reusable-significant-edits");
+      expect(capped, `${row.prompt.school}: ${row.prompt.title}`).toContain(row.recommendedAction);
     }
   });
 

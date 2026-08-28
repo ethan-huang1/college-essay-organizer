@@ -32,7 +32,7 @@ describe("accounts", () => {
 
     expect(snapshot?.workspace.kind).toBe("personal");
     expect(snapshot?.workspace.userId).toBe(user.id);
-    expect(snapshot?.families).toHaveLength(10);
+    expect(snapshot?.families).toHaveLength(11);
     // A brand-new account starts genuinely empty.
     expect(snapshot?.schools).toHaveLength(0);
     expect(snapshot?.prompts).toHaveLength(0);
@@ -104,7 +104,7 @@ describe("accounts", () => {
 
     const rows = await connection.db.select().from(workspaces).where(eq(workspaces.userId, user.id));
     expect(rows).toHaveLength(1);
-    expect((await getWorkspaceSnapshot(connection.db, personalWorkspaceId(user.id)))?.families).toHaveLength(10);
+    expect((await getWorkspaceSnapshot(connection.db, personalWorkspaceId(user.id)))?.families).toHaveLength(11);
   });
 
   it("removes a user's workspace and all its contents with the account", async () => {

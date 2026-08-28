@@ -229,13 +229,14 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
       const populated = new Set(classified.map(effective));
       for (const slug of [
         "why-us", "why-major", "community", "diversity", "shorts",
-        "personal-statement", "challenge-growth", "roommate", "reading-list", "other",
+        "personal-statement", "challenge-growth", "activities-impact",
+        "roommate", "reading-list", "other",
       ]) {
         expect(populated, slug).toContain(slug);
       }
-      // All ten. If this ever fails for `other`, check that the review still
+      // All eleven. If this ever fails for `other`, check that the review still
       // uses it as a real category rather than as a fallback.
-      expect(populated.size).toBe(10);
+      expect(populated.size).toBe(11);
     });
 
     it("reserves Personal Statement for genuinely open-topic prompts", () => {

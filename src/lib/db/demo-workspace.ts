@@ -127,6 +127,18 @@ export const DEMO_ESSAYS: readonly DemoEssay[] = [
     content:
       "The little free library outside our building was empty for most of a year. Not vandalized — emptied, steadily, by neighbors who needed books and had no way to return them. My first instinct was a sign-out sheet. My second, better instinct was to ask why anyone would sign a sheet for a box of paperbacks. So I stopped trying to enforce return and started trying to increase supply: a drive at my school, a standing agreement with a used bookstore for their unsellable stock, a shelf I built badly and rebuilt well. The library is full now, and it empties constantly, which is the point.",
   },
+  // Demonstrates the Activities & Impact category: a sustained role with a
+  // concrete outcome, which is what makes that category primary rather than a
+  // theme. Synthetic, like every essay here.
+  {
+    title: "Three Years of Saturday Mornings",
+    family: "Activities & Impact",
+    status: "ready",
+    targetWordCount: 350,
+    designation: "canonical",
+    content:
+      "I ran the equipment desk at the community pool for three summers, which sounds like handing out kickboards and mostly was. The part I would defend is the binder. When I started, lost goggles were an argument: a parent would insist their child had checked in a pair, and there was no way to know. I built a tag system out of a laminator and a roll of coloured tape, and then — because the tags kept going missing too — a one-page log that took eleven seconds to fill in and settled every dispute in under a minute. By my third summer the guards had stopped asking me to arbitrate anything, which I took as the point rather than a demotion. I trained two people to replace me and left the binder behind. I hear it is on its fourth volume.",
+  },
   {
     title: "The Argument I Lost",
     family: "Other",
@@ -300,6 +312,7 @@ export async function resetDemoWorkspace(db: AppDatabase): Promise<DemoWorkspace
 
   const assignmentPlan: [string, string, number][] = [
     ["What I Would Bring to a Hall", "Roommate", 2],
+    ["Three Years of Saturday Mornings", "Activities & Impact", 2],
     ["The Metronome", "Personal Statement", 2],
     ["Fixing the Free Library", "Community", 2],
   ];

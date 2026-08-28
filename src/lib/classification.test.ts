@@ -115,8 +115,11 @@ describe("deterministic prompt/essay classification", () => {
     it("emits seeded tag names so essay and prompt tags share one vocabulary", () => {
       expect(classifyText("Tell us about a research question you fell down a rabbit hole exploring.").tags)
         .toContain("intellectual curiosity");
-      expect(classifyText("Describe your most meaningful extracurricular project and its impact.").tags)
-        .toContain("activities & impact");
+      // Not a tag any more: Activities & Impact is a primary category, so an
+      // activities prompt classifies into it rather than being tagged with it.
+      // Recording both would let matching count one concept twice.
+      expect(classifyText("Describe your most meaningful extracurricular activity and its impact.").primarySlug)
+        .toBe("activities-impact");
       expect(classifyText("Reflect on a time you held an opposing view and changed your mind.").tags)
         .toContain("disagreement");
       expect(classifyText("What principle matters most to you and why?").tags).toContain("values & meaning");
@@ -140,7 +143,7 @@ describe("deterministic prompt/essay classification", () => {
       for (const tag of emitted) expect(seeded, `"${tag}" is not a seeded tag`).toContain(tag);
     });
 
-    it("covers the review's twelve tag secondaries, not only the original three", () => {
+    it("covers the review's eleven tag secondaries, not only the original three", () => {
       // An essay earns secondary signal only through these rules, so a tag the
       // rules cannot produce is one the essay side can never match on.
       const samples: [string, string][] = [
