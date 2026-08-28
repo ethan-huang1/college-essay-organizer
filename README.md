@@ -20,7 +20,7 @@ Schools → Prompts → Essay categories → Essays → Reuse opportunities
 |---|---|
 | **Overview** (`/`) | How much work is there, how much is done, and where can one essay do double duty? |
 | **All prompts** (`/schools`) | Every prompt grouped by school, one scannable row each, filterable by school, category, status, or text. |
-| **Categories** (`/families`) | The same prompts grouped by the ten-category taxonomy — *Intellectual Curiosity — 14 prompts across 11 schools* — so cross-school overlap is obvious. |
+| **Categories** (`/families`) | The same prompts grouped by the eleven-category taxonomy — *Why Major — 61 prompts across 31 schools* — so cross-school overlap is obvious. |
 | **My essays** (`/essays`) | The essay library: drafts, immutable versions, and which prompts each essay answers. |
 | **Reuse** (`/reuse`) | Per essay: prompts it already answers, prompts it could answer, and prompts it must **not** be reused for. |
 
@@ -35,9 +35,12 @@ Switch between them in the sidebar's Workspace panel. They never share records.
   curated registry and classifies them automatically. Colleges can be renamed or
   removed (with a confirmation step) at any time.
 - **Example workspace** — a reproducible demo seeded by running the *same* import
-  pipeline over 19 real schools, plus 7 clearly labelled sample essays: ~112
-  prompts, all ten categories, and real reuse opportunities. "Reset example"
-  rebuilds it from scratch and never touches your own work.
+  pipeline over 20 real schools, plus 9 clearly labelled sample essays: all
+  eleven categories and real reuse opportunities, including the case a student
+  most needs to see — an essay that names one college and must **not** be
+  recycled at another. "Reset example" rebuilds it from scratch and never touches
+  your own work. The sample essays are synthetic and labelled as such; they are
+  nobody's real writing.
 
 ## Quick start
 
@@ -144,26 +147,138 @@ Re-importing a school is idempotent: prompts are matched on a stable
 wording has changed is flagged `needs-review` with the previous text recorded in
 `prompt_change_log`.
 
-## Classification and matching are deterministic
+## The eleven categories
 
-There is no LLM in the request path. Both systems are pure functions that are
-fully explainable from their inputs, which is what makes them testable and what
-lets the UI show *why* it suggested something.
+```
+Community · Identity & Background · Challenge & Growth · Activities & Impact
+Why Major · Why Us · Personal Statement · Short Answer · Roommate
+Reading List · Other
+```
 
-- **Classification** ([`classification.ts`](src/lib/classification.ts)) scores
-  prompt text against keyword sets for the ten categories and assigns one
-  primary plus up to three secondary categories. Any classification can be
-  overridden per prompt, which is recorded as a manual override.
-- **Matching** ([`matching.ts`](src/lib/matching.ts)) scores each essay against
-  each prompt on category overlap, word-count fit, and
-  institution-specificity risk — independently, so a strong thematic match with
-  another school's name in it is still correctly downgraded. It returns a score,
-  the matched themes, the missing requirements, and one of
-  `ready-to-reuse` / `minor-adaptation` / `major-adaptation` / `new-response`.
+Two of these are worth explaining, because both were arrived at by measurement
+rather than taste:
+
+- **Personal Statement means "choose essentially any topic you want"** — nothing
+  more. It holds **2** of the 255 catalogue prompts. A broad, reflective prompt
+  about community belongs in Community. Letting it drift back into a catch-all is
+  what previously made any two of 106 prompts read as a strong match.
+- **Other means a genuinely bespoke framing**, not "unclassified". It is the
+  largest category at 80 prompts, and it participates in matching through its
+  secondary themes rather than being excluded — otherwise a third of the
+  catalogue would match nothing a student had ever written.
+
+Seventeen **secondary themes** sit underneath (Contribution, Intellectual
+Curiosity, Values, Creativity, Disagreement, Leadership, Service…). Six of them
+are also primary categories; the rest exist only as themes. A category is never
+repeated among its own secondaries.
+
+## How classification works
+
+Catalogue prompts are **not** classified by keyword matching. All 255 carry a
+hand-reviewed primary category, secondary themes, and prompt function, committed
+as data in [`category-review.ts`](src/lib/retrieval/category-review.ts) and
+generated from a reviewed spreadsheet
+([`docs/evaluation/source-review.csv`](docs/evaluation/source-review.csv)) by
+`scripts/regenerate-category-review.mts`. Changing a classification means editing
+that spreadsheet and re-running the script.
+
+The keyword classifier in [`classification.ts`](src/lib/classification.ts)
+remains, and does two jobs: classifying prompts a student adds that are not in
+the catalogue, and deriving secondary themes from an essay's own text. A student
+can override any classification, recorded as `source: 'manual'`, and no automated
+pass — import, migration, or reclassification — may overwrite it.
+
+## How reuse is scored
+
+Four independent factors, summed to a score out of 100. **Nothing is
+subtracted**: school-specific material and word count are *editing cost*, and
+they lower the band through ceilings rather than the score, so the score answers
+"does this essay answer this prompt?" and the band answers "how much work is
+it?".
+
+| Factor | Weight | What it reads |
+|---|---|---|
+| Primary category | 25 | Do they want the same *kind* of essay? |
+| Semantic similarity | 40 | Do the actual texts mean the same thing? |
+| Secondary overlap | 20 | 7 points per shared theme, capped at 20 |
+| Prompt function | 15 | Does the essay *do* what the prompt asks? |
+
+Primary category is deliberately the **smallest** factor. An earlier design gave
+it 60 points on top of a 20 baseline, landing exactly on the threshold for "ready
+to reuse" — so two prompts sharing a broad category were called ready to submit
+unchanged, and nothing in the score ever read the essay.
+
+**Prompt function** is the factor students most need and least expect: *"describe
+a community that shaped you"* and *"how will you contribute to our community"*
+share a topic and want different essays. Each prompt is labelled with one of
+eight functions (describe, reflect, explain impact, demonstrate growth, explain
+motivation, discuss future contribution, connect to school, state a future goal),
+and a mismatch across the retrospective/forward boundary caps the band no matter
+how high the score.
+
+### Four bands, and no "ready to reuse"
+
+Essentially every reused essay needs some tailoring, so no label claims
+otherwise:
+
+| Score | Label |
+|---|---|
+| 70–100 | Reusable with slight edits |
+| 60–69 | Reusable with edits |
+| 50–59 | Reusable with significant edits |
+| < 50 | New response recommended |
+
+The 60–69 / 50–59 split is load-bearing: **68** means "a reasonably strong
+foundation", **52** means "substantial material is salvageable but expect to
+rewrite most of it".
 
 An essay that names one school is flagged **high risk** against a different
-school's fit prompt and surfaced as "Do not reuse here" rather than quietly
-hidden.
+school's fit prompt and capped, never quietly hidden — a strong Stanford "Why Us"
+essay is a genuinely useful starting point for Duke, it simply cannot be
+submitted unchanged.
+
+## Semantic similarity runs locally
+
+The only model in the project. [`embedding.ts`](src/lib/embedding.ts) runs
+`all-MiniLM-L6-v2` through ONNX **on this machine**: no API key, no network at
+inference time, and no essay text leaves the process — the same privacy
+constraint that ruled out third-party document sync.
+
+Two details that are not optional, both found by measuring rather than reasoning:
+
+- **One text per call.** Batching pads every text to the longest in the batch and
+  mean-pools over the padding, so a text's vector depends on its neighbours —
+  measured at cosine 0.991 between the same prompt in two different batches,
+  against 1.000000 embedded twice alone. It is also *faster*, because padding
+  wastes compute.
+- **Similarity is calibrated, never raw.** Real cosines from this model sit in a
+  narrow 0.02–0.25 band: an essay about rebuilding a free library scores 0.253
+  against the prompt it answers and 0.020 against "why engineering at Princeton".
+  Real signal, unreadable by any absolute threshold. Each prompt is z-scored
+  against that essay's own distribution, which asks the question that matters —
+  *is this prompt closer than the average prompt?*
+
+**With no model available the whole app still works.** Semantic similarity scores
+its neutral value, every band stays reachable, and nothing errors. That fallback
+is the rollback path for the feature, and it is the path the entire test suite
+runs on.
+
+## Origin prompts
+
+The matcher knows what an essay *does* because the student can say which prompt
+it was written for — either picking one from their college list or pasting a
+prompt from outside it (a scholarship, a class assignment, a college not yet
+added). An essay started from a prompt records it automatically.
+
+Origin is deliberately **not** the same as an assignment. Assignments are
+many-to-many and grow every time a suggestion is accepted; origin is one prompt
+and never moves. Conflating them let a later assignment redefine what an essay
+was — the suggestion the student accepted would become the evidence for itself.
+
+Function is resolved in a fixed order of authority: explicit catalogue origin →
+pasted origin, classified from its text → earliest assignment, for essays
+predating this → the essay's own text → unknown, which scores neutral rather than
+as a mismatch. Existing essays stay null and keep working.
 
 ## Architecture
 
@@ -236,7 +351,10 @@ knowing:
 - `essay_prompt_matches` is a full recompute, not an incremental cache, so a
   stale match cannot survive an edit.
 - `assigned_essay_responses` has a unique index on `prompt_id`: a prompt has at
-  most one current response.
+  most one current response. It answers "where is this essay used", which is a
+  different question from `essays.origin_prompt_id` — "what was it written for".
+  The latter is a nullable FK with `on delete set null`, so an essay outlives the
+  prompt record it came from.
 
 ## Verification
 
@@ -245,8 +363,14 @@ knowing:
 ```
 
 Runs ESLint (including type-aware promise rules), a strict TypeScript check,
-the Vitest suite (72 tests), a production build, and the 80-test
+the Vitest suite (279 tests), a production build, and the 103-assertion
 overnight-orchestration suite.
+
+The suite runs with embeddings **disabled**, so every assertion holds identically
+on a machine with the model cached and one without — a test whose result depends
+on whether a 25MB download happened is flaky, not passing. Two files opt back in
+and skip themselves when the model is genuinely absent, so the real path is still
+covered.
 
 The persistence tests run against **PGlite** — real Postgres compiled to WASM,
 in-process — applying the same committed migrations as production. So `jsonb`,
@@ -260,13 +384,29 @@ Individually: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
 Recorded honestly rather than papered over:
 
-- **The classifier does not recognise real "why us" prompts.** Its keywords
-  match organizer-side phrasing ("why us", "our campus") that actual
-  supplements never use — they say "Why are you applying to Nursing". Those
-  prompts currently land in *Community & Contribution*, and the *Why This
-  School / Program* category will stay empty in a personal workspace until the
-  keyword list is widened. Not fixed yet because it changes classifications for
-  every existing prompt.
+- **Semantic similarity is not available in the deployed build.** The ONNX
+  runtime is bundled but the model weights are not — they are gitignored, and the
+  serverless filesystem is read-only. The app runs correctly on three factors,
+  but scores computed with the model and scores computed without it differ, so a
+  recompute triggered in production will produce lower numbers than a local one.
+  How the weights should reach production is an open decision.
+- **The serverless function is 219MB against a 250MB limit**, up from 2.96MB,
+  entirely from the embedding dependency described above. 88% of the ceiling
+  consumed for a capability that is not currently active.
+- **Prompt-function inference is 76.7% precise**, measured against the reviewed
+  catalogue on the 45% of prompts where it commits to an answer. It is only used
+  for prompts outside the catalogue and for legacy essays; every catalogue prompt
+  carries a reviewed function instead. It deliberately answers "unknown" rather
+  than guessing, because a wrong function costs 15 points and can cap a band
+  while an unknown one scores neutral.
+- **Coverage is 51.5% on the prompts where reuse is the point.** A six-essay
+  portfolio finds reusable material for about half a ten-college list, once Why
+  Us, Short Answer, Roommate and Reading List are excluded — those are bespoke by
+  construction and telling a student to write them fresh is correct advice.
+- **No real essays have been evaluated.** Every number in
+  [`docs/evaluation/`](docs/evaluation/) comes from catalogue prompts standing in
+  for essays, or from the nine synthetic demo essays. That bounds the answer
+  rather than settling it.
 - **36 of 100 schools import no prompts** (`needs-review` above). This is a
   data-availability limit, not a bug, and each record says exactly what was
   unresolved.
@@ -284,6 +424,8 @@ Recorded honestly rather than papered over:
 - JSON export/import of a whole workspace is specified but not built.
 - Layout is verified at 1440 / 1200 / 1024 / 768 px; 390 px has not been
   verified on a real device.
+- The origin-prompt UI is built and tested but has not been exercised by a real
+  user in production; the data layer is verified directly instead.
 
 ## Where AI would slot in later
 
@@ -294,6 +436,9 @@ The deterministic layer is deliberately shaped so a model could be added
   shapes. A model-backed implementation could return the same shape, and the
   `classificationSource` column already distinguishes `deterministic` from
   `manual` — a third value is the only schema change needed.
+- The embedding layer is the working proof of that shape: a real model was added
+  as one factor of four, behind a null-returning interface, without any other
+  part of the system learning that it exists.
 - Prompt retrieval is already separated into typed source records with citations,
   so a model could *propose* a record for human confirmation without ever
   writing directly to the prompt table.
@@ -306,6 +451,17 @@ replace a cited official prompt.
 
 ## Project documents
 
+- [docs/reuse-scoring.md](docs/reuse-scoring.md) — the authoritative scoring
+  design: every weight, band, ceiling, and the reasoning behind each.
+- [docs/evaluation/](docs/evaluation/) — what was measured and what it showed,
+  including the numbers that contradicted earlier conclusions:
+  [reuse-scoring.md](docs/evaluation/reuse-scoring.md) (65,025-pair run),
+  [qualitative-review.md](docs/evaluation/qualitative-review.md) (cases judged by
+  reading them), [other-audit.md](docs/evaluation/other-audit.md),
+  [secondary-diagnosis.md](docs/evaluation/secondary-diagnosis.md),
+  [reconciliation.md](docs/evaluation/reconciliation.md).
+- [docs/adaptation-workflow.md](docs/adaptation-workflow.md) — specification for
+  school-specific adaptation, deliberately not built.
 - [MVP_SPEC.md](MVP_SPEC.md) — the product specification this is built against.
 - [AGENT_HANDOFF.md](AGENT_HANDOFF.md) — live status, decisions, and what's next.
 - [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) — operating rules for autonomous runs.
