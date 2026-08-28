@@ -59,9 +59,25 @@ async function getExtractor(): Promise<Extractor | null> {
     if (process.env[DISABLE_ENV_VAR]) return null;
     try {
       const { env, pipeline } = await import("@huggingface/transformers");
-      // Keep the weights inside the repo rather than under node_modules, so a
-      // reinstall does not silently trigger a fresh 25MB download.
-      env.cacheDir = ".model-cache";
+      const { join } = await import("node:path");
+
+      // Load from the committed weights in models/, never from the network.
+      //
+      // This is what makes the factor work in production at all. The serverless
+      // filesystem is read-only outside /tmp, so a runtime download has nowhere
+      // to land: before these files were committed the load failed on every cold
+      // start and the app silently scored three factors instead of four.
+      //
+      // Absolute, because a lambda's working directory is not guaranteed to be
+      // the project root, and a relative path that resolves elsewhere would look
+      // exactly like a missing model.
+      env.localModelPath = join(process.cwd(), "models");
+      // No fallback to the hub. An embedding is only comparable to another from
+      // the same weights, and the 255 committed prompt vectors came from these -
+      // so quietly fetching a different copy would produce numbers that look
+      // fine and mean nothing. Fail loudly instead.
+      env.allowRemoteModels = false;
+
       const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: EMBEDDING_DTYPE });
       return extractor as unknown as Extractor;
     } catch (error) {

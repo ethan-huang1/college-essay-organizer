@@ -163,7 +163,8 @@ rather than taste:
   about community belongs in Community. Letting it drift back into a catch-all is
   what previously made any two of 106 prompts read as a strong match.
 - **Other means a genuinely bespoke framing**, not "unclassified". It is the
-  largest category at 80 prompts, and it participates in matching through its
+  largest category at **80 of the 255 catalogue prompts** (a given workspace sees
+  fewer — a 36-college list holds 40), and it participates in matching through its
   secondary themes rather than being excluded — otherwise a third of the
   catalogue would match nothing a student had ever written.
 
@@ -258,6 +259,13 @@ Two details that are not optional, both found by measuring rather than reasoning
   against that essay's own distribution, which asks the question that matters —
   *is this prompt closer than the average prompt?*
 
+The weights are **committed** under [`models/`](models/) (~23MB) and loaded with
+`allowRemoteModels` off, so production has them and inference never reaches the
+network. They were not committed at first, and the failure was instructive: the
+serverless filesystem is read-only, the download had nowhere to land, and the app
+ran on three factors with no error anywhere. A test now asserts the weights ship
+and that the build is told to include them, because nothing else would notice.
+
 **With no model available the whole app still works.** Semantic similarity scores
 its neutral value, every band stays reachable, and nothing errors. That fallback
 is the rollback path for the feature, and it is the path the entire test suite
@@ -339,7 +347,7 @@ stale. Completion counts deliberately cover current-cycle prompts only.
 
 ## Data model
 
-15 tables under [`src/lib/db/schema.ts`](src/lib/db/schema.ts). The parts worth
+16 tables under [`src/lib/db/schema.ts`](src/lib/db/schema.ts). The parts worth
 knowing:
 
 - `essays` holds current content; `essay_versions` is append-only. Editing never
@@ -384,15 +392,12 @@ Individually: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
 Recorded honestly rather than papered over:
 
-- **Semantic similarity is not available in the deployed build.** The ONNX
-  runtime is bundled but the model weights are not — they are gitignored, and the
-  serverless filesystem is read-only. The app runs correctly on three factors,
-  but scores computed with the model and scores computed without it differ, so a
-  recompute triggered in production will produce lower numbers than a local one.
-  How the weights should reach production is an open decision.
-- **The serverless function is 219MB against a 250MB limit**, up from 2.96MB,
-  entirely from the embedding dependency described above. 88% of the ceiling
-  consumed for a capability that is not currently active.
+- **The serverless function is 88.6MB**, up from 2.96MB before embeddings: 35.7MB
+  of ONNX runtime and 23.7MB of model weights. It was briefly 219MB of a 250MB
+  limit, because `onnxruntime-node` ships prebuilt binaries for five platforms and
+  a Linux lambda can run one; the other four are excluded in
+  [`next.config.ts`](next.config.ts). Cold starts are slower than a
+  2.96MB function's.
 - **Prompt-function inference is 76.7% precise**, measured against the reviewed
   catalogue on the 45% of prompts where it commits to an answer. It is only used
   for prompts outside the catalogue and for legacy essays; every catalogue prompt
@@ -426,6 +431,9 @@ Recorded honestly rather than papered over:
   verified on a real device.
 - The origin-prompt UI is built and tested but has not been exercised by a real
   user in production; the data layer is verified directly instead.
+- Scores stored before the model shipped were computed with it (from a local
+  run), so they already reflect four factors. Any workspace whose matches predate
+  that will be rewritten on its next recompute.
 
 ## Where AI would slot in later
 
