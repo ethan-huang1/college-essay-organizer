@@ -29,9 +29,15 @@ prompts were in one category. The score never read the essay.
 | Factor | Weight | Scoring | Source |
 |---|---|---|---|
 | 1. Primary category | **25** | all-or-nothing | `category-review.ts` |
-| 2. Semantic similarity | **35** | calibrated z-score (below) | local embedding model |
+| 2. Semantic similarity | **40** | calibrated z-score (below) | local embedding model |
 | 3. Secondary overlap | **20** | 7 per shared secondary or tag, cap 20 | `category-review.ts` |
-| 4. Prompt-function fit | **20** | all-or-nothing | `category-review.ts` |
+| 4. Prompt-function fit | **15** | all-or-nothing; neutral is 7.5 | `category-review.ts` |
+
+Five points moved from function to semantic. Function keeps its band ceiling,
+which is where most of its value was — measured, the ceiling changes an outcome
+only on pairs the points had already decided — while semantic is the factor that
+lies strictly between its floor and ceiling on 86% of pairs and so does the
+actual discriminating. Totals are unchanged, so no band threshold moves.
 
 `contentFitScore = sum`, range 0–100. **Nothing is subtracted.** Word count and
 school-specificity are editing cost, not content mismatch, and act only as band
@@ -95,10 +101,15 @@ reweighted onto the signals that do carry information:
 | Factor | Normal | `Other` |
 |---|---|---|
 | Primary | 25 | **0 — unavailable** |
-| Semantic | 35 | **40** |
+| Semantic | 40 | **45** |
 | Secondary | 20 | **20** |
-| Function | 20 | **25** |
+| Function | 15 | **20** |
 | **Maximum** | 100 | **85** |
+
+`Other`'s ceiling is 85 because it forfeits the whole 25-point primary factor and
+gets 10 of that back across semantic and function. It is not a flat 15-point
+deduction: an `Other` pair with strong semantic and function evidence outscores a
+same-category pair that is weak on both.
 
 Applies when **either side's primary is `Other`**. There is no categorical bar on
 reaching the top band: an `Other` pair needs 70 out of the 85 available to it —
@@ -253,7 +264,9 @@ useful. Report:
 ## Acceptance criteria
 
 1. A shared primary alone scores 25 → `new-response`; with a perfect semantic
-   score it reaches only 60.
+   score it reaches only 65.
+1b. A perfect score is exactly 100 and `Other`'s ceiling is exactly 85. A maximum
+   anywhere else silently reshifts every band boundary.
 2. A function mismatch keeps the Duke-reflect vs Penn-contribute pair out of the
    top band, asserted by score (64) *and* independently by the ceiling.
 3. An `Other` pair earns 0 on factor 1, tops out at 85, and reaches 70 only with

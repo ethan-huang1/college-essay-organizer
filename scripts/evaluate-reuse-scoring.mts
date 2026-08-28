@@ -20,7 +20,7 @@ import { calibrate, cosine, decodeVector } from "../src/lib/embedding.ts";
 import { categoryReview } from "../src/lib/retrieval/category-review.ts";
 import { PROMPT_VECTORS } from "../src/lib/retrieval/prompt-vectors.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
-import { type MatchInput, type RecommendedAction, scoreMatch } from "../src/lib/matching.ts";
+import { type MatchInput, type RecommendedAction, SCORING, scoreMatch } from "../src/lib/matching.ts";
 
 type Item = {
   school: string;
@@ -240,7 +240,7 @@ const topBand = factorStats(semantic.scored.filter((r) => r.action === "reusable
 w("| Factor | Max | Mean, all pairs | Share of points | Mean, top-band pairs | Share of points |");
 w("|---|---|---|---|---|---|");
 for (const key of ["primary", "semantic", "secondary", "function"] as const) {
-  const max = key === "primary" ? 25 : key === "semantic" ? 35 : 20;
+  const max = SCORING.WEIGHTS.normal[key];
   w(`| ${key} | ${max} | ${allPairs.mean[key].toFixed(1)} | ${(allPairs.share[key] * 100).toFixed(1)}% | ${topBand.mean[key].toFixed(1)} | ${(topBand.share[key] * 100).toFixed(1)}% |`);
 }
 w();

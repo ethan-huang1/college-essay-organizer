@@ -8,8 +8,14 @@
 > secondaries, exactly as stored. Nothing below is a restoration of a lost
 > category; every proposal here would be a new one, and needs a product
 > decision rather than a bug fix.
+>
+> **Since that reconciliation, Activities & Impact has been promoted to a
+> primary category** by owner decision — 8 review rows, 14 catalogue records —
+> so `Other` is now 80 of 255 (31.4%) rather than 94 (36.9%). The proposal
+> tables below are regenerated against the new taxonomy, so the
+> Activities & Impact row now measures only what is *left* in `Other`.
 
-`Other` holds **94 of 255** catalogue prompts (36.9%) and is the least
+`Other` holds **80 of 255** catalogue prompts (31.4%) and is the least
 reusable category in the evaluation. Every one of them was read; this report
 tests whether the families I found in them are real or invented.
 
@@ -24,12 +30,12 @@ prove nothing.
 
 | Proposed category | Prompts | % of `Other` | % of catalogue | inside | outside | ratio |
 |---|---|---|---|---|---|---|
-| Activities & Impact | 36 | 38.3% | 14.1% | 0.323 | 0.240 | **1.35×** |
-| Intellectual Curiosity | 14 | 14.9% | 5.5% | 0.253 | 0.224 | **1.13×** |
-| Values & Beliefs | 10 | 10.6% | 3.9% | 0.190 | 0.184 | **1.04×** |
-| Creativity & Making | 12 | 12.8% | 4.7% | 0.239 | 0.214 | **1.12×** |
-| Additional Information | 9 | 9.6% | 3.5% | 0.342 | 0.281 | **1.22×** |
-| _residual `Other`_ | 13 | 13.8% | 5.1% | 0.270 | 0.242 | 1.11× |
+| Activities & Impact | 22 | 27.5% | 8.6% | 0.319 | 0.249 | **1.28×** |
+| Intellectual Curiosity | 14 | 17.5% | 5.5% | 0.253 | 0.224 | **1.13×** |
+| Values & Beliefs | 10 | 12.5% | 3.9% | 0.190 | 0.184 | **1.04×** |
+| Creativity & Making | 12 | 15.0% | 4.7% | 0.239 | 0.214 | **1.12×** |
+| Additional Information | 9 | 11.3% | 3.5% | 0.342 | 0.281 | **1.22×** |
+| _residual `Other`_ | 13 | 16.3% | 5.1% | 0.270 | 0.242 | 1.11× |
 
 For reference, the same measure on the existing primary categories, which are
 the bar a new category should clear:
@@ -39,6 +45,7 @@ the bar a new category should clear:
 | community | 7 | 0.399 | 0.234 | 1.71× |
 | diversity | 30 | 0.326 | 0.232 | 1.40× |
 | challenge-growth | 23 | 0.394 | 0.259 | 1.52× |
+| activities-impact | 14 | 0.258 | 0.244 | 1.06× |
 | why-major | 61 | 0.331 | 0.231 | 1.44× |
 | why-us | 22 | 0.262 | 0.213 | 1.23× |
 | shorts | 13 | 0.260 | 0.192 | 1.35× |
@@ -46,33 +53,25 @@ the bar a new category should clear:
 
 ## Activities & Impact
 
-36 prompts, 38.3% of `Other`, across 20 schools.
-Cohesion 0.323 inside against 0.240 outside (1.35×).
+22 prompts, 27.5% of `Other`, across 14 schools.
+Cohesion 0.319 inside against 0.249 outside (1.28×).
 
 | Prompt | School | Function | Secondaries |
 |---|---|---|---|
-| An extracurricular, job, or responsibility | Stanford University | describe | activities & impact |
-| Activities, employment, travel, or family responsibilities | Harvard University | describe | activities & impact |
-| Most significant activity | Georgetown University | reflect | activities & impact |
-| Your Voice: service and civic engagement | Princeton University | reflect | service, contribution, values & meaning |
-| PIQ 1: Leadership experience _(×7)_ | UC systemwide | explain-impact | leadership, contribution |
-| PIQ 3: Greatest talent or skill _(×7)_ | UC systemwide | explain-impact | activities & impact |
-| PIQ 7: Made your community a better place _(×7)_ | UC systemwide | explain-impact | contribution |
-| A life of purpose | Dartmouth College | explain-impact | values & meaning, contribution, activities & impact |
-| Service to others | University of Notre Dame | explain-impact | service, contribution |
-| University Honors: curiosity in action | North Carolina State University | explain-impact | intellectual curiosity, activities & impact |
-| Engaging with a Pitzer core value | Pitzer College | explain-impact | values & meaning, contribution, activities & impact |
-| Make a space more welcoming | University of Richmond | explain-impact | contribution |
-| Turn ideas into actions | University of Richmond | demonstrate-growth | challenge-growth, activities & impact, contribution |
-| Proudest activity | University of Texas at Austin | reflect | activities & impact |
+| Your Voice: service and civic engagement | Princeton University | reflect | activities-impact, service, contribution, values & meaning |
+| PIQ 3: Greatest talent or skill _(×7)_ | UC systemwide | explain-impact | activities-impact |
+| PIQ 7: Made your community a better place _(×7)_ | UC systemwide | explain-impact | activities-impact, contribution |
+| A life of purpose | Dartmouth College | explain-impact | activities-impact, values & meaning, contribution |
+| Service to others | University of Notre Dame | explain-impact | activities-impact, service, contribution |
+| Engaging with a Pitzer core value | Pitzer College | explain-impact | activities-impact, values & meaning, contribution |
+| Make a space more welcoming | University of Richmond | explain-impact | activities-impact, contribution |
 | Leaders and citizens | University of Michigan | discuss-future-contribution | contribution, leadership, goals & future |
-| Advancing equity and justice | Villanova University | explain-impact | contribution, service |
+| Advancing equity and justice | Villanova University | explain-impact | activities-impact, contribution, service |
 | Someone borrowing your strength | Villanova University | explain-impact | contribution, values & meaning |
-| Life outside school | Washington and Lee University | demonstrate-growth | activities & impact, contribution |
 
 ## Intellectual Curiosity
 
-14 prompts, 14.9% of `Other`, across 10 schools.
+14 prompts, 17.5% of `Other`, across 10 schools.
 Cohesion 0.253 inside against 0.224 outside (1.13×).
 
 | Prompt | School | Function | Secondaries |
@@ -94,7 +93,7 @@ Cohesion 0.253 inside against 0.224 outside (1.13×).
 
 ## Values & Beliefs
 
-10 prompts, 10.6% of `Other`, across 8 schools.
+10 prompts, 12.5% of `Other`, across 8 schools.
 Cohesion 0.190 inside against 0.184 outside (1.04×).
 
 | Prompt | School | Function | Secondaries |
@@ -112,21 +111,21 @@ Cohesion 0.190 inside against 0.184 outside (1.04×).
 
 ## Creativity & Making
 
-12 prompts, 12.8% of `Other`, across 11 schools.
+12 prompts, 15.0% of `Other`, across 11 schools.
 Cohesion 0.239 inside against 0.214 outside (1.12×).
 
 | Prompt | School | Function | Secondaries |
 |---|---|---|---|
 | PIQ 2: Creative side _(×7)_ | UC systemwide | describe | creativity |
-| Scientific Drive: Making | California Institute of Technology | describe | activities & impact, creativity |
+| Scientific Drive: Making | California Institute of Technology | describe | activities-impact, creativity |
 | BA+BFA: artistic influences | Oberlin College | describe | creativity, intellectual curiosity |
-| An engineering or science project | Tufts University | describe | activities & impact, creativity |
+| An engineering or science project | Tufts University | describe | activities-impact, creativity |
 | A specific portfolio piece | Tufts University | describe | creativity |
-| M&T: Something you built | University of Pennsylvania | describe | activities & impact, creativity |
+| M&T: Something you built | University of Pennsylvania | describe | activities-impact, creativity |
 
 ## Additional Information
 
-9 prompts, 9.6% of `Other`, across 9 schools.
+9 prompts, 11.3% of `Other`, across 9 schools.
 Cohesion 0.342 inside against 0.281 outside (1.22×).
 
 | Prompt | School | Function | Secondaries |
@@ -137,7 +136,7 @@ Cohesion 0.342 inside against 0.281 outside (1.22×).
 
 ## Residual `Other`
 
-13 prompts, 13.8% of `Other`, cohesion 0.270 against 0.242.
+13 prompts, 16.3% of `Other`, cohesion 0.270 against 0.242.
 
 | Prompt | School | Function | Why it stays |
 |---|---|---|---|
@@ -157,8 +156,8 @@ Cohesion 0.342 inside against 0.281 outside (1.22×).
 
 ## If all five were adopted
 
-- `Other` would absorb out **81 of 94** prompts (86.2%).
-- `Other` would fall from 36.9% of the catalogue to **5.1%**.
+- `Other` would absorb out **67 of 80** prompts (83.8%).
+- `Other` would fall from 31.4% of the catalogue to **5.1%**.
 - The taxonomy would grow from 10 primaries to 15.
 
 ## Would a new category actually improve recommendations?
@@ -174,9 +173,9 @@ Pairs of prompts repeated across UC campuses are excluded.
 
 | Proposed category | Distinct pairs | Cross 50 | Cross 60 | Cross 70 |
 |---|---|---|---|---|
-| Activities & Impact | 306 | 125 (40.8%) | 94 (30.7%) | 37 (12.1%) |
-| Intellectual Curiosity | 182 | 66 (36.3%) | 42 (23.1%) | 21 (11.5%) |
-| Values & Beliefs | 90 | 39 (43.3%) | 25 (27.8%) | 8 (8.9%) |
-| Creativity & Making | 30 | 10 (33.3%) | 14 (46.7%) | 7 (23.3%) |
-| Additional Information | 6 | 1 (16.7%) | 1 (16.7%) | 1 (16.7%) |
+| Activities & Impact | 90 | 35 (38.9%) | 36 (40.0%) | 35 (38.9%) |
+| Intellectual Curiosity | 182 | 76 (41.8%) | 41 (22.5%) | 25 (13.7%) |
+| Values & Beliefs | 90 | 41 (45.6%) | 24 (26.7%) | 7 (7.8%) |
+| Creativity & Making | 30 | 14 (46.7%) | 7 (23.3%) | 6 (20.0%) |
+| Additional Information | 6 | 1 (16.7%) | 0 (0.0%) | 1 (16.7%) |
 

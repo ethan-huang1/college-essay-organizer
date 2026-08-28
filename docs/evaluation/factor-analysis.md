@@ -118,10 +118,10 @@ pair could reach, which is the reason a weight cannot simply be lowered.
 
 | Function rule | Weight | Redistributed to | Out of | ≥50 | ≥60 | ≥70 | Cross-category ≥50 |
 |---|---|---|---|---|---|---|---|
-| all-or-nothing (today) | 20 | — (max falls) | 100 | 5.9% | 2.9% | 1.3% | 503 |
-| graded, half credit for adjacent | 20 | — (max falls) | 100 | 6.8% | 3.5% | 1.6% | 560 |
-| all-or-nothing | 15 | — (max falls) | 95 | 4.9% | 2.3% | 1.0% | 219 |
-| graded | 15 | — (max falls) | 95 | 5.5% | 2.8% | 1.2% | 255 |
-| graded, 5 points to semantic | 15 | semantic | 100 | 6.8% | 3.5% | 1.7% | 539 |
-| graded, 5 points to primary | 15 | primary | 100 | 6.7% | 3.8% | 1.9% | 255 |
+| all-or-nothing (today) | 20 | — (max falls) | 105 | 7.2% | 3.7% | 1.8% | 988 |
+| graded, half credit for adjacent | 20 | — (max falls) | 105 | 8.3% | 4.4% | 2.2% | 1238 |
+| all-or-nothing | 15 | — (max falls) | 100 | 6.2% | 3.0% | 1.4% | 594 |
+| graded | 15 | — (max falls) | 100 | 6.9% | 3.6% | 1.7% | 696 |
+| graded, 5 points to semantic | 15 | semantic | 105 | 8.5% | 4.4% | 2.3% | 1326 |
+| graded, 5 points to primary | 15 | primary | 105 | 8.0% | 4.6% | 2.5% | 696 |
 

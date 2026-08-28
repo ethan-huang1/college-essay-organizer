@@ -24,11 +24,12 @@ import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval
 const PRIMARY_TO_SLUG: Record<string, string> = {
   "Community": "community", "Background & Identity": "diversity", "Why Us": "why-us",
   "Why Major": "why-major", "Challenge & Growth": "challenge-growth",
+  "Activities & Impact": "activities-impact",
   "Personal Statement": "personal-statement", "Short Answer": "shorts",
   "Other": "other", "Reading List": "reading-list", "Roommate": "roommate",
 };
 const SECONDARY_TO_STORED: Record<string, string> = {
-  "Academic Context": "academic context", "Activities & Impact": "activities & impact",
+  "Academic Context": "academic context", "Activities & Impact": "activities-impact",
   "Background & Identity": "diversity", "Challenge & Growth": "challenge-growth",
   "Collaboration": "collaboration", "Community": "community", "Contribution": "contribution",
   "Course": "course", "Creativity": "creativity", "Disagreement": "disagreement",
@@ -37,13 +38,41 @@ const SECONDARY_TO_STORED: Record<string, string> = {
   "Why Major": "why-major", "Why Us": "why-us",
 };
 
-type Row = { school: string; title: string; primary: string; secondaries: string[]; fn: string };
-const rows: Row[] = readFileSync("docs/evaluation/source-review.tsv", "utf8")
-  .split("\n").filter((line) => line.trim())
-  .map((line) => {
-    const [school, title, primary, secondaries, fn] = line.split("\t");
-    return { school, title, primary, secondaries: secondaries ? secondaries.split(";").filter(Boolean) : [], fn };
-  });
+type Row = { school: string; title: string; primary: string; secondaries: string[] };
+
+/** Minimal RFC4180 reader: the review's prompt text contains commas and quotes. */
+function parseCsv(text: string): Record<string, string>[] {
+  const table: string[][] = [];
+  let row: string[] = [], field = "", quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { field += '"'; i += 1; }
+      else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(field); field = ""; }
+    else if (ch === "\n") { row.push(field); table.push(row); row = []; field = ""; }
+    else if (ch !== "\r") field += ch;
+  }
+  if (field || row.length) { row.push(field); table.push(row); }
+  const header = table.shift()!.map((h) => h.replace(/^\ufeff/, "").trim());
+  return table.filter((r) => r.some((c) => c.trim()))
+    .map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+
+// The owner's file, byte-for-byte. Override columns win where filled, which is
+// how a classification is meant to be changed.
+const csv = parseCsv(readFileSync("docs/evaluation/source-review.csv", "utf8"));
+const UC_LABEL = "University of California (systemwide)";
+const rows: Row[] = csv.map((r) => ({
+  school: r.School === UC_LABEL ? "UC_SYSTEMWIDE" : r.School,
+  title: r["Prompt title"],
+  primary: r["Your primary override"] || r["Final primary"] || r["Proposed primary"],
+  secondaries: [1, 2, 3]
+    .map((n) => r[`Your secondary ${n}`] || r[`Final secondary ${n}`] || r[`Secondary ${n}`])
+    .filter(Boolean),
+}));
 
 const UC = [...new Set(listCoveredSchoolNames().filter((s) => s.startsWith("University of California,")))].sort();
 /** One review row can stand for seven campus prompts. */
@@ -64,8 +93,13 @@ const pct = (n: number, d: number) => `${((n / Math.max(d, 1)) * 100).toFixed(1)
 
 w("# Reconciliation: manual review against the running system");
 w();
-w("Source of truth: [source-review.tsv](source-review.tsv), the transcription of");
-w("the owner's `Essay_Prompt_Category_Review_Claude.csv`.");
+w("Source of truth: [source-review.csv](source-review.csv), a byte copy of the");
+w("owner's `Essay_Prompt_Category_Review_Claude.csv`.");
+w();
+w("The owner's decisions applied on top of it - promoting eight prompts to");
+w("Activities & Impact and adding it as a secondary to nine others - are encoded in");
+w("`scripts/regenerate-category-review.mts`, so the differences reported below");
+w("against the raw CSV are expected and are listed as such.");
 w();
 
 w("## Every primary category in the review");
@@ -116,19 +150,19 @@ for (const row of expanded) {
   const actualSecondaries = [...actual.families, ...actual.tags].sort();
   if (actual.primary !== expectedPrimary) {
     mismatches += 1;
-    detail.push(`| ${row.school} | ${row.title} | primary | review \`${expectedPrimary}\` vs stored \`${actual.primary}\` |`);
+    detail.push(`| ${row.school} | ${row.title} | primary | CSV \`${expectedPrimary}\` -> stored \`${actual.primary}\` |`);
   }
   if (JSON.stringify(expectedSecondaries) !== JSON.stringify(actualSecondaries)) {
     mismatches += 1;
-    detail.push(`| ${row.school} | ${row.title} | secondaries | review [${expectedSecondaries}] vs stored [${actualSecondaries}] |`);
+    detail.push(`| ${row.school} | ${row.title} | secondaries | CSV [${expectedSecondaries}] -> stored [${actualSecondaries}] |`);
   }
 }
 if (mismatches === 0) {
-  w(`**No.** All ${expanded.length} reviewed prompts carry exactly the primary and secondary`);
-  w("assignments the review gives them. Nothing was renamed away, merged, dropped, or");
-  w("left in `Other` against the review's instruction.");
+  w(`**Nothing.** All ${expanded.length} prompts carry exactly the primary and secondary`);
+  w("assignments the CSV gives them, with no owner decisions outstanding.");
 } else {
-  w(`**${mismatches} mismatches.**`);
+  w(`**${mismatches} differences**, all of which should be owner decisions from the`);
+  w("list above rather than losses. Anything here that is not one of those is a bug.");
   w();
   w("| School | Prompt | Field | Difference |");
   w("|---|---|---|---|");
@@ -156,7 +190,7 @@ for (const name of ["Activities & Impact", "Creativity"]) {
       if (seen.has(r.title)) continue;
       seen.add(r.title);
       const copies = asFirstSecondaryOfOther.filter((x) => x.title === r.title).length;
-      w(`- ${r.title}${copies > 1 ? ` _(×${copies})_` : ""} — ${copies > 1 ? "UC systemwide" : r.school} · secondaries [${r.secondaries.join(", ")}] · function ${r.fn}`);
+      w(`- ${r.title}${copies > 1 ? ` _(×${copies})_` : ""} — ${copies > 1 ? "UC systemwide" : r.school} · secondaries [${r.secondaries.join(", ")}]`);
     }
     w();
   }

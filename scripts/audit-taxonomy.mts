@@ -139,6 +139,12 @@ w("> appear 0 times as a primary in the review** and 24 and 19 times as");
 w("> secondaries, exactly as stored. Nothing below is a restoration of a lost");
 w("> category; every proposal here would be a new one, and needs a product");
 w("> decision rather than a bug fix.");
+w(">");
+w("> **Since that reconciliation, Activities & Impact has been promoted to a");
+w("> primary category** by owner decision — 8 review rows, 14 catalogue records —");
+w("> so `Other` is now 80 of 255 (31.4%) rather than 94 (36.9%). The proposal");
+w("> tables below are regenerated against the new taxonomy, so the");
+w("> Activities & Impact row now measures only what is *left* in `Other`.");
 w();
 w(`\`Other\` holds **${others.length} of ${all.length}** catalogue prompts (${pct(others.length, all.length)}) and is the least`);
 w("reusable category in the evaluation. Every one of them was read; this report");
@@ -170,7 +176,7 @@ w("the bar a new category should clear:");
 w();
 w("| Existing category | Prompts | inside | outside | ratio |");
 w("|---|---|---|---|---|");
-for (const slug of ["community", "diversity", "challenge-growth", "why-major", "why-us", "shorts", "roommate"]) {
+for (const slug of ["community", "diversity", "challenge-growth", "activities-impact", "why-major", "why-us", "shorts", "roommate"]) {
   const members = all.filter((p) => p.primary === slug);
   if (members.length < 2) continue;
   const c = cohesion(members, all);

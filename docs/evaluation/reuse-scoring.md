@@ -25,7 +25,7 @@ and its ceiling for every pair, and read the ceiling case as a forecast: it
 said a six-essay portfolio would cover 89.4% of a ten-college list once the
 model landed, and concluded the weights were sound and only the model was
 missing. **That was wrong.** With real embeddings, aggregate coverage is
-40.4% without a provider and 36.2% with one. An upper bound assumes every
+36.2% without a provider and 36.2% with one. An upper bound assumes every
 pair is maximally similar, which no corpus is; it was a bound, and treating it
 as a prediction overstated the outcome by roughly a factor of two.
 
@@ -33,9 +33,9 @@ as a prediction overstated the outcome by roughly a factor of two.
 
 It moved quality, not quantity, and that is the right direction:
 
-- Top-band pairs went from 774 to 1,478.
-- Coverage at ≥60 went from 19.1% to 29.8%; at ≥70 from 14.9% to 21.3%.
-- Coverage at ≥50 **fell** from 40.4% to 36.2%.
+- Top-band pairs went from 132 to 1,457.
+- Coverage at ≥60 went from 19.1% to 31.9%; at ≥70 from 2.1% to 21.3%.
+- Coverage at ≥50 **fell** from 36.2% to 36.2%.
 
 That last line is a correction rather than a regression. With no provider the
 factor scores a neutral 18 of 35 for *every* pair, including unrelated ones,
@@ -46,14 +46,14 @@ the model says they are not similar. Fewer, better recommendations.
 
 Full table in §3b. In one line each, across all 65,025 pairs:
 
-- **Semantic (35)** earns 64% of all points awarded and sits strictly
+- **Semantic (35)** earns 69% of all points awarded and sits strictly
   between its floor and ceiling on 86% of pairs. It is the factor doing the
   discriminating, which is what a 35 weight should buy.
-- **Function (20)** earns 17% overall but 27% among top-band pairs - it acts
+- **Function (20)** earns 13% overall but 19% among top-band pairs - it acts
   mostly as a gate on the strong end rather than a spread across the middle.
 - **Primary (25)** is at its floor on 91% of pairs, which is arithmetic rather
   than weakness: with ten categories, most pairs of prompts do not share one.
-- **Secondary (20)** is the weak factor. It earns a mean of 1.4 of 20 and is at
+- **Secondary (20)** is the weak factor. It earns a mean of 1.5 of 20 and is at
   its floor on 82% of pairs. Recorded, not acted on: the weights are fixed for
   this run, and the likeliest cause is thin theme data rather than a wrong
   weight - the review gives most prompts one or two secondaries, so two prompts
@@ -62,11 +62,11 @@ Full table in §3b. In one line each, across all 65,025 pairs:
 ### The remaining gap is `Other`, not the weights
 
 Coverage restricted to categories where reuse is the point is
-45.5%, and the misses are concentrated: Why Us, Short Answer, Roommate
+51.5%, and the misses are concentrated: Why Us, Short Answer, Roommate
 and Reading List score near zero *correctly* - a Why Us essay is the one thing
 a student must not recycle. Excluding those, one category stands out:
 
-`Other` covers **16.7%** of its prompts at ≥50 and 0.0% at ≥70, the
+`Other` covers **33.3%** of its prompts at ≥50 and 0.0% at ≥70, the
 worst of any category where reuse is expected - and it is the largest category
 in the catalogue at 94 of 255 prompts.
 
@@ -81,7 +81,7 @@ would only disguise it.
 ### Ceilings
 
 The function ceiling is present on 45.7% of pairs and changes the band on
-**5** of 65,025. Forfeiting the factor's 20 points already drops almost
+**77** of 65,025. Forfeiting the factor's 20 points already drops almost
 every mismatched pair below 70, so the ceiling is a guarantee rather than a
 mechanism - it makes the owner's reflective-vs-future-contribution case
 impossible rather than merely unlikely. Worth keeping, not worth describing as
@@ -89,8 +89,8 @@ doing heavy lifting.
 
 ### Ranking moved further, and needs a release note
 
-Mean top-10 overlap with the superseded formula is 28.9%, and the previously
-top-ranked suggestion survives in the top 10 for 25.1% of prompts. Lower than
+Mean top-10 overlap with the superseded formula is 34.0%, and the previously
+top-ranked suggestion survives in the top 10 for 26.7% of prompts. Lower than
 without embeddings, as expected: the semantic factor reorders within a category
 where the old formula could not tell two prompts apart at all. Intended, but a
 student who noted yesterday's best suggestion will not find it today.
@@ -105,7 +105,7 @@ List is a different primary category and a different function, so factors 1 and
 4 both score zero. This is the concrete argument against letting semantic
 similarity dominate the formula.
 
-Across the corpus, **287** pairs have z > 2 while disagreeing on both category
+Across the corpus, **295** pairs have z > 2 while disagreeing on both category
 and function. Their band distribution shows whether the other factors are
 holding:
 
@@ -113,8 +113,8 @@ holding:
 |---|---|
 | `reusable-slight-edits` | 0 |
 | `reusable-edits` | 0 |
-| `reusable-significant-edits` | 0 |
-| `new-response` | 287 |
+| `reusable-significant-edits` | 75 |
+| `new-response` | 220 |
 
 **A batching bug that would have corrupted every comparison.** Passing several
 texts to the embedding pipeline at once pads them to the longest and mean-pools
@@ -145,36 +145,36 @@ contribution.
 
 | Band | **With semantic similarity** | Without a provider |
 |---|---|---|
-| `reusable-slight-edits` | **1,478 (2.3%)** | 774 (1.2%) |
-| `reusable-edits` | **1,513 (2.3%)** | 1,375 (2.1%) |
-| `reusable-significant-edits` | **2,410 (3.7%)** | 3,192 (4.9%) |
-| `new-response` | **59,624 (91.7%)** | 59,684 (91.8%) |
+| `reusable-slight-edits` | **1,457 (2.2%)** | 132 (0.2%) |
+| `reusable-edits` | **1,603 (2.5%)** | 2,096 (3.2%) |
+| `reusable-significant-edits` | **2,497 (3.8%)** | 3,181 (4.9%) |
+| `new-response` | **59,468 (91.5%)** | 59,616 (91.7%) |
 
 ### 2. `Other` distribution against the rest
 
-`Other` is involved in **39,104** of 65,025 pairs (60.1%), because it is 94 of the 255 prompts.
+`Other` is involved in **34,400** of 65,025 pairs (52.9%), because it is 94 of the 255 prompts.
 
 | Band | Pairs involving `Other` | All other pairs |
 |---|---|---|
-| `reusable-slight-edits` | 339 (0.9%) | 1,139 (4.4%) |
-| `reusable-edits` | 519 (1.3%) | 994 (3.8%) |
-| `reusable-significant-edits` | 919 (2.4%) | 1,491 (5.8%) |
-| `new-response` | 37,327 (95.5%) | 22,297 (86.0%) |
+| `reusable-slight-edits` | 279 (0.8%) | 1,178 (3.8%) |
+| `reusable-edits` | 495 (1.4%) | 1,108 (3.6%) |
+| `reusable-significant-edits` | 848 (2.5%) | 1,649 (5.4%) |
+| `new-response` | 32,778 (95.3%) | 26,690 (87.2%) |
 
 ### 3. `Other` pairs reaching the top band
 
-339 at the semantic upper bound. A sample, with factor breakdowns:
+279 at the semantic upper bound. A sample, with factor breakdowns:
 
 | Essay (stand-in) | Prompt | Score | primary/semantic/secondary/function |
 |---|---|---|---|
-| Amherst College: Option A: Curiosity | Amherst College: Option A: Curiosity | 79 | 0/40/14/25 |
-| Amherst College: Option A: Curiosity | Stanford University: Genuinely excited about learning | 72 | 0/40/7/25 |
-| Boston College: A meaningful conversation partner | Boston College: A meaningful conversation partner | 79 | 0/40/14/25 |
-| Boston College: The danger of a single story | Washington and Lee University: Johnson Scholarship: authentic representation | 72 | 0/33/14/25 |
-| Boston College: A fourth 'Be' | Amherst College: Option A: Curiosity | 72 | 0/40/7/25 |
-| Boston College: A fourth 'Be' | Boston College: A fourth 'Be' | 79 | 0/40/14/25 |
-| Bowdoin College: The Offer of the College | Bowdoin College: The Offer of the College | 72 | 0/40/7/25 |
-| Bowdoin College: The Offer of the College | Washington and Lee University: Johnson Scholarship: education and social frameworks | 72 | 0/40/7/25 |
+| Amherst College: Option A: Curiosity | Amherst College: Option A: Curiosity | 79 | 0/45/14/20 |
+| Amherst College: Option A: Curiosity | Stanford University: Genuinely excited about learning | 72 | 0/45/7/20 |
+| Boston College: A meaningful conversation partner | Boston College: A meaningful conversation partner | 79 | 0/45/14/20 |
+| Boston College: The danger of a single story | Washington and Lee University: Johnson Scholarship: authentic representation | 71 | 0/37/14/20 |
+| Boston College: A fourth 'Be' | Amherst College: Option A: Curiosity | 72 | 0/45/7/20 |
+| Boston College: A fourth 'Be' | Boston College: A fourth 'Be' | 79 | 0/45/14/20 |
+| Bowdoin College: The Offer of the College | Bowdoin College: The Offer of the College | 72 | 0/45/7/20 |
+| Bowdoin College: The Offer of the College | Washington and Lee University: Johnson Scholarship: education and social frameworks | 72 | 0/45/7/20 |
 
 ### 3b. What each factor actually contributes
 
@@ -184,12 +184,12 @@ almost nothing is not paying for its weight.
 
 | Factor | Max | Mean, all pairs | Share of points | Mean, top-band pairs | Share of points |
 |---|---|---|---|---|---|
-| primary | 25 | 2.3 | 11.4% | 19.2 | 24.4% |
-| semantic | 35 | 12.8 | 64.4% | 32.9 | 41.8% |
-| secondary | 20 | 1.4 | 7.0% | 5.6 | 7.1% |
-| function | 20 | 3.4 | 17.1% | 21.1 | 26.8% |
+| primary | 25 | 2.3 | 11.2% | 20.1 | 25.4% |
+| semantic | 40 | 14.3 | 69.0% | 38.1 | 48.0% |
+| secondary | 20 | 1.5 | 7.2% | 5.9 | 7.4% |
+| function | 15 | 2.6 | 12.6% | 15.3 | 19.2% |
 
-Top band is 1,478 pairs. `Other` pairs use a different vector (0/40/20/25), so
+Top band is 1,457 pairs. `Other` pairs use a different vector (0/40/20/25), so
 the maxima column is the normal one and mixed rows sit slightly above it.
 
 Discrimination - how often each factor separates one prompt from another for the
@@ -198,10 +198,10 @@ floor nor its ceiling:
 
 | Factor | At floor | In between | At ceiling |
 |---|---|---|---|
-| primary | 91.0% | 0.0% | 9.0% |
-| semantic | 13.2% | 85.7% | 1.0% |
-| secondary | 81.6% | 18.3% | 0.1% |
-| function | 85.1% | 6.5% | 8.4% |
+| primary | 90.7% | 0.0% | 9.3% |
+| semantic | 13.1% | 86.0% | 0.9% |
+| secondary | 80.6% | 19.3% | 0.1% |
+| function | 85.1% | 7.2% | 7.6% |
 
 ### 3c. Distribution of the secondary and function factors
 
@@ -211,18 +211,18 @@ Asked for directly: how often each factor lands on each of its possible values.
 
 | Points | Pairs | Share |
 |---|---|---|
-| 0 | 53,045 | 81.6% |
-| 7 | 11,058 | 17.0% |
-| 14 | 865 | 1.3% |
-| 20 | 57 | 0.1% |
+| 0 | 52,439 | 80.6% |
+| 7 | 11,290 | 17.4% |
+| 14 | 1,228 | 1.9% |
+| 20 | 68 | 0.1% |
 
 **function**
 
 | Points | Pairs | Share |
 |---|---|---|
 | 0 | 55,356 | 85.1% |
-| 20 | 4,213 | 6.5% |
-| 25 | 5,456 | 8.4% |
+| 15 | 4,705 | 7.2% |
+| 20 | 4,964 | 7.6% |
 
 Both sides of every pair here are catalogue prompts, so both have a reviewed
 function - which is why the function factor never shows its neutral 10 in this
@@ -231,8 +231,8 @@ case is measured in recommendation-cases.md instead.
 
 ### 3d. Does the 45-point cross-category ceiling still exist?
 
-Across 50,328 pairs whose primary categories differ, the highest score is
-**79** and **1,281** (2.5%) reach the reuse floor.
+Across 52,568 pairs whose primary categories differ, the highest score is
+**79** and **1,373** (2.6%) reach the reuse floor.
 
 The 45 ceiling was measured with real essays, where the function factor is a
 constant neutral 10 because an unassigned essay has no recorded function. Here
@@ -243,16 +243,16 @@ which is the whole reason capturing an essay's origin prompt matters.
 
 | Score | Pairs |
 |---|---|
-| 72 | 279 |
-| 87 | 251 |
-| 80 | 226 |
-| 79 | 128 |
-| 76 | 86 |
-| 77 | 83 |
-| 70 | 56 |
-| 75 | 49 |
+| 72 | 309 |
+| 87 | 253 |
+| 80 | 225 |
+| 79 | 127 |
+| 94 | 97 |
+| 77 | 89 |
+| 76 | 70 |
+| 71 | 61 |
 
-**56** of 1,483 top-band scores sit exactly on 70 (3.8%).
+**59** of 1,534 top-band scores sit exactly on 70 (3.8%).
 
 ### 4. Boundary examples
 
@@ -260,49 +260,47 @@ which is the whole reason capturing an essay's origin prompt matters.
 
 | Score | Band | Essay (stand-in) → Prompt |
 |---|---|---|
-| 71 | `reusable-slight-edits` | Option A: Unique experiences → Rice University: Residential College perspectives |
-| 71 | `reusable-slight-edits` | The danger of a single story → Harvard University: A strong disagreement |
-| 69 | `reusable-edits` | The danger of a single story → Texas A&M University: Your story |
-| 69 | `reusable-edits` | The Offer of the College → Amherst College: Option A: Curiosity |
+| 71 | `reusable-slight-edits` | The danger of a single story → Washington and Lee University: Johnson Scholarship: authentic representation |
+| 71 | `reusable-slight-edits` | Brown | RISD Dual Degree → Oberlin College: BA+BFA: integrated-arts vision |
+| 69 | `reusable-edits` | Option A: Unique experiences → Johns Hopkins University: Engaging across differences and building bridges |
+| 69 | `reusable-edits` | Option A: Unique experiences → Rice University: Residential College perspectives |
 
 **Around 60** — the edits floor:
 
 | Score | Band | Essay (stand-in) → Prompt |
 |---|---|---|
-| 61 | `reusable-edits` | Option A: Unique experiences → New York University: Bridge builders |
-| 61 | `reusable-edits` | A meaningful conversation partner → Yale University: A topic or idea that excites you |
+| 61 | `reusable-edits` | Option A: Curiosity → Boston College: A fourth 'Be' |
+| 61 | `reusable-edits` | Option A: Disagreement and connection → Washington and Lee University: A diverse aspect you would bring |
 | 59 | `reusable-significant-edits` | Option A: Curiosity → Yale University: Choose One: personal experience |
-| 59 | `reusable-significant-edits` | Option A: Curiosity → Duke University: Viewpoints and experiences |
+| 59 | `reusable-significant-edits` | A meaningful conversation partner → Yale University: A topic or idea that excites you |
 
 **Around 50** — the reuse floor:
 
 | Score | Band | Essay (stand-in) → Prompt |
 |---|---|---|
-| 51 | `reusable-significant-edits` | Option A: Curiosity → Brown University: Growing up and contributing to Brown |
-| 51 | `reusable-significant-edits` | Option A: Curiosity → Villanova University: A lesson in life |
-| 49 | `new-response` | Option A: Disagreement and connection → Dartmouth College: Finding common ground |
-| 49 | `new-response` | A meaningful tradition → Duke University: Viewpoints and experiences |
+| 51 | `reusable-significant-edits` | Option A: Curiosity → Bowdoin College: The Offer of the College |
+| 51 | `reusable-significant-edits` | Option A: Curiosity → Washington and Lee University: Johnson Scholarship: education and social frameworks |
+| 49 | `new-response` | Option A: Curiosity → Brown University: Growing up and contributing to Brown |
+| 49 | `new-response` | Option A: Curiosity → Villanova University: A lesson in life |
 
 ### 5. False-positive candidates in the top band
 
 Pairs scoring 70+ whose categories differ - the shape most likely to be wrong,
 since they reach the band on semantic, theme and function evidence alone.
 
-**6** at the semantic upper bound (0.0% of all pairs). Sample:
+**4** at the semantic upper bound (0.0% of all pairs). Sample:
 
 | Essay category | Prompt category | Score | Essay → Prompt |
 |---|---|---|---|
 | why-us | why-major | 71 | Brown | RISD Dual Degree → BA+BFA: integrated-arts vision |
 | why-major | why-us | 70 | Intellectual curiosity at Haverford → Combine curiosity, creativity, and Rochester opportunities |
 | why-major | why-us | 75 | BA+BFA: integrated-arts vision → Brown | RISD Dual Degree |
-| why-us | why-major | 70 | Combine curiosity, creativity, and Rochester opportunities → Academic interest (A.B. degree or undecided) |
-| why-us | why-major | 70 | Combine curiosity, creativity, and Rochester opportunities → Intellectual curiosity at Haverford |
-| why-us | why-major | 71 | Combine curiosity, creativity, and Rochester opportunities → School-specific: College of Arts and Sciences |
+| why-us | why-major | 70 | Combine curiosity, creativity, and Rochester opportunities → School-specific: College of Arts and Sciences |
 
 ### 6. Function mismatch
 
 - Pairs with a **major** function mismatch: **29,700** (45.7%). With eight functions split evenly across two groups, roughly half of all pairs cross a group boundary, so this number is structural rather than a signal.
-- Pairs where the ceiling actually **changes the band**: **5** (0.0%). Everywhere else the forfeited 20 points had already put the pair below 70, so the ceiling is redundant.
+- Pairs where the ceiling actually **changes the band**: **77** (0.1%). Everywhere else the forfeited 20 points had already put the pair below 70, so the ceiling is redundant.
 - Pairs where either function is unknown: **0** — every catalogue prompt has one, so this is 0 by construction here and non-zero only for prompts a student adds.
 
 ### 7. Word count: ordinary vs extreme
@@ -328,12 +326,12 @@ For each prompt, the top 10 suggestions under the superseded formula compared
 with the top 10 now. Overlap is the measure that matters: a student who saw a
 good suggestion yesterday should still see it.
 
-- Mean top-10 overlap: **28.9%**.
-- The previously top-ranked suggestion is still in the top 10 for **64/255** prompts (25.1%).
+- Mean top-10 overlap: **34.0%**.
+- The previously top-ranked suggestion is still in the top 10 for **68/255** prompts (26.7%).
 
 ### 9. Pairs crossing the raised `new-response` floor
 
-The floor rose from 30 to 50. Of **8,236** pairs the old formula would have recommended, **4,666** (56.7%) now read as `new-response`.
+The floor rose from 30 to 50. Of **9,737** pairs the old formula would have recommended, **5,386** (55.3%) now read as `new-response`.
 
 ### 10. Ceiling attribution
 
@@ -345,8 +343,8 @@ it actually lowered the band below what the score gave. Only the second matters.
 
 | Ceiling | Present | Binding | Binding share |
 |---|---|---|---|
-| the prompt asks for something this essay does not do | 29,700 | 5 | 0.0% |
-| **any** | | 5 | 0.0% |
+| the prompt asks for something this essay does not do | 29,700 | 77 | 0.1% |
+| **any** | | 77 | 0.1% |
 
 School-specificity never fires here: the cross-product supplies no
 school-specific phrases, by design. Its behaviour is covered by unit tests.
@@ -374,17 +372,17 @@ a disappointing number means the weights are wrong or the model is missing.
 
 | College | Prompts | ≥50 no provider | ≥50 semantic | ≥60 no provider | ≥60 semantic | ≥70 no provider | ≥70 semantic |
 |---|---|---|---|---|---|---|---|
-| Harvard University | 5 | 1 | 1 | 1 | 1 | 1 | 1 |
-| Stanford University | 8 | 2 | 2 | 1 | 2 | 1 | 2 |
-| Duke University | 5 | 3 | 3 | 1 | 2 | 0 | 1 |
-| Northwestern University | 6 | 3 | 2 | 1 | 1 | 1 | 1 |
-| Rice University | 4 | 3 | 2 | 2 | 2 | 2 | 2 |
-| University of Michigan | 2 | 2 | 2 | 0 | 1 | 0 | 0 |
-| Boston College | 5 | 3 | 3 | 2 | 3 | 2 | 2 |
+| Harvard University | 5 | 1 | 2 | 1 | 1 | 0 | 1 |
+| Stanford University | 8 | 2 | 2 | 1 | 2 | 0 | 2 |
+| Duke University | 5 | 2 | 2 | 1 | 2 | 0 | 2 |
+| Northwestern University | 6 | 3 | 2 | 1 | 2 | 0 | 1 |
+| Rice University | 4 | 3 | 3 | 2 | 2 | 0 | 1 |
+| University of Michigan | 2 | 1 | 1 | 0 | 1 | 0 | 0 |
+| Boston College | 5 | 3 | 3 | 2 | 3 | 1 | 2 |
 | Davidson College | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
 | University of Richmond | 3 | 1 | 0 | 0 | 0 | 0 | 0 |
 | Texas A&M University | 7 | 1 | 2 | 1 | 2 | 0 | 1 |
-| **Total** | **47** | **40.4%** | **36.2%** | **19.1%** | **29.8%** | **14.9%** | **21.3%** |
+| **Total** | **47** | **36.2%** | **36.2%** | **19.1%** | **31.9%** | **2.1%** | **21.3%** |
 
 Read the `≥50` column as "has some reusable material" and `≥70` as "has a
 strong candidate".
@@ -400,17 +398,18 @@ supposed to serve.
 
 | Prompt category | Prompts | ≥50 | ≥60 | ≥70 | Reuse expected? |
 |---|---|---|---|---|---|
-| other | 12 | 16.7% | 16.7% | 0.0% | yes |
-| diversity | 11 | 54.5% | 45.5% | 36.4% | yes |
-| why-us | 7 | 28.6% | 0.0% | 0.0% | **no** |
+| diversity | 11 | 63.6% | 54.5% | 36.4% | yes |
+| other | 9 | 33.3% | 22.2% | 0.0% | yes |
+| why-us | 7 | 0.0% | 0.0% | 0.0% | **no** |
 | why-major | 5 | 60.0% | 60.0% | 60.0% | yes |
 | shorts | 5 | 0.0% | 0.0% | 0.0% | **no** |
+| activities-impact | 3 | 0.0% | 0.0% | 0.0% | yes |
 | challenge-growth | 3 | 66.7% | 66.7% | 33.3% | yes |
 | roommate | 2 | 0.0% | 0.0% | 0.0% | **no** |
 | community | 2 | 100.0% | 100.0% | 100.0% | yes |
 
-**Restricted to categories where reuse is the point**: 15/33 prompts
-(45.5%) have reusable material at ≥50, and 42.4% at ≥60.
+**Restricted to categories where reuse is the point**: 17/33 prompts
+(51.5%) have reusable material at ≥50, and 45.5% at ≥60.
 
 ### Is that number a property of the formula or of the sample?
 
@@ -421,12 +420,12 @@ scoring.
 
 | Portfolio | ≥50, reuse-expected prompts | ≥60 | ≥70 |
 |---|---|---|---|
-| 1 (first of each category) | 45.5% | 42.4% | 30.3% |
-| 2 (middle of each category) | 36.4% | 15.2% | 3.0% |
-| 3 (last of each category) | 54.5% | 30.3% | 6.1% |
+| 1 (first of each category) | 51.5% | 45.5% | 30.3% |
+| 2 (middle of each category) | 30.3% | 15.2% | 3.0% |
+| 3 (last of each category) | 51.5% | 30.3% | 9.1% |
 
-Range 36.4% to 54.5%, a spread of
-18.2 points. Narrow enough to treat the figure as a property of the scoring rather than of the sample.
+Range 30.3% to 51.5%, a spread of
+21.2 points. Wide enough that the aggregate is sample-dependent and should not be quoted as a single figure.
 
 The remaining 14 prompts (29.8% of the list) are Why Us, Short
 Answer, Roommate or Reading List. Telling a student to write those fresh is
