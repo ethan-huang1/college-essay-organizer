@@ -1,19 +1,5 @@
 import type { NextConfig } from "next";
 
-/**
- * The five platform builds onnxruntime-node ships, of which a Linux x64 lambda
- * needs exactly one.
- *
- * Left in, the serverless function measured **219MB against Vercel's 250MB
- * limit** - 88% of the ceiling for binaries that can never execute there. These
- * four account for ~176MB of it.
- */
-const UNUSED_ONNX_BINARIES = [
-  "node_modules/onnxruntime-node/bin/napi-v6/win32/**",
-  "node_modules/onnxruntime-node/bin/napi-v6/darwin/**",
-  "node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**",
-];
-
 const nextConfig: NextConfig = {
   // onnxruntime-node loads a native .node binary, which cannot be bundled.
   serverExternalPackages: ["better-sqlite3", "onnxruntime-node", "@huggingface/transformers"],
@@ -42,11 +28,18 @@ const nextConfig: NextConfig = {
     "/": ["models/**"],
     "/[section]": ["models/**"],
   },
-  outputFileTracingExcludes: {
-    "/*": UNUSED_ONNX_BINARIES,
-    "/": UNUSED_ONNX_BINARIES,
-    "/[section]": UNUSED_ONNX_BINARIES,
-  },
+  /**
+   * There is deliberately no `outputFileTracingExcludes` entry for the unused
+   * onnxruntime platform binaries, though that is the obvious place for it.
+   *
+   * It does not work here: onnxruntime-node is in `serverExternalPackages`
+   * because it loads a native .node file, and an external package is copied
+   * wholesale rather than traced, so the excludes never applied. Measured across
+   * real deployments - 2.96MB before the dependency, 219.19MB after, and still
+   * 219.19MB with the excludes in place. They changed nothing.
+   *
+   * `scripts/prune-onnx-binaries.mjs`, wired to `prebuild`, deletes them instead.
+   */
   turbopack: {
     root: process.cwd(),
   },

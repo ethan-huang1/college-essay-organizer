@@ -392,12 +392,13 @@ Individually: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
 Recorded honestly rather than papered over:
 
-- **The serverless function is 88.6MB**, up from 2.96MB before embeddings: 35.7MB
-  of ONNX runtime and 23.7MB of model weights. It was briefly 219MB of a 250MB
-  limit, because `onnxruntime-node` ships prebuilt binaries for five platforms and
-  a Linux lambda can run one; the other four are excluded in
-  [`next.config.ts`](next.config.ts). Cold starts are slower than a
-  2.96MB function's.
+- **The serverless function is large.** Measured on real deployments: 2.96MB
+  before embeddings, 219.19MB with the dependency, 227.23MB once the weights were
+  added. `onnxruntime-node` ships prebuilt binaries for five platforms and a
+  Linux lambda runs one, so `scripts/prune-onnx-binaries.mjs` deletes the rest
+  during `prebuild`. `outputFileTracingExcludes` was tried first and measurably
+  did nothing — an external package is copied wholesale rather than traced. Cold
+  starts are slower than a 2.96MB function's regardless.
 - **Prompt-function inference is 76.7% precise**, measured against the reviewed
   catalogue on the 45% of prompts where it commits to an answer. It is only used
   for prompts outside the catalogue and for legacy essays; every catalogue prompt

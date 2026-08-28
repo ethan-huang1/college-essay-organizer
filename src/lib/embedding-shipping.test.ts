@@ -38,12 +38,24 @@ describe("the embedding model ships with the app", () => {
     expect(PROMPT_VECTOR_MODEL).toBe(EMBEDDING_MODEL);
   });
 
-  it("excludes the platform binaries a Linux lambda cannot run", () => {
+  it("prunes the platform binaries a Linux lambda cannot run", () => {
     // 210MB of onnxruntime across five platforms took the function to 219MB of a
-    // 250MB limit. Only linux/x64 is reachable there.
-    expect(config).toContain("outputFileTracingExcludes");
-    for (const platform of ["win32", "darwin", "linux/arm64"]) {
-      expect(config, `${platform} binaries should be excluded`).toContain(platform);
+    // 250MB limit; only linux/x64 is reachable there. Done by deletion in
+    // prebuild rather than by outputFileTracingExcludes, which measurably did
+    // nothing - an external package is copied wholesale, not traced.
+    const prune = readFileSync(join(process.cwd(), "scripts/prune-onnx-binaries.mjs"), "utf8");
+    for (const platform of ["win32/x64", "win32/arm64", "darwin/arm64", "linux/arm64"]) {
+      expect(prune, `${platform} should be pruned`).toContain(platform);
     }
+    // And must keep the one that runs there.
+    expect(prune).toContain('join(root, "linux", "x64")');
+
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as { scripts: Record<string, string> };
+    expect(pkg.scripts.prebuild).toContain("prune-onnx-binaries");
+  });
+
+  it("only prunes on Vercel, so local development keeps its own binary", () => {
+    const prune = readFileSync(join(process.cwd(), "scripts/prune-onnx-binaries.mjs"), "utf8");
+    expect(prune).toContain("process.env.VERCEL");
   });
 });
