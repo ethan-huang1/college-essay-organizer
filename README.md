@@ -392,13 +392,16 @@ Individually: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
 Recorded honestly rather than papered over:
 
-- **The serverless function is large.** Measured on real deployments: 2.96MB
-  before embeddings, 219.19MB with the dependency, 227.23MB once the weights were
-  added. `onnxruntime-node` ships prebuilt binaries for five platforms and a
-  Linux lambda runs one, so `scripts/prune-onnx-binaries.mjs` deletes the rest
-  during `prebuild`. `outputFileTracingExcludes` was tried first and measurably
-  did nothing — an external package is copied wholesale rather than traced. Cold
-  starts are slower than a 2.96MB function's regardless.
+- **The serverless function is large, and its true size is not established.**
+  `vercel inspect` reports 2.96MB before embeddings, 219.19MB with the
+  dependency, and 227.23MB once the weights were added — but that figure did not
+  move when `scripts/prune-onnx-binaries.mjs` verifiably deleted ~176MB of
+  unusable platform binaries (the build log confirms four platforms removed), and
+  it rose by only 8MB for 23MB of weights. Both facts contradict reading it as a
+  sum of included files, so what it measures is unclear and it should not be
+  quoted as headroom against Vercel's 250MB limit. What is established: the prune
+  runs, `outputFileTracingExcludes` did not work for an external package, and
+  cold starts are slower than a 2.96MB function's.
 - **Prompt-function inference is 76.7% precise**, measured against the reviewed
   catalogue on the 45% of prompts where it commits to an answer. It is only used
   for prompts outside the catalogue and for legacy essays; every catalogue prompt
