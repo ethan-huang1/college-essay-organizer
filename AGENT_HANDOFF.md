@@ -432,11 +432,14 @@ none of this fixture data was committed):
 
 ## Next Steps
 
-> **Current objective supersedes the list below.** The active work is the
-> reuse-scoring redesign in [docs/reuse-scoring.md](docs/reuse-scoring.md);
-> the exact next task and its traps are under **Overnight Run State**. The items
-> below remain accurate as the wider P0 backlog and should be picked up only
-> after Stages 1–4 of the current objective are done or explicitly blocked.
+> **Both recent objectives are complete**: the reuse-scoring redesign
+> ([docs/reuse-scoring.md](docs/reuse-scoring.md)) and the UI/UX redesign (see
+> **UI architecture** and **Overnight Run State**). Neither has been deployed.
+> The list below is the wider P0 backlog and is the next thing to pick up.
+>
+> Item 3's "verify desktop/mobile overflow" is now done for the four main views
+> at 1440px, 2880px and 390px; what remains of it is the Playwright workflow.
+> Mobile beyond the no-horizontal-scroll floor is deliberately deferred.
 
 
 0. **Open decisions for a human:** (a) 390 px was never directly verified —
@@ -467,10 +470,47 @@ none of this fixture data was committed):
 ## Overnight Run State
 
 - Disposition: complete
-- Objective: implement the reuse-scoring redesign in
-  [docs/reuse-scoring.md](docs/reuse-scoring.md). **All five stages are done.**
-  What remains is two product decisions - see Blockers.
-- Working tree clean, full canonical gate green (260 Vitest tests, 74s).
+- Objective: **UI/UX redesign — complete.** Both phases of
+  `~/.claude/plans/plan-mode-only-do-majestic-koala.md` are done: top
+  navigation, card/row vocabulary, tokens and split stylesheets, school marks,
+  Overview, Your Prompts, My Essays and the reuse ribbon, Categories, Reuse,
+  the essay editor surface, empty states, the photography machinery and the
+  credits page, plus the parity, contrast and dead-rule sweeps.
+- The previous objective (the reuse-scoring redesign) remains complete and
+  deployed; its record is [docs/reuse-scoring.md](docs/reuse-scoring.md).
+- Working tree clean, full canonical gate green (377 Vitest tests).
+
+### Redesign verification
+
+- `git diff --stat src/lib/` over the whole redesign shows only the additive
+  `school-photos.ts` and its test. No product logic changed.
+- `src/app/redesign-parity.test.ts` pins the filter predicates (moved to
+  `filtering.ts` so they are testable) and the 30 form field names every
+  Server Action reads by string, where a rename is invisible to TypeScript.
+- `src/app/contrast.test.ts` asserts WCAG AA on 29 token pairs and the 12 mark
+  colours, and fails if a colour is added without being checked.
+- Verified in Chrome at 1440px, 2880px and 390px: exactly one
+  `aria-current="page"` and it is the nav tab; filter chips are named removal
+  links carrying neither `aria-pressed` nor `aria-current`; no unlabelled form
+  control; visible focus everywhere, light on the dark nav; keyboard order
+  follows visual order; the account popover opens and closes; no horizontal
+  scroll at any of the three widths.
+- Before/after performance measured against a production build of `059f7f1` in
+  a worktree: [docs/evaluation/redesign-performance.md](docs/evaluation/redesign-performance.md).
+  CLS 0.00 both. **Two honest negatives recorded there:** warm LCP is +57 ms,
+  and first-load bytes are +63% because the two real typefaces cost 85 KB.
+
+### Two traps for the next agent
+
+1. **A bare `"@"` alias in `vitest.config.mts` is a prefix match** and also
+   rewrites `@huggingface/transformers` to `src/huggingface/transformers`,
+   which fails a semantic-matching test with a confusing message. It is
+   anchored on `/^@\//` now; do not "simplify" it back to a string key.
+2. **Local dev points `DATABASE_URL` at the production Neon database.** UI work
+   was done against a throwaway PGlite-over-socket server instead
+   (`@electric-sql/pglite-socket`, `maxConnections` above 1 — the default of 1
+   gives `ECONNRESET` because `openDatabase` uses a 5-connection pool). Do not
+   sign up test accounts against production.
 
 ### Completed
 
@@ -574,10 +614,10 @@ similarity dominate the formula.
 - Last agent: Claude
 ## Last Verified Commit
 
-`b03da7d` — "test: cover the live semantic matching path, and update the design
-doc". The full canonical gate (lint, strict typecheck, 260 Vitest tests,
+`76013d4` — "feat: rebuild the interface around cards, rows, and the reuse
+ribbon". The full canonical gate (lint, strict typecheck, **377 Vitest tests**,
 production build, 103 orchestration assertions) passed immediately before this
-checkpoint and before each commit in this run. The working tree is clean.
+checkpoint. The working tree is clean.
 
 Production is still deployed from `09a9804` plus the reuse hotfixes through
-`2373f8f`. **Nothing in this run has been deployed.**
+`2373f8f`. **Nothing in this run has been deployed, including the redesign.**
