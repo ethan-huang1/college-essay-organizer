@@ -24,7 +24,7 @@ export function AuthCard({
   return (
     <main className="sign-in-frame">
       <div className="sign-in-card">
-        <span className="brand-mark" aria-hidden="true">E</span>
+        <span className="auth-mark" aria-hidden="true">E</span>
         <h1>{signingUp ? "Create your workspace" : "College Essay Organizer"}</h1>
         <p className="sign-in-lede">
           {signingUp

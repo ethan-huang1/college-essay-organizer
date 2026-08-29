@@ -3,12 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { reuseOpportunities, workState, type ReuseMatch } from "@/lib/progress";
+import { reuseOpportunities, type ReuseMatch } from "@/lib/progress";
 import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { canonicalPromptGroups, summarizeWorkloadFor, workspaceWorkload, type WorkloadSummary } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
 import { assignEssayAction } from "../../assignment-actions";
+import { essayMatchesFilters, promptMatchesFilters, type Filters as FilterState } from "../../filtering";
 import {
   createEssayAction,
   deleteEssayAction,
@@ -17,19 +18,24 @@ import {
   updateEssayMetadataAction,
 } from "../../essay-actions";
 import { createPromptAction } from "../../prompt-actions";
-import { AddCollegeForm, ProgressBar, ProgressLine, PromptFields, PromptRow, PromptTableHead } from "../../prompt-ui";
+import { CatalogueStateBadge, CatalogueStateNote } from "../../catalogue-state";
+import { AddCollegeForm, ProgressLine, ProgressRing, PromptFields, PromptRow } from "../../prompt-ui";
+import { SchoolMark } from "../../school-mark";
 import { deleteSchoolAction, setSchoolProgramsAction, updateSchoolAction } from "../../school-actions";
 
+// One vocabulary everywhere - nav, page title, <title>, headings and empty
+// states all use these words. The route keys stay as they are: renaming
+// /schools would break every ?school= link and any bookmark.
 const sections = {
-  schools: { title: "All prompts", description: "Every prompt on your list, grouped by school." },
-  families: { title: "Essay categories", description: "The same question, asked by different schools — where one essay can do more work." },
-  essays: { title: "My essays", description: "Your reusable library: drafts, versions, and the prompts each essay answers." },
-  reuse: { title: "Reuse opportunities", description: "Essays you already have that could answer prompts you have not started." },
+  schools: { title: "Your Prompts", description: "Every prompt on your list, grouped by college." },
+  families: { title: "Categories", description: "The same question, asked by different schools — where one essay can do more work." },
+  essays: { title: "My Essays", description: "Your reusable library: drafts, versions, and the prompts each essay answers." },
+  reuse: { title: "Reuse", description: "Essays you already have that could answer prompts you have not started." },
 } as const;
 
 type SectionName = keyof typeof sections;
 
-type Filters = { school: string; family: string; status: string; q: string; edit: string; remove: string };
+type Filters = FilterState;
 
 // Keeps the current filters in the "edit this prompt" and "remove this school"
 // links, so opening (or cancelling) either never throws away the view the
@@ -71,12 +77,89 @@ function schoolNames(snapshot: WorkspaceSnapshot) {
   return new Map(snapshot.schools.map((school) => [school.id, school.name]));
 }
 
+const WORK_STATE_LABEL: Record<string, string> = {
+  "not-started": "Not started",
+  "in-progress": "In progress",
+  complete: "Complete",
+};
+
+/** The same link `withFilters` builds, minus one filter. */
+function withoutFilter(base: string, filters: Filters, drop: keyof Filters) {
+  return withFilters(base, { ...filters, [drop]: "" });
+}
+
+/**
+ * The filters currently in force, each removable on its own.
+ *
+ * The selects already say what is selected, but only while you look at them;
+ * once the page has scrolled, "why am I seeing 4 of 52 prompts" needs an
+ * answer at the top of the results. These are removal links, not toggles, so
+ * they carry neither aria-pressed nor aria-current - the accessible name says
+ * what activating one does.
+ */
+function FilterChips({
+  base,
+  filters,
+  snapshot,
+  statusLabels,
+}: {
+  base: string;
+  filters: Filters;
+  snapshot: WorkspaceSnapshot;
+  statusLabels: Record<string, string>;
+}) {
+  const chips: { key: keyof Filters; label: string; value: string }[] = [];
+  const school = snapshot.schools.find((entry) => entry.id === filters.school);
+  const family = snapshot.families.find((entry) => entry.id === filters.family);
+  if (school) chips.push({ key: "school", label: "School", value: school.name });
+  if (family) chips.push({ key: "family", label: "Category", value: family.name });
+  if (filters.status) {
+    chips.push({ key: "status", label: "Status", value: statusLabels[filters.status] ?? filters.status });
+  }
+  if (filters.q) chips.push({ key: "q", label: "Search", value: filters.q });
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="filter-chips">
+      <span className="eyebrow-label">Showing</span>
+      {chips.map((chip) => (
+        <Link
+          className="chip"
+          key={chip.key}
+          href={withoutFilter(base, filters, chip.key)}
+          aria-label={`Remove ${chip.label.toLowerCase()} filter: ${chip.value}`}
+        >
+          <span>
+            {chip.label}: <strong>{chip.value}</strong>
+          </span>
+          <span aria-hidden="true">✕</span>
+        </Link>
+      ))}
+      {chips.length > 1 ? (
+        <Link className="text-link" href={base}>Clear all</Link>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * An empty screen is an invitation to act, so it says what to do rather than
+ * only what is missing.
+ *
+ * The illustration is drawn in the palette and is plainly a drawing - it never
+ * poses as a photograph - and it is decorative, so it is hidden from screen
+ * readers and the sentence carries the meaning.
+ */
 function EmptyWorkspace({ children }: { children: ReactNode }) {
   return (
-    <div className="empty-state">
-      <span className="empty-mark" aria-hidden="true">—</span>
+    <div className="empty-state card">
+      <svg className="empty-art" viewBox="0 0 120 80" aria-hidden="true" focusable="false">
+        <rect x="14" y="10" width="58" height="60" rx="6" fill="var(--surface-sunk)" />
+        <rect x="48" y="18" width="58" height="60" rx="6" fill="var(--brand-soft)" stroke="var(--brand)" strokeWidth="1.5" />
+        <path d="M58 34h38M58 44h38M58 54h24" stroke="var(--brand)" strokeWidth="2" strokeLinecap="round" opacity="0.55" />
+      </svg>
       <p>{children}</p>
-      <Link className="text-link" href="/">Go to the overview <span aria-hidden="true">→</span></Link>
+      <Link className="text-link" href="/">Go to the Overview <span aria-hidden="true">→</span></Link>
     </div>
   );
 }
@@ -84,41 +167,42 @@ function EmptyWorkspace({ children }: { children: ReactNode }) {
 /* ------------------------------------------------------------------ prompts */
 
 function PromptFilterBar({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
-  const active = filters.school || filters.family || filters.status || filters.q;
   return (
-    <form className="filter-bar" action="/schools">
-      <label>
-        <span>School</span>
-        <select name="school" defaultValue={filters.school}>
-          <option value="">All schools</option>
-          {[...snapshot.schools].sort((a, b) => a.name.localeCompare(b.name)).map((school) => (
-            <option key={school.id} value={school.id}>{school.name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>Category</span>
-        <select name="family" defaultValue={filters.family}>
-          <option value="">All categories</option>
-          {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>Status</span>
-        <select name="status" defaultValue={filters.status}>
-          <option value="">Any status</option>
-          <option value="not-started">Not started</option>
-          <option value="in-progress">In progress</option>
-          <option value="complete">Complete</option>
-        </select>
-      </label>
-      <label className="filter-search">
-        <span>Search</span>
-        <input name="q" defaultValue={filters.q} placeholder="Prompt or school" />
-      </label>
-      <button type="submit">Filter</button>
-      {active ? <Link className="text-link" href="/schools">Clear</Link> : null}
-    </form>
+    <div className="filter-toolbar">
+      <form className="filter-controls" action="/schools">
+        <label className="field-label">
+          <span>School</span>
+          <select className="select" name="school" defaultValue={filters.school}>
+            <option value="">All schools</option>
+            {[...snapshot.schools].sort((a, b) => a.name.localeCompare(b.name)).map((school) => (
+              <option key={school.id} value={school.id}>{school.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field-label">
+          <span>Category</span>
+          <select className="select" name="family" defaultValue={filters.family}>
+            <option value="">All categories</option>
+            {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+          </select>
+        </label>
+        <label className="field-label">
+          <span>Status</span>
+          <select className="select" name="status" defaultValue={filters.status}>
+            <option value="">Any status</option>
+            <option value="not-started">Not started</option>
+            <option value="in-progress">In progress</option>
+            <option value="complete">Complete</option>
+          </select>
+        </label>
+        <label className="field-label filter-search">
+          <span>Search</span>
+          <input className="input" name="q" defaultValue={filters.q} placeholder="Prompt or school" />
+        </label>
+        <button className="btn" type="submit">Filter</button>
+      </form>
+      <FilterChips base="/schools" filters={filters} snapshot={snapshot} statusLabels={WORK_STATE_LABEL} />
+    </div>
   );
 }
 
@@ -172,7 +256,6 @@ function RemoveConfirmation({ school, cancelHref }: { school: WorkspaceSnapshot[
   );
 }
 
-type SchoolWithState = WorkspaceSnapshot["schools"][number];
 type SnapshotPrompt = WorkspaceSnapshot["prompts"][number];
 
 // "UC Berkeley, UCLA, Davis +2" - one shared question names every school that
@@ -197,44 +280,6 @@ function canonicalRows(snapshot: WorkspaceSnapshot, prompts: readonly SnapshotPr
   }));
 }
 
-// One line per state, each of which means something different to a student
-// deciding what to work on. "No supplemental essay" is finished work; "wording
-// not published" is a reason to check back; "needs review" is a reason to look
-// now. Collapsing them into one blank cell was the original bug.
-const CATALOGUE_STATE_COPY: Record<SchoolWithState["catalogueState"], { badge: string; note: string } | null> = {
-  current: null,
-  "no-supplement": {
-    badge: "✓ No supplemental essay",
-    note: "This college asks for no supplemental essay this cycle. Nothing to write here — that is the finished state, not a gap.",
-  },
-  "not-published": {
-    badge: "⏳ Wording not published",
-    note: "This college has not published its 2026–27 wording yet. Its prompts will import once they are official; add any you already know by hand.",
-  },
-  "needs-review": {
-    badge: "⚠ Needs review",
-    note: "At least one prompt changed since it was imported. Check the wording before relying on the word limits.",
-  },
-  "previous-cycle-only": {
-    badge: "2025–26 only",
-    note: "Only last cycle's prompts are on file. They are useful for planning, but none of them count toward this cycle's work.",
-  },
-  manual: {
-    badge: "Not yet verified",
-    note: "No verified prompts on file for this college yet. Add prompts by hand, or check back once the catalogue covers it.",
-  },
-};
-
-function CatalogueStateBadge({ school }: { school: SchoolWithState }) {
-  const copy = CATALOGUE_STATE_COPY[school.catalogueState];
-  return copy ? <span className={`catalogue-badge ${school.catalogueState}`}>{copy.badge}</span> : null;
-}
-
-function CatalogueStateNote({ school }: { school: SchoolWithState }) {
-  const copy = CATALOGUE_STATE_COPY[school.catalogueState];
-  return <p className={`catalogue-note ${school.catalogueState}`}>{copy?.note ?? "No prompts on file for this college yet."}</p>;
-}
-
 function SchoolHeader({
   snapshot,
   school,
@@ -248,19 +293,24 @@ function SchoolHeader({
 }) {
   const progress = workspaceWorkload(snapshot, (prompt) => prompt.schoolId === school.id);
   return (
-    <div className={`school-header${focused ? " focused" : ""}`}>
-      <div>
+    <div className="card-head">
+      <SchoolMark name={school.name} />
+      <div className="card-head-text">
         {focused ? null : (
-          <>
-            <h2><Link href={`/schools?school=${school.id}`}>{school.name}</Link></h2>
-            {school.promptCount > 0 ? <ProgressLine progress={progress} /> : null}
-          </>
+          <h2>
+            <Link href={`/schools?school=${school.id}`}>{school.name}</Link>
+          </h2>
         )}
+        <p className="card-meta">
+          {progress.requiredTotal > 0
+            ? `${progress.requiredTotal} required · ${progress.requiredComplete} done · ${progress.requiredRemaining} to go`
+            : "No required essays on file"}
+          {progress.reusable > 0 ? ` · ${progress.reusable} reusable` : ""}
+        </p>
         <CatalogueStateBadge school={school} />
-        {school.notes ? <p className="detail-note">{school.notes}</p> : null}
+        {school.notes ? <p className="card-meta">{school.notes}</p> : null}
       </div>
-      <div className="school-header-side">
-        <ProgressBar progress={progress} />
+      <div className="school-group-actions">
         <details className="school-edit">
           <summary>Edit details</summary>
           <form action={updateSchoolAction} className="inline-edit-form">
@@ -271,6 +321,7 @@ function SchoolHeader({
           </form>
         </details>
         <Link className="school-remove" href={removeHref}>Remove</Link>
+        <ProgressRing progress={progress} label={school.name} />
       </div>
     </div>
   );
@@ -320,17 +371,7 @@ function UnresolvedProgramsPanel({ programs }: { programs: WorkloadSummary["unre
 
 function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
   const names = schoolNames(snapshot);
-  const query = filters.q.trim().toLowerCase();
-  const visible = snapshot.prompts.filter((prompt) => {
-    if (filters.school && prompt.schoolId !== filters.school) return false;
-    if (filters.family && prompt.primaryFamily?.id !== filters.family && !prompt.secondaryFamilies.some((family) => family.id === filters.family)) return false;
-    if (filters.status && workState(prompt) !== filters.status) return false;
-    if (query) {
-      const haystack = `${prompt.title} ${prompt.promptText} ${names.get(prompt.schoolId) ?? ""}`.toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
+  const visible = snapshot.prompts.filter((prompt) => promptMatchesFilters(prompt, filters, names));
 
   // A college the student chose is always worth showing: a school with no
   // prompts has a reason, and hiding it made "no supplemental essay" look
@@ -375,38 +416,41 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
       ) : schools.length === 0 ? (
         <p className="empty-note">No prompts match this filter.</p>
       ) : (
-        <div className="school-sections">
+        <div className="school-groups">
           {shared.length > 0 ? (
-            <section>
-              <div className="school-header shared-header">
-                <div>
+            <section className="card school-group">
+              <div className="card-head">
+                <div className="card-head-text">
                   <h2>Shared prompts</h2>
-                  <p className="detail-note">
+                  <p className="card-meta">
                     One set of questions, asked identically by {schoolLabel(shared[0].schools)}. Answer each once.
                   </p>
                 </div>
-                <div className="school-header-side">
-                  <ProgressBar progress={summarizeWorkloadFor(snapshot, shared.map((entry) => entry.prompt))} />
+                <div className="school-group-actions">
+                  <ProgressRing
+                    progress={summarizeWorkloadFor(snapshot, shared.map((entry) => entry.prompt))}
+                    label="Shared prompts"
+                  />
                 </div>
               </div>
-              <div className="prompt-table">
-                <PromptTableHead />
+              <ul className="rows card-body">
                 {shared.map((entry) => (
-                  <PromptRow
-                    key={entry.prompt.id}
-                    snapshot={snapshot}
-                    prompt={entry.prompt}
-                    schoolName={schoolLabel(entry.schools)}
-                    editing={filters.edit === entry.prompt.id}
-                    editHref={`${withFilters("/schools", filters, { edit: entry.prompt.id })}#prompt-${entry.prompt.id}`}
-                    cancelHref={`${withFilters("/schools", filters)}#prompt-${entry.prompt.id}`}
-                  />
+                  <li key={entry.prompt.id}>
+                    <PromptRow
+                      snapshot={snapshot}
+                      prompt={entry.prompt}
+                      schoolName={schoolLabel(entry.schools)}
+                      editing={filters.edit === entry.prompt.id}
+                      editHref={`${withFilters("/schools", filters, { edit: entry.prompt.id })}#prompt-${entry.prompt.id}`}
+                      cancelHref={`${withFilters("/schools", filters)}#prompt-${entry.prompt.id}`}
+                    />
+                  </li>
                 ))}
-              </div>
+              </ul>
             </section>
           ) : null}
           {schools.map(({ school, prompts, sharedCount }) => (
-            <section key={school.id}>
+            <section className="card school-group" key={school.id}>
               <SchoolHeader
                 snapshot={snapshot}
                 school={school}
@@ -427,21 +471,21 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
                     ? <p className="empty-note">No prompts match this filter for {school.name}.</p>
                     : <CatalogueStateNote school={school} />
               ) : (
-                <div className="prompt-table">
-                  <PromptTableHead showSchool={false} />
+                <ul className="rows card-body">
                   {prompts.map((prompt) => (
-                    <PromptRow
-                      key={prompt.id}
-                      snapshot={snapshot}
-                      prompt={prompt}
-                      schoolName={school.name}
-                      showSchool={false}
-                      editing={filters.edit === prompt.id}
-                      editHref={`${withFilters("/schools", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
-                      cancelHref={`${withFilters("/schools", filters)}#prompt-${prompt.id}`}
-                    />
+                    <li key={prompt.id}>
+                      <PromptRow
+                        snapshot={snapshot}
+                        prompt={prompt}
+                        schoolName={school.name}
+                        showSchool={false}
+                        editing={filters.edit === prompt.id}
+                        editHref={`${withFilters("/schools", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                        cancelHref={`${withFilters("/schools", filters)}#prompt-${prompt.id}`}
+                      />
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </section>
           ))}
@@ -491,7 +535,7 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
           const rows = canonicalRows(snapshot, prompts);
           const schoolsAsking = [...new Set(prompts.map((prompt) => names.get(prompt.schoolId) ?? ""))];
           return (
-            <details className="category-group" key={family.id} open>
+            <details className="card category-group" key={family.id} open>
               <summary>
                 <span className="swatch large" style={{ backgroundColor: family.color }} aria-hidden="true" />
                 <span className="category-heading">
@@ -502,31 +546,31 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
                   </span>
                 </span>
                 <span className="category-count"><strong>{rows.length}</strong> prompts</span>
-                <ProgressBar progress={progress} />
+                <ProgressRing progress={progress} label={family.name} />
               </summary>
               <div className="category-body">
                 <p className="category-description">{family.description}</p>
-                <div className="prompt-table">
-                  <PromptTableHead />
+                <ul className="rows">
                   {rows.map(({ prompt, schoolLabel: label }) => (
-                    <PromptRow
-                      key={prompt.id}
-                      snapshot={snapshot}
-                      prompt={prompt}
-                      schoolName={label}
-                      editing={filters.edit === prompt.id}
-                      editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
-                      cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
-                    />
+                    <li key={prompt.id}>
+                      <PromptRow
+                        snapshot={snapshot}
+                        prompt={prompt}
+                        schoolName={label}
+                        editing={filters.edit === prompt.id}
+                        editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                        cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
+                      />
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             </details>
           );
         })}
 
         {unclassifiedRows.length > 0 ? (
-          <details className="category-group">
+          <details className="card category-group">
             <summary>
               <span className="swatch large muted-swatch" aria-hidden="true" />
               <span className="category-heading">
@@ -534,23 +578,23 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
                 <span className="category-schools">Prompts with no primary category yet</span>
               </span>
               <span className="category-count"><strong>{unclassifiedRows.length}</strong> prompts</span>
-              <ProgressBar progress={summarizeWorkloadFor(snapshot, unclassified)} />
+              <ProgressRing progress={summarizeWorkloadFor(snapshot, unclassified)} label="Unclassified" />
             </summary>
             <div className="category-body">
-              <div className="prompt-table">
-                <PromptTableHead />
+              <ul className="rows">
                 {unclassifiedRows.map(({ prompt, schoolLabel: label }) => (
-                  <PromptRow
-                    key={prompt.id}
-                    snapshot={snapshot}
-                    prompt={prompt}
-                    schoolName={label}
-                    editing={filters.edit === prompt.id}
-                    editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
-                    cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
-                  />
+                  <li key={prompt.id}>
+                    <PromptRow
+                      snapshot={snapshot}
+                      prompt={prompt}
+                      schoolName={label}
+                      editing={filters.edit === prompt.id}
+                      editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                      cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
+                    />
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </details>
         ) : null}
@@ -634,6 +678,24 @@ function OriginPromptFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; 
   );
 }
 
+/**
+ * What this essay was written for, for display above the editor.
+ *
+ * Mirrors the precedence the matcher already uses - a prompt chosen from the
+ * college list wins over pasted text - so the editor shows the same origin the
+ * score was derived from. Read-only: nothing here decides anything.
+ */
+function essayOrigin(snapshot: WorkspaceSnapshot, essay: WorkspaceEssay) {
+  const linked = essay.originPromptId
+    ? snapshot.prompts.find((prompt) => prompt.id === essay.originPromptId)
+    : undefined;
+  if (linked) return { title: linked.title, text: linked.promptText };
+  if (essay.originPromptTitle || essay.originPromptText) {
+    return { title: essay.originPromptTitle || "Pasted prompt", text: essay.originPromptText };
+  }
+  return null;
+}
+
 function EssayVersionHistory({ essay }: { essay: WorkspaceEssay }) {
   return (
     <div className="version-list">
@@ -662,17 +724,87 @@ function EssayVersionHistory({ essay }: { essay: WorkspaceEssay }) {
   );
 }
 
-function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
-  const query = filters.q.trim().toLowerCase();
-  const openByEssay = new Map(
-    reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts).map((group) => [group.essay.id, group.open.length]),
+/**
+ * Where one essay can actually go.
+ *
+ * This is the product's whole argument on one line - an essay is not a
+ * one-shot answer, it is a piece of writing several colleges will take - so it
+ * is the one place the design spends any boldness.
+ *
+ * The mark keeps each college's own colour and the reuse band is a ring around
+ * it. Tinting the mark itself by band, as first drafted, would have thrown away
+ * the college identity that makes the row readable at a glance; two channels
+ * carry more than one recoloured channel. Neither is load-bearing on its own:
+ * every entry is a link whose accessible name states the college and the band
+ * in words.
+ */
+function ReuseRibbon({
+  essay,
+  matches,
+}: {
+  essay: WorkspaceEssay;
+  matches: readonly { schoolName: string; action: string; label: string }[];
+}) {
+  const seen = new Set<string>();
+  const entries: { schoolName: string; action: string; label: string }[] = [];
+  for (const entry of matches) {
+    if (seen.has(entry.schoolName)) continue;
+    seen.add(entry.schoolName);
+    entries.push(entry);
+  }
+  if (entries.length === 0) return null;
+
+  const shown = entries.slice(0, 9);
+  const rest = entries.length - shown.length;
+
+  return (
+    <div className="ribbon-block">
+      <p className="detail-label">Where this essay can go</p>
+      <ul className="ribbon">
+        {shown.map((entry) => (
+          <li key={entry.schoolName}>
+            <Link
+              className={`ribbon-mark ${entry.action}`}
+              href={entry.action === "assigned" ? `/essays#essay-${essay.id}` : "/reuse"}
+              aria-label={`${entry.schoolName} — ${entry.label}`}
+              title={`${entry.schoolName} — ${entry.label}`}
+            >
+              <SchoolMark name={entry.schoolName} small />
+            </Link>
+          </li>
+        ))}
+        {rest > 0 ? <li className="ribbon-more">+{rest}</li> : null}
+      </ul>
+    </div>
   );
-  const filteredEssays = snapshot.essays.filter((essay) => {
-    if (filters.status && essay.status !== filters.status) return false;
-    if (filters.family && essay.primaryFamily?.id !== filters.family && !essay.secondaryFamilies.some((family) => family.id === filters.family)) return false;
-    if (query && !essay.title.toLowerCase().includes(query) && !essay.currentContent.toLowerCase().includes(query)) return false;
-    return true;
-  });
+}
+
+function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
+  const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
+  const openByEssay = new Map(groups.map((group) => [group.essay.id, group.open.length]));
+
+  // The ribbon's entries, in the order a student cares about: already
+  // answering, then ready to reuse, then reusable after adapting.
+  const ribbonByEssay = new Map(
+    groups.map((group) => [
+      group.essay.id,
+      [
+        ...group.inUse.map((match) => ({ schoolName: match.schoolName, action: "assigned", label: "already answering a prompt here" })),
+        ...group.open.map((match) => ({
+          schoolName: match.schoolName,
+          action: match.recommendedAction,
+          label: ACTION_LABELS[match.recommendedAction as RecommendedAction],
+        })),
+        ...group.withEdits.map((match) => ({
+          schoolName: match.schoolName,
+          action: match.recommendedAction,
+          label: `${ACTION_LABELS[match.recommendedAction as RecommendedAction]}, after adapting school-specific material`,
+        })),
+      ],
+    ]),
+  );
+
+  const filteredEssays = snapshot.essays.filter((essay) => essayMatchesFilters(essay, filters));
 
   return (
     <>
@@ -691,77 +823,100 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
         </details>
       </div>
 
-      <form className="filter-bar" action="/essays">
-        <label>
-          <span>Status</span>
-          <select name="status" defaultValue={filters.status}>
-            <option value="">Any status</option>
-            {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Category</span>
-          <select name="family" defaultValue={filters.family}>
-            <option value="">All categories</option>
-            {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
-          </select>
-        </label>
-        <label className="filter-search">
-          <span>Search</span>
-          <input name="q" defaultValue={filters.q} placeholder="Title or content" />
-        </label>
-        <button type="submit">Filter</button>
-        {filters.status || filters.family || filters.q ? <Link className="text-link" href="/essays">Clear</Link> : null}
-      </form>
+      <div className="filter-toolbar">
+        <form className="filter-controls" action="/essays">
+          <label className="field-label">
+            <span>Status</span>
+            <select className="select" name="status" defaultValue={filters.status}>
+              <option value="">Any status</option>
+              {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="field-label">
+            <span>Category</span>
+            <select className="select" name="family" defaultValue={filters.family}>
+              <option value="">All categories</option>
+              {snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
+            </select>
+          </label>
+          <label className="field-label filter-search">
+            <span>Search</span>
+            <input className="input" name="q" defaultValue={filters.q} placeholder="Title or content" />
+          </label>
+          <button className="btn" type="submit">Filter</button>
+        </form>
+        <FilterChips base="/essays" filters={filters} snapshot={snapshot} statusLabels={{}} />
+      </div>
 
       {snapshot.essays.length === 0 ? (
         <EmptyWorkspace>No essays yet. Open a prompt and choose “Start a new essay for this prompt”, or add one here.</EmptyWorkspace>
       ) : filteredEssays.length === 0 ? (
         <p className="empty-note">No essays match this filter.</p>
       ) : (
-        <div className="record-grid">
-          {filteredEssays.map((essay) => (
-            <article className="essay-record" id={`essay-${essay.id}`} key={essay.id}>
-              <div className="record-meta-row">
-                <span className={`status-pill ${essay.status}`}>{essay.status}</span>
-                <span className="record-meta">
-                  {essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""} words · v{essay.versionCount}
-                </span>
+        <div className="card-grid wide">
+          {filteredEssays.map((essay) => {
+            const origin = essayOrigin(snapshot, essay);
+            return (
+            <article className="card essay-card" id={`essay-${essay.id}`} key={essay.id}>
+              <div className="card-head">
+                <div className="card-head-text">
+                  <h2>{essay.title}</h2>
+                  <p className="card-meta">
+                    {essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""} words · v{essay.versionCount}
+                    {" · "}
+                    {essay.linkedPromptCount > 0
+                      ? `answering ${essay.linkedPromptCount} ${essay.linkedPromptCount === 1 ? "prompt" : "prompts"}`
+                      : "not assigned yet"}
+                    {openByEssay.get(essay.id) ? <> · <Link className="text-link" href="/reuse">{openByEssay.get(essay.id)} more possible</Link></> : null}
+                  </p>
+                </div>
+                <span className={`pill ${essay.status}`}>{essay.status}</span>
               </div>
-              <h2>{essay.title}</h2>
-              <div className="family-chips">
-                {essay.primaryFamily ? (
-                  <span className="primary-chip">
-                    <span className="swatch" style={{ backgroundColor: essay.primaryFamily.color }} aria-hidden="true" />
-                    {essay.primaryFamily.name}
-                  </span>
-                ) : <span>Unclassified</span>}
-                {essay.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+
+              <div className="essay-card-body">
+                <div className="family-chips">
+                  {essay.primaryFamily ? (
+                    <span className="primary-chip">
+                      <span className="swatch" style={{ backgroundColor: essay.primaryFamily.color }} aria-hidden="true" />
+                      {essay.primaryFamily.name}
+                    </span>
+                  ) : <span>Unclassified</span>}
+                  {essay.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+                </div>
+
+                <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
+
+                <ReuseRibbon essay={essay} matches={ribbonByEssay.get(essay.id) ?? []} />
+
+                {essay.schoolSpecificPhrases.length > 0 ? (
+                  <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p>
+                ) : null}
               </div>
-              <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
-              <p className="essay-usage">
-                {essay.linkedPromptCount > 0
-                  ? `Answering ${essay.linkedPromptCount} ${essay.linkedPromptCount === 1 ? "prompt" : "prompts"}`
-                  : "Not assigned to a prompt yet"}
-                {openByEssay.get(essay.id) ? <> · <Link className="text-link" href="/reuse">{openByEssay.get(essay.id)} more possible</Link></> : null}
-              </p>
-              {essay.linkedPrompts.length > 0 ? (
-                <ul className="linked-prompt-list">
-                  {essay.linkedPrompts.map((link) => <li key={link.id}>{link.schoolName} · {link.title}</li>)}
-                </ul>
-              ) : null}
-              {essay.schoolSpecificPhrases.length > 0 ? <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p> : null}
+
               <div className="record-actions">
                 <details>
                   <summary>Write</summary>
-                  <form action={saveEssayVersionAction} className="prompt-form">
-                    <input name="essayId" type="hidden" value={essay.id} />
-                    <label className="field-wide">Content <span>saving creates a new version; the essay is never edited in place</span>
-                      <textarea name="content" maxLength={20000} defaultValue={essay.currentContent} />
-                    </label>
-                    <label className="field-wide field-secondary">Reason for this version <span>optional</span><input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
-                    <button type="submit">Save as new version</button>
-                  </form>
+                  <div className="essay-editor">
+                    {origin ? (
+                      <aside className="editor-prompt">
+                        <p className="detail-label">Written for</p>
+                        <p className="editor-prompt-title">{origin.title}</p>
+                        {origin.text ? <p className="editor-prompt-text">{origin.text}</p> : null}
+                      </aside>
+                    ) : null}
+                    <form action={saveEssayVersionAction} className="prompt-form editor-form">
+                      <input name="essayId" type="hidden" value={essay.id} />
+                      <label className="field-wide">Content <span>saving creates a new version; the essay is never edited in place</span>
+                        <textarea name="content" maxLength={20000} defaultValue={essay.currentContent} />
+                      </label>
+                      <p className="editor-count">
+                        {essay.wordCount} {essay.wordCount === 1 ? "word" : "words"} saved
+                        {essay.targetWordCount ? ` · target ${essay.targetWordCount}` : ""}
+                      </p>
+                      <label className="field-wide field-secondary">Reason for this version <span>optional</span><input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
+                      <button type="submit">Save as new version</button>
+                    </form>
+                  </div>
                 </details>
                 <details>
                   <summary>Details &amp; history</summary>
@@ -779,7 +934,8 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
                 </details>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
     </>
@@ -853,21 +1009,31 @@ function MatchRow({
   const adjustments = matchAdjustments(match);
   return (
     <li>
-      <span className="match-score">{match.score}</span>
-      <span className="reuse-prompt">
-        <span className="cell-school">{label}</span>
-        <span>{match.promptTitle}</span>
-      </span>
-      <span className="reuse-action">{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
-      <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
-      <form action={assignEssayAction}>
-        <input name="promptId" type="hidden" value={match.promptId} />
-        <input name="essayId" type="hidden" value={essayId} />
-        <button className="text-link" type="submit">Use here</button>
-      </form>
-      <span className="reuse-explanation">
+      <div className="row match-row">
+        <span className="match-score">{match.score}</span>
+        <span className="row-main">
+          <span className="row-title">{match.promptTitle}</span>
+          <span className="row-sub">{label}</span>
+        </span>
+        <span className="row-side">
+          <span className={`pill ${match.recommendedAction}`}>
+            {ACTION_LABELS[match.recommendedAction as RecommendedAction]}
+          </span>
+          {match.schoolSpecificityRisk === "low" ? null : (
+            <span className={`pill risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
+          )}
+          <form action={assignEssayAction}>
+            <input name="promptId" type="hidden" value={match.promptId} />
+            <input name="essayId" type="hidden" value={essayId} />
+            <button className="text-link" type="submit">Use here</button>
+          </form>
+        </span>
+      </div>
+      {/* Named edits rather than a verdict: "248 words -> cut to 150" tells a
+          student what to do in a way "needs minor adaptation" never did. */}
+      <p className="match-adjustments">
         {adjustments.length > 0 ? adjustments.join(" · ") : match.explanation}
-      </span>
+      </p>
     </li>
   );
 }
@@ -893,7 +1059,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
     return (
       <EmptyWorkspace>
         {snapshot.essays.length === 0
-          ? "Reuse appears once your library has essays. Open a prompt and start one, or add an essay from My essays."
+          ? "Reuse appears once your library has essays. Open a prompt and start one, or add an essay from My Essays."
           : "None of your essays match an unanswered prompt closely enough to reuse yet. Classify prompts or essays to improve the match."}
       </EmptyWorkspace>
     );
@@ -901,7 +1067,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 
   return (
     <>
-      <p className="reuse-lede">
+      <p className="reuse-lede card">
         <strong>{openTotal + withEditsTotal}</strong> unanswered {openTotal + withEditsTotal === 1 ? "prompt" : "prompts"} can
         be served by an essay you already have
         {withEditsTotal > 0 ? <> — {openTotal} ready as-is, {withEditsTotal} after adapting school-specific material</> : null}.
@@ -910,11 +1076,11 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 
       <div className="reuse-list">
         {groups.map(({ essay, inUse, open, withEdits, possible }) => (
-          <article className="reuse-group" key={essay.id}>
-            <div className="reuse-group-head">
-              <div>
+          <article className="card reuse-group" key={essay.id}>
+            <div className="card-head">
+              <div className="card-head-text">
                 <h2><Link href={`/essays#essay-${essay.id}`}>{essay.title}</Link></h2>
-                <p className="reuse-group-meta">{essay.wordCount} words · {essay.status}</p>
+                <p className="card-meta">{essay.wordCount} words · {essay.status}</p>
               </div>
               <p className="reuse-tally">
                 <span><strong>{inUse.length}</strong> in use</span>
@@ -923,7 +1089,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             </div>
 
             {open.length > 0 ? (
-              <ul className="reuse-rows">
+              <ul className="rows reuse-rows card-body">
                 {open.map(({ match, schoolLabel: label }) => (
                   <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
                 ))}
@@ -939,7 +1105,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             {possible.length > 0 ? (
               <details className="reuse-weaker">
                 <summary>{possible.length} weaker {possible.length === 1 ? "option" : "options"} — would need real rewriting</summary>
-                <ul className="reuse-rows">
+                <ul className="rows reuse-rows">
                   {possible.map(({ match, schoolLabel: label }) => (
                     <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
                   ))}
@@ -961,7 +1127,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             {withEdits.length > 0 ? (
               <div className="reuse-with-edits">
                 <p className="detail-label">Reusable here, after adapting school-specific material</p>
-                <ul className="reuse-rows">
+                <ul className="rows reuse-rows">
                   {withEdits.map(({ match, schoolLabel: label }) => (
                     <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
                   ))}

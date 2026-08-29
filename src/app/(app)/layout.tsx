@@ -13,113 +13,102 @@ import { loadDemoWorkspace, openPersonalWorkspace } from "../workspace-actions";
 // workspace cookie and the database.
 export const dynamic = "force-dynamic";
 
-// A college with no prompts used to render a bare "—" whatever the reason. The
-// sidebar has room for one glyph, so each state gets a distinct one plus a
-// title for the full explanation.
-const NAV_STATE_MARK = {
-  current: "—",
-  "no-supplement": "✓",
-  "not-published": "⏳",
-  "needs-review": "⚠",
-  "previous-cycle-only": "'25",
-  manual: "?",
-} as const;
-
-const NAV_STATE_TITLE = {
-  current: "No prompts on file yet",
-  "no-supplement": "No supplemental essay this cycle",
-  "not-published": "2026–27 wording not published yet",
-  "needs-review": "A prompt changed since import — needs review",
-  "previous-cycle-only": "Only 2025–26 prompts are on file",
-  manual: "No verified prompts on file yet",
-} as const;
-
 export default async function AppLayout({ children }: Readonly<{ children: ReactNode }>) {
   const snapshot = await getActiveWorkspaceSnapshot();
   const overall = workspaceWorkload(snapshot);
   const reuse = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
   const openReuse = reuse.reduce((total, group) => total + group.open.length, 0);
 
-  const navigation: [string, string, number | null][] = [
-    ["Overview", "/", null],
-    ["All prompts", "/schools", overall.requiredTotal],
+  // The wordmark leads to Overview, so the four product sections are the four
+  // tabs. Same routes as before: renaming /schools would break every
+  // ?school= link and any bookmark.
+  const sections: [string, string, number][] = [
+    ["Your Prompts", "/schools", overall.requiredTotal],
     ["Categories", "/families", snapshot.families.filter((family) => family.promptCount > 0).length],
-    ["My essays", "/essays", snapshot.essays.length],
+    ["My Essays", "/essays", snapshot.essays.length],
     ["Reuse", "/reuse", openReuse],
-    ["Plans", "/plans", null],
   ];
 
-  const schools = [...snapshot.schools].sort((a, b) => a.name.localeCompare(b.name));
   const isDemo = snapshot.workspace.kind === "demo";
+  const initial = (snapshot.user.email.trim()[0] ?? "?").toUpperCase();
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <Link className="brand" href="/" aria-label="College Essay Organizer home">
-          <span className="brand-mark" aria-hidden="true">E</span>
-          <span>
-            <span className="brand-name">College Essay</span>
-            <span className="brand-subtitle">Organizer</span>
-          </span>
-        </Link>
-
-        <nav className="primary-nav" aria-label="Primary navigation">
-          {navigation.map(([label, href, count]) => (
-            <NavLink className="nav-link" href={href} key={href}>
-              <span>{label}</span>
-              {count === null ? null : <span className="nav-count">{count}</span>}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="nav-schools">
-          <p className="nav-label">
-            Schools <span>{schools.length}</span>
-          </p>
-          {schools.length > 0 ? (
-            <ul>
-              {schools.map((school) => {
-                const progress = workspaceWorkload(snapshot, (prompt) => prompt.schoolId === school.id);
-                return (
-                  <li key={school.id}>
-                    <NavLink className="nav-school" href={`/schools?school=${school.id}`} schoolId={school.id}>
-                      <span title={school.name}>{school.name}</span>
-                      <span className={`nav-progress ${school.catalogueState}`} title={NAV_STATE_TITLE[school.catalogueState]}>
-                        {progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : NAV_STATE_MARK[school.catalogueState]}
-                      </span>
-                    </NavLink>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="nav-empty">No colleges yet.</p>
-          )}
-          <Link className="nav-add" href="/schools#add-college">
-            <span aria-hidden="true">+</span> Add college
+    <div className="app">
+      <header className="topnav">
+        <div className="topnav-inner">
+          <Link className="wordmark" href="/" aria-label="College Essay Organizer — Overview">
+            <span className="wordmark-mark" aria-hidden="true">
+              E
+            </span>
+            <span className="wordmark-text">
+              <strong>College Essay</strong> <span>Organizer</span>
+            </span>
           </Link>
-        </div>
 
-        <div className="workspace-switch">
-          <p className="nav-label">Workspace</p>
-          <strong>{snapshot.workspace.name}</strong>
-          <span>{isDemo ? "Real prompts · sample essays" : "Your colleges · private to you"}</span>
-          <span className="signed-in-as" title={snapshot.user.email}>{snapshot.user.email}</span>
-          <div className="workspace-switch-actions">
-            <form action={openPersonalWorkspace}>
-              <PendingButton pendingLabel="Opening…" ariaCurrent={isDemo ? undefined : "true"}>My workspace</PendingButton>
-            </form>
-            <form action={loadDemoWorkspace}>
-              <PendingButton pendingLabel={isDemo ? "Rebuilding…" : "Loading…"}>
-                {isDemo ? "Reset example" : "Example workspace"}
-              </PendingButton>
-            </form>
+          <nav className="sections" aria-label="Primary navigation">
+            {sections.map(([label, href, count]) => (
+              <NavLink className="section-tab" href={href} key={href}>
+                <span>{label}</span>
+                <span className="tab-count">{count}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="topnav-utility">
+            <NavLink className="utility-link" href="/plans">
+              Plans
+            </NavLink>
+
+            {/* The native popover attribute brings Escape, light-dismiss and
+                top-layer stacking with no JavaScript. */}
+            <button
+              className="avatar"
+              type="button"
+              popoverTarget="account-menu"
+              aria-label={`Account and workspace — ${snapshot.user.email}`}
+            >
+              <span aria-hidden="true">{initial}</span>
+            </button>
+
+            <div className="account-menu" id="account-menu" popover="auto">
+              <p className="account-email" title={snapshot.user.email}>
+                {snapshot.user.email}
+              </p>
+
+              <div className="account-workspace">
+                <strong>{snapshot.workspace.name}</strong>
+                <span>{isDemo ? "Real prompts · sample essays" : "Your colleges · private to you"}</span>
+              </div>
+
+              <div className="account-actions">
+                <form action={openPersonalWorkspace}>
+                  <PendingButton pendingLabel="Opening…" ariaCurrent={isDemo ? undefined : "true"}>
+                    My workspace
+                  </PendingButton>
+                </form>
+                <form action={loadDemoWorkspace}>
+                  <PendingButton pendingLabel={isDemo ? "Rebuilding…" : "Loading…"}>
+                    {isDemo ? "Reset example" : "Example workspace"}
+                  </PendingButton>
+                </form>
+              </div>
+
+              <div className="account-actions">
+                <Link className="account-link" href="/photo-credits">Photo credits</Link>
+              </div>
+
+              <div className="account-signout">
+                <form action={signOutAction}>
+                  <button className="text-link" type="submit">
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
-          <form action={signOutAction} className="sign-out-form">
-            <button className="text-link" type="submit">Sign out</button>
-          </form>
         </div>
-      </aside>
+      </header>
+
       <main className="workspace">{children}</main>
     </div>
   );

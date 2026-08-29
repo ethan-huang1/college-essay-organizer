@@ -3,6 +3,7 @@
 
 .plans-list {
   display: grid;
+  max-width: var(--content-max);
   gap: var(--s3);
   margin: 0;
   padding: 0;
@@ -45,6 +46,7 @@
    they are shown as source in a monospace pane - the same way they read in an
    editor. */
 .plan-source {
+  max-width: var(--content-max);
   margin: 0;
   padding: var(--s6);
   overflow-x: auto;

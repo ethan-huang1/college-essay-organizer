@@ -1,6 +1,16 @@
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // The same "@/*" -> "./src/*" alias tsconfig.json gives the app, so a module
+  // under test can import the way the application imports rather than a second
+  // way that exists only for the suite.
+  resolve: {
+    alias: [
+      { find: /^@\//, replacement: `${fileURLToPath(new URL("./src", import.meta.url))}/` },
+    ],
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { TOP_UNIVERSITIES } from "@/lib/top-universities";
 import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
@@ -100,17 +101,41 @@ function PreviousCycleWarning({ cycleLabel }: { cycleLabel: string }) {
   );
 }
 
-// Measured against the essays the schools actually ask for, not the number of
-// prompt rows: a choose-4-of-8 set that is done reads as full rather than half.
-export function ProgressBar({ progress }: { progress: WorkloadSummary }) {
-  const share = progress.requiredTotal > 0 ? `${(progress.requiredComplete / progress.requiredTotal) * 100}%` : "0%";
+/**
+ * Progress for a card header, measured against the essays the schools
+ * actually ask for rather than the number of prompt rows: a choose-4-of-8 set
+ * that is done reads as full rather than half.
+ *
+ * The fraction is rendered as text inside the ring and the element is a real
+ * progressbar with an accessible name, so the arc is never the only carrier of
+ * the information.
+ */
+export function ProgressRing({ progress, label }: { progress: WorkloadSummary; label: string }) {
+  const { requiredComplete: done, requiredTotal: total } = progress;
+
+  // A progressbar with aria-valuemax="0" is not a valid progressbar, and "0 of
+  // 0 complete" tells a screen-reader user nothing. With nothing to measure the
+  // ring is decoration; the reason there is nothing to measure is already
+  // stated in words next to it.
+  if (total === 0) {
+    return (
+      <span className="ring" style={{ "--share": 0 } as CSSProperties} aria-hidden="true">
+        <span className="ring-value">—</span>
+      </span>
+    );
+  }
+
   return (
     <span
-      className="progress-bar"
-      role="img"
-      aria-label={`${progress.requiredComplete} of ${progress.requiredTotal} required essays complete`}
+      className={`ring${done === total ? " ring-done" : ""}`}
+      style={{ "--share": Math.round((done / total) * 100) } as CSSProperties}
+      role="progressbar"
+      aria-valuenow={done}
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-label={`${label}: ${done} of ${total} required ${total === 1 ? "prompt" : "prompts"} complete`}
     >
-      <span className="progress-fill complete" style={{ width: share }} />
+      <span className="ring-value">{done}/{total}</span>
     </span>
   );
 }
@@ -240,9 +265,11 @@ export function PromptRow({
       <summary>
         <span className={`work-dot ${state}`} aria-hidden="true" />
         <span className="cell-title">
-          {showSchool ? <span className="cell-school">{schoolName}</span> : null}
+          <span className="cell-topline">
+            {showSchool ? <span className="cell-school">{schoolName}</span> : null}
+            {prompt.requirement === "required" ? null : <span className="req-tag">{prompt.requirement}</span>}
+          </span>
           <span className="cell-prompt">{prompt.title}</span>
-          {prompt.requirement === "required" ? null : <span className="req-tag">{prompt.requirement}</span>}
         </span>
         <span className="cell-limit">{limitLabel(prompt)}</span>
         <span className="cell-category">
@@ -352,19 +379,5 @@ export function PromptRow({
         </div>
       </div>
     </details>
-  );
-}
-
-export function PromptTableHead({ showSchool = true }: { showSchool?: boolean }) {
-  return (
-    <div className="prompt-table-head" aria-hidden="true">
-      <span />
-      <span>{showSchool ? "School · Prompt" : "Prompt"}</span>
-      <span>Limit</span>
-      <span>Category</span>
-      <span>Status</span>
-      <span>Essay</span>
-      <span />
-    </div>
   );
 }

@@ -1,0 +1,370 @@
+/* Primitives shared by every view: cards, pills, rings, rows, controls.
+   Card for a thing you act on as a unit; row for a thing you scan inside a
+   container. A card nested in a card is a defect. */
+
+/* ------------------------------------------------------------------- card */
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.card-head {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  padding: var(--s4) var(--s6);
+}
+
+.card-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.card-head-text h2,
+.card-head-text h3 {
+  margin: 0;
+  font-size: var(--text-lead);
+  letter-spacing: -0.012em;
+}
+
+.card-head-text h2 a:hover,
+.card-head-text h3 a:hover {
+  color: var(--brand);
+}
+
+.card-meta {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+/* The hairline between a card's header and its body, straight from the
+   reference: it separates identity from detail without boxing anything. */
+.card-body {
+  border-top: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------------------- grids
+   Wide displays gain columns rather than stretching cards: a 900px card
+   holding three short values is worse than a 500px one. */
+
+.card-grid {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+}
+
+.card-grid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+}
+
+.tile-grid {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+/* -------------------------------------------------------------------- pill
+   Every pill carries text, so colour is never the only signal. */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--quiet-tint);
+  color: var(--quiet-ink);
+  font-size: var(--text-small);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill.ok,
+.pill.complete,
+.pill.ready,
+.pill.submitted,
+.pill.verified,
+.pill.no-supplement,
+.pill.reusable-slight-edits {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.pill.warn,
+.pill.in-progress,
+.pill.draft,
+.pill.revising,
+.pill.reusable-edits {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.pill.caution,
+.pill.risk-medium,
+.pill.needs-review,
+.pill.unverified,
+.pill.reusable-significant-edits {
+  background: var(--caution-tint);
+  color: var(--caution-ink);
+}
+
+.pill.risk,
+.pill.risk-high {
+  background: var(--risk-tint);
+  color: var(--risk-ink);
+}
+
+.pill.info,
+.pill.not-published,
+.pill.previous-cycle,
+.pill.previous-cycle-only {
+  background: var(--info-tint);
+  color: var(--info-ink);
+}
+
+.pill.brand {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* --------------------------------------------------------------------- ring
+   Progress carries text as well as the ring; the ring is never the only
+   carrier. The accessible name comes from the wrapping progressbar. */
+
+.ring {
+  position: relative;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--brand) calc(var(--share) * 1%), var(--surface-sunk) 0);
+}
+
+.ring::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.ring-value {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ring-done {
+  background: conic-gradient(var(--brand) 100%, var(--brand) 0);
+}
+
+/* --------------------------------------------------------------------- mark
+   Colours come from the curated palette in school-mark.tsx, where every
+   background/initials pair is pre-verified for contrast. */
+
+.mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  font-size: var(--text-meta);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.mark.small {
+  width: 30px;
+  height: 30px;
+  font-size: var(--text-small);
+}
+
+.mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------------------------------------------------------------------- row
+   Compact, hairline-separated, one line. Breathing room comes from row
+   height and the card's padding, not from a border and shadow per item. */
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  min-height: var(--row-h);
+  padding: var(--s2) var(--s6);
+}
+
+/* The separator lives on the list item, not the row, so it still works when a
+   row is wrapped in a <details> for its expanded detail. */
+.rows > li + li,
+.rows > .row + .row {
+  border-top: 1px solid var(--line-soft);
+}
+
+.row:hover {
+  background: color-mix(in srgb, var(--surface-sunk) 45%, var(--surface));
+}
+
+.row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row-title {
+  display: block;
+  overflow: hidden;
+  font-size: var(--text-meta);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-sub {
+  display: block;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+/* Metadata stays right-aligned and stops growing, so the title column is what
+   gains the space on a wide screen. */
+.row-side {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--s4);
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.work-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.work-dot.complete {
+  background: var(--brand);
+}
+
+.work-dot.in-progress {
+  background: var(--warn-ink);
+}
+
+/* ----------------------------------------------------------------- controls */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--brand);
+  border-radius: var(--r-control);
+  background: var(--brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--nav);
+  background: var(--nav);
+}
+
+/* A slow action's button says what it is doing and refuses a second click,
+   rather than looking untouched for ten seconds. */
+button[aria-busy="true"],
+button:disabled {
+  opacity: 0.62;
+  cursor: progress;
+}
+
+.field-label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.input,
+.select {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.eyebrow-label {
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .card-grid,
+  .card-grid.wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-head,
+  .row {
+    padding-inline: var(--s4);
+  }
+
+  /* Pills and buttons carry text and cannot shrink, so on a phone a row's
+     metadata wraps under its title rather than forcing the card wider than the
+     screen. */
+  .row,
+  .row-side,
+  .card-head {
+    flex-wrap: wrap;
+  }
+
+  .row-side {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  /* Truncating to one line is right on a wide screen, where the column has a
+     known width. On a phone that nowrap text is what sets the card's minimum
+     width, so it wraps instead: two lines beat a sideways scrollbar. */
+  .row-title,
+  .row-sub,
+  .pill {
+    overflow: visible;
+    white-space: normal;
+  }
+}

@@ -1,0 +1,79 @@
+/* Page shell and the furniture every view shares. */
+
+.app {
+  min-height: 100vh;
+  background: var(--ground);
+}
+
+.workspace {
+  width: min(100%, var(--shell-max));
+  min-width: 0;
+  margin: 0 auto;
+  padding: var(--s12) var(--gutter) var(--s16);
+}
+
+.page-frame {
+  width: 100%;
+}
+
+/* ------------------------------------------------------------- page heading
+   No rule under the title: cards carry the structure now, and a hairline
+   below a heading is exactly the "something you read" signal this redesign is
+   moving away from. */
+
+.section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4) var(--s8);
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: var(--s8);
+}
+
+.section-heading h1 {
+  margin: 0;
+  font-size: var(--text-display);
+}
+
+.lede {
+  max-width: var(--measure);
+  margin: var(--s2) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+}
+
+.section-heading .lede code {
+  font-size: var(--text-meta);
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    padding: var(--s6) var(--s4) var(--s12);
+  }
+
+  .section-heading h1 {
+    font-size: var(--text-title);
+  }
+}
+
+/* ------------------------------------------------------------ empty states */
+
+.empty-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--s4);
+  padding: var(--s12) var(--s8);
+}
+
+.empty-art {
+  width: 120px;
+  height: 80px;
+}
+
+.empty-state p {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-lead);
+  line-height: 1.55;
+}

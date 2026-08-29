@@ -1,0 +1,229 @@
+/* Your Prompts: one card per college, compact prompt rows inside it.
+   The rows keep a grid rather than going free-flowing, because column
+   alignment is what makes a hundred prompts scannable - but the visible table
+   head is gone, since the values label themselves. */
+
+.school-groups {
+  display: grid;
+  max-width: var(--content-max);
+  gap: var(--s6);
+}
+
+.school-group .card-head {
+  align-items: flex-start;
+  padding: var(--s6);
+}
+
+.school-group .card-head-text h2 {
+  font-size: var(--text-section);
+}
+
+.school-group-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--s4);
+  align-items: center;
+}
+
+.school-edit {
+  font-size: var(--text-meta);
+}
+
+.school-edit > summary {
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.school-edit > summary:hover {
+  color: var(--brand);
+}
+
+.school-edit[open] > summary {
+  margin-bottom: var(--s3);
+  color: var(--ink);
+}
+
+.school-remove {
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+.school-remove:hover {
+  color: var(--risk-ink);
+}
+
+/* --------------------------------------------------------------- prompt row */
+
+.prompt-row > summary {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: 10px minmax(0, 1fr) 92px 152px 104px minmax(0, 190px) 14px;
+  align-items: center;
+  min-height: var(--row-h);
+  padding: var(--s2) var(--s6);
+  cursor: pointer;
+  list-style: none;
+}
+
+.prompt-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.prompt-row > summary:hover {
+  background: color-mix(in srgb, var(--surface-sunk) 45%, var(--surface));
+}
+
+/* The chevron is the seventh column, so it never crowds the essay name. */
+.prompt-row > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.prompt-row[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+.prompt-row[open] > summary {
+  background: var(--surface-sunk);
+}
+
+.cell-title {
+  min-width: 0;
+}
+
+.cell-topline {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.cell-school {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-prompt {
+  display: block;
+  overflow: hidden;
+  font-size: var(--text-meta);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.req-tag {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--quiet-tint);
+  color: var(--quiet-ink);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.cell-limit,
+.cell-category,
+.cell-state,
+.cell-essay {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-category {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cell-state.complete {
+  color: var(--ok-ink);
+  font-weight: 600;
+}
+
+.cell-state.in-progress {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.cell-essay {
+  color: var(--ink);
+}
+
+/* The glyph needs air: "\u21bbWhat I Would Bring" read as one word. */
+.essay-mark,
+.reuse-mark {
+  margin-right: 5px;
+  color: var(--brand);
+}
+
+.reuse-mark {
+  color: var(--warn-ink);
+}
+
+/* A previous-cycle prompt states so on its own line rather than being trimmed
+   into a column - it must never be missed. */
+.cycle-warning {
+  grid-column: 1 / -1;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-control);
+  background: var(--info-tint);
+  color: var(--info-ink);
+  font-size: var(--text-small);
+}
+
+/* Between the mobile floor and 1440 the category column is the first thing
+   worth losing: the pill is repeated in the expanded detail. */
+@media (max-width: 1180px) {
+  .prompt-row > summary {
+    grid-template-columns: 10px minmax(0, 1fr) 84px 96px minmax(0, 170px) 14px;
+  }
+
+  .cell-category {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  /* The header's actions do not shrink, so on a phone they wrap to their own
+     line rather than pushing the card wider than the screen. */
+  .school-group .card-head {
+    flex-wrap: wrap;
+  }
+
+  .school-group-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .prompt-row > summary {
+    grid-template-columns: 10px minmax(0, 1fr) minmax(0, 96px) 14px;
+    padding-inline: var(--s4);
+  }
+
+  .cell-limit,
+  .cell-category,
+  .cell-state {
+    display: none;
+  }
+
+  .cell-prompt,
+  .cell-school,
+  .cell-essay {
+    overflow: visible;
+    white-space: normal;
+  }
+}

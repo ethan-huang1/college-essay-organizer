@@ -19,16 +19,16 @@ Schools → Prompts → Essay categories → Essays → Reuse opportunities
 | View | What it answers |
 |---|---|
 | **Overview** (`/`) | How much work is there, how much is done, and where can one essay do double duty? |
-| **All prompts** (`/schools`) | Every prompt grouped by school, one scannable row each, filterable by school, category, status, or text. |
+| **Your Prompts** (`/schools`) | Every prompt grouped by college as a card of compact rows, filterable by college, category, status, or text. |
 | **Categories** (`/families`) | The same prompts grouped by the eleven-category taxonomy — *Why Major — 61 prompts across 31 schools* — so cross-school overlap is obvious. |
-| **My essays** (`/essays`) | The essay library: drafts, immutable versions, and which prompts each essay answers. |
+| **My Essays** (`/essays`) | The essay library: drafts, immutable versions, and a ribbon of the colleges each essay can actually go to. |
 | **Reuse** (`/reuse`) | Per essay: prompts it already answers, prompts it could answer, and prompts it must **not** be reused for. |
 
 ![Categories view grouping prompts from different schools under one theme](docs/categories.png)
 
 ## Two workspaces
 
-Switch between them in the sidebar's Workspace panel. They never share records.
+Switch between them in the account menu at the top right. They never share records.
 
 - **My workspace** — created empty when you sign up, private to your account. You add your own colleges with
   **Add a college**, which imports that school's current-cycle prompts from the
@@ -288,13 +288,90 @@ pasted origin, classified from its text → earliest assignment, for essays
 predating this → the essay's own text → unknown, which scores neutral rather than
 as a mismatch. Existing essays stay null and keep working.
 
+## The interface
+
+Horizontal top navigation on a warm off-white ground. Four sections, the
+wordmark leading back to Overview, and the account controls behind an avatar
+menu that uses the native `popover` attribute — Escape, light-dismiss and
+top-layer stacking with no JavaScript.
+
+**Cards for things you act on, rows for things you scan.** A college, an essay,
+a category group and a stat tile are cards. A prompt, an essay version, a reuse
+suggestion and a match are compact rows, hairline-separated inside their card,
+taking their breathing room from row height and card padding rather than from a
+border and shadow each. A card inside a card is treated as a defect.
+
+**Two typefaces, doing different jobs.** Plus Jakarta Sans carries the whole
+interface; Newsreader is confined to the two surfaces where paragraphs are
+actually read — a prompt's own wording and an essay's text. Both are
+self-hosted at build time, so there is no runtime request to Google and no
+layout shift.
+
+**Every college has an identity mark**: its initials on one of twelve curated
+colours, picked deterministically from the name. The colours are a vetted list
+rather than a hue derived from a hash, because a free hue can land somewhere
+illegible; `src/app/contrast.test.ts` asserts that every one carries white
+initials at AA and sits at 3:1 against the card surface. A campus photograph
+replaces the initials where one is registered — none currently is, see
+[docs/school-photos.md](docs/school-photos.md).
+
+**The reuse ribbon** is the one place the design raises its voice. Each essay
+card carries a row of college marks showing where that essay can actually go,
+each ringed by its reuse band. It puts the product's argument — one essay, many
+prompts — on screen at a glance. Every mark is a link whose accessible name
+states the college and the band in words, so colour is never load-bearing.
+
+Composed for 1440px and for larger displays up to 2880px, where grids gain
+columns rather than stretching cards: the college grid goes from three columns
+to five. Below 900px the app stays usable rather than polished — mobile
+optimisation is deliberately deferred.
+
+### Accessibility
+
+`src/app/contrast.test.ts` parses `src/app/styles/tokens.css` and asserts WCAG
+AA on every declared foreground/background pair — 4.5:1 for text, 3:1 for the
+boundaries of things you operate — plus a guard that every colour in the
+palette is either checked or listed as decorative with a stated reason, so a
+colour cannot be added without being contrast-checked.
+
+Hairlines between surfaces and pill fills are the documented exceptions: a card
+reads as a card because it is white on cream, and a pill always carries its own
+text, so neither depends on its border to be perceived.
+
+Beyond contrast: `aria-current="page"` is reserved for the active navigation
+item; filter chips are removal links, named for what activating them does, and
+carry neither `aria-pressed` nor `aria-current`; progress is a real
+`progressbar` with an accessible name and a visible fraction, and degrades to
+plain decoration when there is nothing to measure rather than claiming "0 of 0
+complete"; focus is always visible, with a lighter ring reserved for the dark
+navigation bar; and `prefers-reduced-motion` disables every transition.
+
+### Style organisation
+
+`globals.css` was 2311 lines of undifferentiated rules. It is now a short list
+of imports:
+
+```
+src/app/styles/
+  tokens.css       colour, type, space, radius - no selectors
+  base.css         reset, document defaults, focus, reduced motion
+  primitives.css   card, pill, ring, mark, row, controls
+  features/        nav, shell, auth, overview, filters, prompts,
+                   prompt-detail, forms, essays, categories, reuse,
+                   credits, plans
+```
+
+A two-direction sweep checks that every rule is used and every class in the
+markup is styled, because an orphan rule and a missing rule are different bugs.
+
 ## Architecture
 
 Next.js App Router with React Server Components on Postgres (Drizzle ORM),
 deployed on Vercel with Neon. Every mutation is a server action driven by a
-plain `<form>`; the only client component in the app is the one that highlights
-the active sidebar link. Progressive disclosure is done with `<details>` and URL
-parameters, so the interface works without JavaScript.
+plain `<form>`; the only client component in the app is the one that marks the
+current section in the top navigation. Progressive disclosure is done with
+`<details>` and URL parameters, and the account menu uses the native `popover`
+attribute, so the interface works without JavaScript.
 
 Nothing is prerendered — every route reads the workspace cookie and the
 database — so the root layout declares `force-dynamic` and the build needs no
@@ -306,10 +383,16 @@ src/app/
   sign-in/, sign-up/    the auth pages, sharing one AuthCard
   auth-actions.ts       sign up / sign in / sign out
   proxy.ts (src/)       the auth gate, in front of every route
-  (app)/layout.tsx      sidebar navigation, per-school progress, workspace switch
+  (app)/layout.tsx      top navigation, account menu, workspace switch
   (app)/page.tsx        Overview dashboard
-  (app)/[section]/      All prompts / Categories / My essays / Reuse
+  (app)/[section]/      Your Prompts / Categories / My Essays / Reuse
+  (app)/plans/          reads the local plan files in ~/.claude/plans
+  (app)/photo-credits/  photograph attribution, and the independence notice
   prompt-ui.tsx         the shared prompt row used by two views
+  school-mark.tsx       a college's identity mark: initials on a vetted colour
+  catalogue-state.tsx   what a college with no prompts on file actually means
+  filtering.ts          the filter predicates, lifted out so they are testable
+  styles/               tokens, base, primitives, one partial per view
   *-actions.ts          server actions (auth, college, school, prompt, essay)
 src/lib/
   retrieval/            typed school records + registry + validation
@@ -321,6 +404,7 @@ src/lib/
   essays.ts             essay CRUD with immutable versions
   auth.ts               scrypt hashing + stateless signed sessions
   users.ts              accounts and their personal workspaces
+  school-photos.ts      campus photographs and their required provenance
   db/                   Drizzle schema, migrations, seeds, demo workspace
     client.ts           Neon pool for the app, PGlite for tests
     server.ts           cached pool + one-time workspace initialization

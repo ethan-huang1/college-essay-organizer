@@ -1,0 +1,280 @@
+/* Top navigation. Replaces the 248px left sidebar, which spent a fifth of a
+   1440px screen on a school list that duplicated the filter's school select. */
+
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--nav);
+  color: var(--nav-ink);
+}
+
+.topnav-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--s8);
+  width: min(100%, var(--shell-max));
+  height: var(--nav-h);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+/* ------------------------------------------------------------------ wordmark */
+
+.wordmark {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--s3);
+  white-space: nowrap;
+}
+
+.wordmark-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--nav-ink);
+  color: var(--nav);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wordmark-text {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.wordmark-text strong {
+  font-weight: 650;
+}
+
+.wordmark-text span {
+  color: var(--nav-ink-soft);
+  font-weight: 400;
+}
+
+/* ---------------------------------------------------------------- section tabs */
+
+.sections {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s1);
+  height: 100%;
+}
+
+.section-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s4);
+  color: var(--nav-ink-soft);
+  font-size: var(--text-meta);
+  font-weight: 550;
+  transition: color 120ms ease;
+}
+
+.section-tab:hover {
+  color: var(--nav-ink);
+}
+
+.section-tab[aria-current="page"] {
+  color: var(--nav-ink);
+  font-weight: 650;
+}
+
+/* The dot is decoration on top of a real aria-current, never the only signal. */
+.section-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--focus-nav);
+  transform: translateX(-50%);
+}
+
+.tab-count {
+  min-width: 21px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 13%);
+  color: var(--nav-ink);
+  font-size: var(--text-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------------- utility */
+
+.topnav-utility {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin-left: auto;
+}
+
+/* Plans is a developer surface, not one of the four product sections, so it
+   sits with the account controls rather than among the tabs. */
+.utility-link {
+  color: var(--nav-ink-soft);
+  font-size: var(--text-meta);
+}
+
+.utility-link:hover,
+.utility-link[aria-current="page"] {
+  color: var(--nav-ink);
+}
+
+.avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--focus-nav);
+  color: var(--nav);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------- account menu
+   The native popover attribute carries Escape, light-dismiss and top-layer
+   stacking, so this needs no JavaScript. Its default UA placement is centred
+   in the viewport, so it is positioned under the avatar here - the right
+   offset follows the shell rather than the window, which matters once the
+   viewport is wider than --shell-max. */
+
+.account-menu {
+  position: fixed;
+  top: calc(var(--nav-h) + 10px);
+  right: max(var(--gutter), (100vw - var(--shell-max)) / 2 + var(--gutter));
+  left: auto;
+  width: 304px;
+  margin: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: 0 14px 34px rgb(25 24 20 / 14%);
+  color: var(--ink);
+}
+
+.account-email {
+  overflow: hidden;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-workspace {
+  margin: var(--s3) 0 0;
+  padding: var(--s3);
+  border-radius: var(--r-control);
+  background: var(--surface-sunk);
+  font-size: var(--text-small);
+}
+
+.account-workspace strong {
+  display: block;
+  font-size: var(--text-meta);
+}
+
+.account-workspace span {
+  color: var(--ink-soft);
+}
+
+.account-actions {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+.account-actions button {
+  display: block;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-actions button:hover {
+  background: var(--surface-sunk);
+}
+
+.account-actions button[aria-current="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+
+.account-link {
+  display: block;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  color: var(--ink);
+  font-size: var(--text-meta);
+}
+
+.account-link:hover {
+  background: var(--surface-sunk);
+}
+
+.account-signout {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+/* Below 900px the tabs wrap under the wordmark rather than overflowing. Mobile
+   polish is deliberately out of scope for this phase; this only keeps the app
+   usable. */
+@media (max-width: 900px) {
+  .topnav-inner {
+    height: auto;
+    flex-wrap: wrap;
+    gap: var(--s3);
+    padding: var(--s3) var(--s4);
+  }
+
+  /* The tab strip scrolls sideways on its own rather than widening the
+     document; without max-width it is sized by its content and takes the page
+     with it. */
+  .sections {
+    order: 3;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .section-tab {
+    flex: 0 0 auto;
+    padding: var(--s2) var(--s3);
+  }
+
+  .section-tab[aria-current="page"]::after {
+    bottom: 2px;
+  }
+
+  .account-menu {
+    right: var(--s4);
+    width: min(304px, calc(100vw - var(--s8)));
+  }
+}

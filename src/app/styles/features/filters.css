@@ -1,0 +1,78 @@
+/* Filter toolbar. The form is unchanged - same field names, same submit
+   target, same result set - so only its presentation moves. */
+
+.filter-toolbar {
+  max-width: var(--content-max);
+  margin-bottom: var(--s6);
+  padding: var(--s4) var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-sunk);
+}
+
+.filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: flex-end;
+}
+
+.filter-controls .field-label {
+  min-width: 160px;
+}
+
+.filter-controls .filter-search {
+  flex: 1 1 220px;
+}
+
+.filter-controls .select,
+.filter-controls .input {
+  width: 100%;
+  height: 38px;
+}
+
+.filter-controls .btn {
+  height: 38px;
+}
+
+/* ------------------------------------------------------------------- chips */
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.chip {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+  max-width: 340px;
+  padding: 3px var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--text-small);
+}
+
+.chip > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip > span:last-child {
+  color: var(--ink-soft);
+}
+
+.chip:hover {
+  border-color: var(--ink);
+}
+
+.chip:hover > span:last-child {
+  color: var(--risk-ink);
+}

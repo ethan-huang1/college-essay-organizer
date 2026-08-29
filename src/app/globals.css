@@ -1,13 +1,24 @@
 @import "tailwindcss";
 
-/* Design system. Order matters:
-   tokens and base establish the ground, legacy.css carries the pre-redesign
-   rules for the views not yet rebuilt, and the new partials come last so they
-   win on equal specificity. legacy.css shrinks to nothing by the end of
-   Phase B. */
+/* Design system. tokens and base establish the ground, primitives define the
+   card / pill / ring / row vocabulary, and each feature partial styles one
+   view. The 2311-line globals.css this replaced, and the legacy.css that
+   carried it through the redesign, are both gone. */
 
 @import "./styles/tokens.css";
 @import "./styles/base.css";
-@import "./styles/legacy.css";
+@import "./styles/primitives.css";
 
+@import "./styles/features/shell.css";
+@import "./styles/features/nav.css";
+@import "./styles/features/auth.css";
+@import "./styles/features/overview.css";
+@import "./styles/features/filters.css";
+@import "./styles/features/prompts.css";
+@import "./styles/features/prompt-detail.css";
+@import "./styles/features/forms.css";
+@import "./styles/features/essays.css";
+@import "./styles/features/categories.css";
+@import "./styles/features/reuse.css";
+@import "./styles/features/credits.css";
 @import "./styles/features/plans.css";

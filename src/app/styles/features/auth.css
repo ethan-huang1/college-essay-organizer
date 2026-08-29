@@ -1,0 +1,111 @@
+/* Sign in and sign up. Same markup as before; only the presentation moves. */
+
+.sign-in-frame {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--s8) var(--s4);
+  background: var(--ground);
+}
+
+.sign-in-card {
+  width: min(100%, 432px);
+  padding: var(--s8);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.auth-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--s6);
+  place-items: center;
+  border-radius: 11px;
+  background: var(--nav);
+  color: var(--nav-ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.sign-in-card h1 {
+  margin-bottom: var(--s3);
+  font-size: var(--text-title);
+}
+
+.sign-in-lede {
+  margin-bottom: var(--s6);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+.sign-in-error {
+  margin-bottom: var(--s4);
+  padding: var(--s3);
+  border-radius: var(--r-control);
+  background: var(--risk-tint);
+  color: var(--risk-ink);
+  font-size: var(--text-meta);
+}
+
+.sign-in-form {
+  display: grid;
+  gap: var(--s4);
+}
+
+.sign-in-form label {
+  display: grid;
+  gap: var(--s2);
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sign-in-form input {
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-body);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.sign-in-form button {
+  margin-top: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sign-in-form button:hover {
+  background: var(--nav);
+}
+
+.field-hint {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.sign-in-note {
+  margin: var(--s6) 0 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+}

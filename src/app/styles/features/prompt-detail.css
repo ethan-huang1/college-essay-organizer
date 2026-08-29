@@ -1,0 +1,260 @@
+/* The expanded body of a prompt row, plus the small shared pieces that appear
+   inside it. */
+
+.prompt-detail {
+  padding: var(--s6);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+/* The prompt's own words, in the reading face. This and the essay editor are
+   the only places the serif appears. */
+.prompt-full-text {
+  max-width: var(--measure);
+  margin: 0 0 var(--s6);
+  font-family: var(--font-prose);
+  font-size: var(--text-lead);
+  line-height: 1.6;
+}
+
+.conditional-note {
+  margin: 0 0 var(--s4);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-control);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--text-meta);
+}
+
+.detail-grid {
+  display: grid;
+  gap: var(--s6);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+}
+
+.detail-label {
+  margin: 0 0 var(--s2);
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.detail-note,
+.detail-meta {
+  margin: 0 0 var(--s2);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  line-height: 1.55;
+}
+
+.detail-meta {
+  font-size: var(--text-small);
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: center;
+  margin-top: var(--s2);
+}
+
+.response-block {
+  min-width: 0;
+}
+
+.assigned-essay-name {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------- suggestions */
+
+.suggestion-list {
+  display: grid;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+  padding: 0;
+  list-style: none;
+}
+
+.suggestion-list li {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.suggestion-name {
+  overflow: hidden;
+  font-size: var(--text-meta);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion-action {
+  grid-column: 2 / -1;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+/* ------------------------------------------------------------------ source */
+
+.verification-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  margin-bottom: var(--s2);
+}
+
+.verification-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--quiet-tint);
+  color: var(--quiet-ink);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.verification-badge.verified {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.verification-badge.unverified {
+  background: var(--caution-tint);
+  color: var(--caution-ink);
+}
+
+.verification-badge.previous-cycle {
+  background: var(--info-tint);
+  color: var(--info-ink);
+}
+
+a.verification-badge:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------ chips */
+
+.family-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  font-size: var(--text-small);
+}
+
+.family-chips > span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--quiet-tint);
+  color: var(--quiet-ink);
+}
+
+.family-chips .primary-chip {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.swatch.large {
+  width: 12px;
+  height: 12px;
+}
+
+.muted-swatch {
+  background: var(--line-strong);
+}
+
+/* -------------------------------------------------------------- edit block */
+
+.prompt-edit {
+  margin-top: var(--s6);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.prompt-edit-head {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.progress-line {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+.progress-line strong {
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.section-progress {
+  white-space: nowrap;
+}
+
+/* nowrap is what keeps the header summary on one line on a desktop; on a phone
+   it is what pushes the document wider than the screen. */
+@media (max-width: 900px) {
+  .section-progress {
+    white-space: normal;
+  }
+}
+
+.unresolved-count {
+  color: var(--caution-ink);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------- misc */
+
+.text-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--brand);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.text-link:hover {
+  color: var(--nav);
+  text-decoration: underline;
+}
+
+.filter-note {
+  margin: 0 0 var(--s4);
+}
+
+.risk-note {
+  margin: 0;
+  color: var(--caution-ink);
+  font-size: var(--text-small);
+}

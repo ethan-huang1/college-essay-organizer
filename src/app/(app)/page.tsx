@@ -6,7 +6,9 @@ import { reuseOpportunities } from "@/lib/progress";
 import { canonicalPromptGroups, workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { assignEssayAction } from "../assignment-actions";
-import { AddCollegeForm, ProgressBar, ProgressLine } from "../prompt-ui";
+import { CatalogueStateBadge } from "../catalogue-state";
+import { AddCollegeForm, ProgressLine, ProgressRing } from "../prompt-ui";
+import { SchoolMark } from "../school-mark";
 
 export const dynamic = "force-dynamic";
 
@@ -61,11 +63,11 @@ export default async function Overview() {
             </p>
           </div>
         </header>
-        <div className="overview-empty">
+        <div className="overview-empty card">
           <AddCollegeForm />
-          <p className="detail-note">
-            Prefer to look around first? Open the <strong>Example workspace</strong> from the workspace panel in the
-            sidebar: a fully populated list of {DEMO_SCHOOLS.length} colleges with real prompts and clearly labelled
+          <p className="empty-note">
+            Prefer to look around first? Open the <strong>Example workspace</strong> from the account menu at the top
+            right: a fully populated list of {DEMO_SCHOOLS.length} colleges with real prompts and clearly labelled
             sample essays. It is kept entirely separate from your own work.
           </p>
         </div>
@@ -98,9 +100,9 @@ export default async function Overview() {
         <ProgressLine className="section-progress" progress={overall} />
       </header>
 
-      <dl className="stat-tiles">
+      <dl className="stat-tiles tile-grid">
         {tiles.map(([label, value, note]) => (
-          <div key={label}>
+          <div className="card stat-tile" key={label}>
             <dt>{label}</dt>
             <dd>{value}</dd>
             {note ? <span>{note}</span> : null}
@@ -108,81 +110,108 @@ export default async function Overview() {
         ))}
       </dl>
 
-      <div className="overview-grid">
-        <section className="overview-panel">
-          <div className="panel-head">
-            <h2>Progress by school</h2>
-            <span className="panel-head-links">
-              <Link className="text-link" href="/schools#add-college">Add college</Link>
-              <Link className="text-link" href="/schools">All prompts <span aria-hidden="true">→</span></Link>
-            </span>
-          </div>
-          <ul className="progress-rows">
-            {bySchool.map(({ school, progress }) => (
-              <li key={school.id}>
-                <Link href={`/schools?school=${school.id}`}>{school.name}</Link>
-                <ProgressBar progress={progress} />
-                <span className="progress-count">{progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : "—"}</span>
-                <span className="progress-reuse">{progress.reusable > 0 ? `${progress.reusable} reusable` : ""}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      <section className="overview-section" aria-labelledby="colleges-heading">
+        <div className="section-bar">
+          <h2 id="colleges-heading">Your colleges</h2>
+          <span className="section-bar-links">
+            <Link className="text-link" href="/schools#add-college">Add college</Link>
+            <Link className="text-link" href="/schools">Your Prompts <span aria-hidden="true">→</span></Link>
+          </span>
+        </div>
+        <div className="card-grid">
+          {bySchool.map(({ school, progress }) => (
+            <article className="card school-card" key={school.id}>
+              <div className="card-head">
+                <SchoolMark name={school.name} />
+                <div className="card-head-text">
+                  <h3>
+                    <Link href={`/schools?school=${school.id}`}>{school.name}</Link>
+                  </h3>
+                  <p className="card-meta">
+                    {progress.requiredTotal > 0
+                      ? `${progress.requiredTotal} required · ${progress.requiredRemaining} to go`
+                      : "No required essays on file"}
+                    {progress.reusable > 0 ? ` · ${progress.reusable} reusable` : ""}
+                  </p>
+                </div>
+                <ProgressRing progress={progress} label={school.name} />
+              </div>
+              <CatalogueStateBadge school={school} />
+            </article>
+          ))}
+        </div>
+      </section>
 
-        <section className="overview-panel">
-          <div className="panel-head">
-            <h2>Progress by category</h2>
+      <div className="overview-columns">
+        <section className="overview-section" aria-labelledby="categories-heading">
+          <div className="section-bar">
+            <h2 id="categories-heading">Progress by category</h2>
             <Link className="text-link" href="/families">Categories <span aria-hidden="true">→</span></Link>
           </div>
-          <ul className="progress-rows">
-            {byCategory.map(({ family, progress }) => (
-              <li key={family.id}>
-                <Link href={`/families?family=${family.id}`}>
-                  <span className="swatch" style={{ backgroundColor: family.color }} aria-hidden="true" />
-                  {family.name}
-                </Link>
-                <ProgressBar progress={progress} />
-                <span className="progress-count">{progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : "—"}</span>
-                <span className="progress-reuse">{progress.reusable > 0 ? `${progress.reusable} reusable` : ""}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="card">
+            <ul className="rows">
+              {byCategory.map(({ family, progress }) => (
+                <li key={family.id}>
+                  <div className="row">
+                    <span className="swatch" style={{ backgroundColor: family.color }} aria-hidden="true" />
+                    <span className="row-main">
+                      <Link className="row-title" href={`/families?family=${family.id}`}>{family.name}</Link>
+                    </span>
+                    <span className="row-side">
+                      {progress.reusable > 0 ? <span>{progress.reusable} reusable</span> : null}
+                      <span className="row-count">
+                        {progress.requiredTotal > 0 ? `${progress.requiredComplete}/${progress.requiredTotal}` : "—"}
+                      </span>
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="overview-section" aria-labelledby="reuse-heading">
+          <div className="section-bar">
+            <h2 id="reuse-heading">Reuse opportunities</h2>
+            <Link className="text-link" href="/reuse">All {openReuse} <span aria-hidden="true">→</span></Link>
+          </div>
+          <div className="card">
+            {topReuse.length === 0 ? (
+              <p className="empty-note">
+                {snapshot.essays.length === 0
+                  ? "Once your library has essays, prompts they can answer show up here."
+                  : "No unanswered prompt matches an existing essay closely enough yet."}
+              </p>
+            ) : (
+              <ul className="rows">
+                {topReuse.map(({ match, essay }) => (
+                  <li key={match.id}>
+                    <div className="row">
+                      <span className="match-score">{match.score}</span>
+                      <span className="row-main">
+                        <span className="row-title">{match.promptTitle}</span>
+                        <span className="row-sub">
+                          {sharedLabel.get(match.promptId) ?? match.schoolName} · {essay.title}
+                        </span>
+                      </span>
+                      <span className="row-side">
+                        <span className={`pill ${match.recommendedAction}`}>
+                          {ACTION_LABELS[match.recommendedAction as RecommendedAction]}
+                        </span>
+                        <form action={assignEssayAction}>
+                          <input name="promptId" type="hidden" value={match.promptId} />
+                          <input name="essayId" type="hidden" value={essay.id} />
+                          <button className="text-link" type="submit">Use here</button>
+                        </form>
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </section>
       </div>
-
-      <section className="overview-panel">
-        <div className="panel-head">
-          <h2>Reuse opportunities</h2>
-          <Link className="text-link" href="/reuse">All {openReuse} <span aria-hidden="true">→</span></Link>
-        </div>
-        {topReuse.length === 0 ? (
-          <p className="detail-note">
-            {snapshot.essays.length === 0
-              ? "Once your library has essays, prompts they can answer show up here."
-              : "No unanswered prompt matches an existing essay closely enough yet."}
-          </p>
-        ) : (
-          <ul className="reuse-rows">
-            {topReuse.map(({ match, essay }) => (
-              <li key={match.id}>
-                <span className="match-score">{match.score}</span>
-                <span className="reuse-prompt">
-                  <span className="cell-school">{sharedLabel.get(match.promptId) ?? match.schoolName}</span>
-                  <span>{match.promptTitle}</span>
-                </span>
-                <span className="reuse-action">{essay.title}</span>
-                <span className={`risk-label risk-${match.schoolSpecificityRisk}`}>{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
-                <form action={assignEssayAction}>
-                  <input name="promptId" type="hidden" value={match.promptId} />
-                  <input name="essayId" type="hidden" value={essay.id} />
-                  <button className="text-link" type="submit">Use here</button>
-                </form>
-                <span className="reuse-explanation">{match.explanation}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       {overall.previousCycle > 0 || attention > 0 ? (
         <p className="overview-note">

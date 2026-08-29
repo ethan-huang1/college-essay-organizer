@@ -1,0 +1,95 @@
+/* Categories: a category is the same kind of container as a college, so it
+   reuses the group card rather than inventing a per-prompt card. */
+
+.category-list {
+  display: grid;
+  max-width: var(--content-max);
+  gap: var(--s6);
+}
+
+.category-group > summary {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+  align-items: center;
+  padding: var(--s4) var(--s6);
+  cursor: pointer;
+  list-style: none;
+}
+
+.category-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.category-group > summary:hover .category-name {
+  color: var(--brand);
+}
+
+.category-heading {
+  min-width: 0;
+}
+
+.category-name {
+  display: block;
+  font-size: var(--text-section);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.category-schools {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-count {
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
+.category-count strong {
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-variant-numeric: tabular-nums;
+}
+
+.category-body {
+  border-top: 1px solid var(--line);
+}
+
+.category-description {
+  max-width: var(--measure);
+  margin: 0;
+  padding: var(--s4) var(--s6);
+  color: var(--ink-soft);
+  font-family: var(--font-prose);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.category-body > .rows {
+  border-top: 1px solid var(--line-soft);
+}
+
+.unused-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  margin: var(--s8) 0 0;
+  padding: var(--s4) var(--s6);
+  border-radius: var(--r-card);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+@media (max-width: 900px) {
+  .category-group > summary {
+    grid-template-columns: 12px minmax(0, 1fr);
+  }
+}

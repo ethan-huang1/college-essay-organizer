@@ -1,0 +1,142 @@
+/* Overview: stat tiles, college cards, and two row panels. */
+
+.overview-section {
+  margin-top: var(--s12);
+}
+
+/* Section bar: a label and its links, not a heading on a rule. */
+.section-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s6);
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--s4);
+}
+
+.section-bar h2 {
+  margin: 0;
+  font-size: var(--text-section);
+}
+
+.section-bar-links {
+  display: flex;
+  gap: var(--s4);
+}
+
+/* -------------------------------------------------------------- stat tiles */
+
+.stat-tiles {
+  max-width: 1520px;
+  margin: 0;
+}
+
+.stat-tile {
+  padding: var(--s4) var(--s6) var(--s6);
+}
+
+.stat-tile dt {
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stat-tile dd {
+  margin: var(--s2) 0 0;
+  font-size: var(--text-display);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.stat-tile span {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+/* ------------------------------------------------------------ college cards */
+
+/* Cards in a row stretch to match, so a two-line college name or a state pill
+   does not leave a ragged edge. The pill sits at the bottom of its card. */
+.school-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.school-card .pill {
+  align-self: flex-start;
+  margin: 0 var(--s6) var(--s4);
+}
+
+/* ------------------------------------------------------------- two columns */
+
+.overview-columns {
+  display: grid;
+  gap: var(--s8);
+  grid-template-columns: repeat(auto-fit, minmax(460px, 760px));
+  align-items: start;
+}
+
+.row-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.match-score {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-sunk);
+  color: var(--ink);
+  font-size: var(--text-small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-empty {
+  padding: var(--s8);
+}
+
+.overview-note {
+  margin: var(--s8) 0 0;
+  padding: var(--s4) var(--s6);
+  border-radius: var(--r-card);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+.empty-note {
+  margin: 0;
+  padding: var(--s4) var(--s6);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+@media (max-width: 900px) {
+  .overview-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* One tile per row turned six numbers into six screens of scrolling. */
+  .tile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .stat-tile {
+    padding: var(--s3) var(--s4) var(--s4);
+  }
+
+  .stat-tile dd {
+    font-size: var(--text-title);
+  }
+}

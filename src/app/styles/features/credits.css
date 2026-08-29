@@ -1,0 +1,68 @@
+/* Photo credits. Plain by design: it is a reference page, not a display. */
+
+.credit-empty {
+  display: grid;
+  gap: var(--s4);
+  max-width: var(--measure);
+  padding: var(--s8);
+}
+
+.credit-empty p {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.credit-list {
+  display: grid;
+  max-width: var(--content-max);
+  gap: var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.credit-detail {
+  display: grid;
+  gap: var(--s2) var(--s4);
+  grid-template-columns: 100px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--s4) var(--s6);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-meta);
+}
+
+.credit-detail dt {
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.credit-detail dd {
+  margin: 0;
+}
+
+.credit-disclaimer {
+  max-width: var(--measure);
+  margin: var(--s8) 0 0;
+  padding: var(--s4) var(--s6);
+  border-radius: var(--r-card);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.6;
+}
+
+/* The per-photograph affordance: small, quiet, and only where a photograph
+   actually is. */
+.photo-credit-link {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.photo-credit-link:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}

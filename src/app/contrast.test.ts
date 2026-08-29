@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { MARK_COLOURS, schoolInitials } from "./school-mark";
+
 // Parses the real token file rather than a copy of the values, so a colour
 // cannot be changed in the design system without this test seeing it.
 const TOKENS = readFileSync(join(import.meta.dirname, "styles/tokens.css"), "utf8");
@@ -98,11 +100,43 @@ describe("colour tokens", () => {
     expect(ratio(front!, back!)).toBeGreaterThanOrEqual(3);
   });
 
+  it("gives every school mark legible white initials", () => {
+    for (const colour of MARK_COLOURS) {
+      expect(ratio("#ffffff", colour), `white initials on ${colour}`).toBeGreaterThanOrEqual(4.5);
+      // 3:1 against the card surface, so the circle's edge shows unaided.
+      expect(ratio(colour, "#ffffff"), `${colour} against --surface`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("uses distinct mark colours", () => {
+    expect(new Set(MARK_COLOURS).size).toBe(MARK_COLOURS.length);
+  });
+
   it("checks every colour in the palette", () => {
     const checked = new Set([...TEXT, ...UI].flat());
     const unchecked = [...palette.keys()].filter(
       (name) => !checked.has(name) && !DECORATIVE.has(name),
     );
     expect(unchecked, "add these to TEXT/UI or to DECORATIVE with a reason").toEqual([]);
+  });
+});
+
+describe("school initials", () => {
+  // Naive initials render half a college list as "U".
+  it.each([
+    ["New York University", "NY"],
+    ["University of Pennsylvania", "Pe"],
+    ["University of California, Berkeley", "CB"],
+    ["Massachusetts Institute of Technology", "MT"],
+    ["Brown University", "Br"],
+    ["Boston College", "Bo"],
+  ])("%s -> %s", (name, expected) => {
+    expect(schoolInitials(name)).toBe(expected);
+  });
+
+  it("never returns an empty mark", () => {
+    for (const name of ["University", "of the", "X", "第一大学"]) {
+      expect(schoolInitials(name).length).toBeGreaterThan(0);
+    }
   });
 });

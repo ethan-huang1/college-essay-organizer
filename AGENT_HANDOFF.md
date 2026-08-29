@@ -29,8 +29,8 @@ below). No retrieval, classification, matching, essay-CRUD, versioning, or
 workspace-isolation behavior changed; the only data-layer additions are one
 narrow status mutation and a pure derived-progress module.
 
-**Two distinct workspaces**, both reachable from the sidebar's Workspace
-panel:
+**Two distinct workspaces**, both reachable from the account menu at the top
+right:
 
 - **My workspace** (personal) starts genuinely empty. The student adds their
   own colleges through the always-visible **Add a college** form on
@@ -52,33 +52,56 @@ No school remains `unresearched`.
 
 ## UI architecture
 
-Navigation lives in the persistent sidebar (`src/app/layout.tsx`, which now
-reads the workspace snapshot): Overview, All prompts, Categories, My essays,
-Reuse, followed by every school with its `complete/total` progress, and the
-workspace switcher. `src/app/nav-link.tsx` is the app's only client
-component — it marks the active section/school.
+**Rebuilt by the UI/UX redesign.** The plan is
+`~/.claude/plans/plan-mode-only-do-majestic-koala.md`; the durable record is the
+"The interface" section of [README.md](README.md) and
+[docs/school-photos.md](docs/school-photos.md). No product logic changed —
+`git diff --stat src/lib/` over the whole redesign shows only the additive
+`school-photos.ts` and its test.
 
-Routes kept their paths; only their role changed:
+Navigation is a **horizontal top bar** (`src/app/(app)/layout.tsx`): the
+wordmark leads to Overview, then four tabs — **Your Prompts / Categories /
+My Essays / Reuse** — then a Plans link and an avatar button opening an account
+menu built on the native `popover` attribute (workspace switch, photo credits,
+sign out). The 248px left sidebar is gone; its school list was a navigation
+shortcut duplicating the filter's school select, and the at-a-glance view of
+colleges now lives on Overview as cards.
+
+`src/app/nav-link.tsx` remains the app's only client component: it marks the
+current section, and now also keeps a section current on its own sub-routes.
+
+Routes kept their paths; only their labels and presentation changed:
 
 | Route | Role |
 |---|---|
-| `/` | Overview dashboard: real stat tiles, progress by school and by category, top reuse opportunities. Replaced the old workspace-picker hero (switching moved to the sidebar). |
-| `/schools` | **All prompts**, grouped by school, with compact school headers. `?school=&family=&status=&q=` filter it; `?edit=<promptId>` opens one edit form. |
-| `/families` | **Essay categories** — the same prompt rows grouped by the existing ten-family taxonomy, each group headed by the schools asking it. |
-| `/essays` | Essay library (largely unchanged, plus "answering N prompts / N more possible"). |
-| `/reuse` | Reuse grouped per essay: prompts it already answers vs. prompts it still could. |
+| `/` | **Overview**: six stat tiles, then every college as a card with its identity mark, progress ring and catalogue-state pill, then progress-by-category and top reuse opportunities as row panels. |
+| `/schools` | **Your Prompts**: one card per college, its prompts as compact hairline-separated rows. `?school=&family=&status=&q=` filter it — unchanged behaviour — via a toolbar whose active selections appear as removable chips. `?edit=<promptId>` opens one edit form. |
+| `/families` | **Categories**: the same rows grouped by the eleven-category taxonomy, reusing the group card rather than a per-prompt card. |
+| `/essays` | **My Essays**: one card per essay, carrying the **reuse ribbon** — college marks ringed by reuse band showing where that essay can actually go. The Write disclosure is a writing surface: the reading face at a real measure, with the essay's origin prompt sticky above it. |
+| `/reuse` | **Reuse** per essay, consuming the same band pills and score marks. |
+| `/plans` | Reads the local markdown plans in `~/.claude/plans` (developer surface; the directory does not exist on a deployed server, which shows the empty state). |
+| `/photo-credits` | Photograph attribution and the independence notice. |
 
-`src/app/prompt-ui.tsx` holds the one shared prompt row used by both the
-school and category views: a `<details>` whose `<summary>` is a table row
-(status dot, school · prompt, limit, category, status, essay) and whose body
-holds full prompt text, assignment/reuse actions, a quick status control,
-categories, and source/verification metadata. Two deliberate constraints:
+`src/app/prompt-ui.tsx` still holds the one shared prompt row used by the
+college and category views: a `<details>` whose `<summary>` is a seven-column
+grid (status dot · school+requirement · prompt · limit · category · status ·
+essay · chevron) and whose body holds full prompt text, assignment/reuse
+actions, a status control, categories, and source metadata. Column alignment
+was deliberately kept — it is what makes a hundred prompts scannable — but the
+visible table head is gone, since the values label themselves. Two constraints
+carry over unchanged:
 
 - **Previous-cycle warnings stay on the collapsed row**, never behind
   disclosure — the spec requires that statement to be prominent.
 - **The full edit form is fetched via `?edit=<id>`, not inlined per row.**
-  107 inlined copies made `/schools` a 4 MB document; it is now ~1.5 MB raw
-  / ~155 KB gzipped, and the remaining bulk is Next's RSC payload.
+  107 inlined copies made `/schools` a 4 MB document.
+
+Styling is `src/app/globals.css` as a short list of imports over
+`styles/tokens.css`, `styles/base.css`, `styles/primitives.css` and one
+`styles/features/*.css` per view. The 2311-line monolith and the `legacy.css`
+that carried it through the migration are both gone. `src/app/contrast.test.ts`
+asserts WCAG AA on every token pair and fails if a colour is added without
+being checked.
 
 ## Workspace modes
 

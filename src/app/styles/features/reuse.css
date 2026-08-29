@@ -1,0 +1,136 @@
+/* Reuse: one card per essay, its candidate prompts as compact rows. Consumes
+   the band pills and the score mark already defined elsewhere. */
+
+.reuse-lede {
+  max-width: var(--content-max);
+  margin: 0 0 var(--s6);
+  padding: var(--s4) var(--s6);
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.reuse-lede strong {
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-weight: 650;
+}
+
+.reuse-list {
+  display: grid;
+  max-width: var(--content-max);
+  gap: var(--s6);
+}
+
+.reuse-tally {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--s6);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+.reuse-tally span {
+  display: grid;
+}
+
+.reuse-tally strong {
+  color: var(--ink);
+  font-size: var(--text-section);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- match row */
+
+.match-row {
+  padding-bottom: 0;
+}
+
+.match-adjustments {
+  margin: 0;
+  padding: 0 var(--s6) var(--s3) calc(var(--s6) + 34px + var(--s4));
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.reuse-rows > li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+/* --------------------------------------------------------------- groupings */
+
+.reuse-weaker {
+  border-top: 1px solid var(--line);
+}
+
+.reuse-weaker > summary {
+  padding: var(--s3) var(--s6);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+
+.reuse-weaker > summary:hover {
+  color: var(--ink);
+}
+
+.reuse-with-edits {
+  border-top: 1px solid var(--line);
+}
+
+.reuse-with-edits > .detail-label {
+  margin: 0;
+  padding: var(--s3) var(--s6) 0;
+}
+
+/* The one place a wall of text is right: it is the difference between reusing
+   an essay honestly and submitting another school's name. */
+.reuse-with-edits-why {
+  max-width: var(--measure);
+  margin: 0;
+  padding: var(--s3) var(--s6) var(--s4);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.6;
+}
+
+.reuse-inuse {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  margin: 0;
+  padding: var(--s3) var(--s6);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.reuse-inuse > span:not(.detail-label) {
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.reuse-inuse .detail-label {
+  margin: 0;
+}
+
+.reuse-group > .detail-note {
+  padding: 0 var(--s6) var(--s4);
+}
+
+@media (max-width: 900px) {
+  .reuse-group .card-head {
+    flex-wrap: wrap;
+  }
+
+  .match-adjustments {
+    padding-left: var(--s4);
+  }
+}

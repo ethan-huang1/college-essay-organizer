@@ -76,31 +76,14 @@
   --r-pill: 999px;
 
   /* ----------------------------------------------------------------- layout */
-  --shell-max: 1720px;
-  --nav-h: 60px;
+  --shell-max: 2240px;
+  /* Lists stop growing well before the shell does: a row holding four short
+     values is worse wide than narrow. Grids use the full shell. */
+  --content-max: 1560px;
+  --nav-h: 64px;
   --row-h: 56px;
   --gutter: 2rem;
   --measure: 68ch;
-
-  /* ---------------------------------------------------------------- legacy
-     The pre-redesign names, re-pointed at the new palette. This is the
-     migration bridge: the views still served by legacy.css (Categories,
-     Reuse) pick up the new colour and type without their markup being
-     touched, and the aliases disappear with legacy.css in Phase B.
-     --font-editorial maps to the sans on purpose - its 28 uses are all
-     headings, and the serif is reserved for prose from here on. */
-  --paper: var(--ground);
-  --paper-raised: var(--surface);
-  --paper-sunk: var(--surface-sunk);
-  --rule: var(--line);
-  --rule-soft: var(--line-soft);
-  --moss: var(--brand);
-  --moss-dark: var(--nav);
-  --oxblood: var(--risk-ink);
-  --gold: var(--warn-ink);
-  --gold-dark: var(--warn-ink);
-  --font-utility: var(--font-ui);
-  --font-editorial: var(--font-ui);
 
   --background: var(--ground);
   --foreground: var(--ink);

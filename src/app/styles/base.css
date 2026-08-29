@@ -67,14 +67,6 @@ h1 {
   color: var(--ink-soft);
 }
 
-/* Prose: the two places paragraphs are actually read. */
-.prose {
-  font-family: var(--font-prose);
-  font-size: var(--text-lead);
-  line-height: 1.6;
-  max-width: var(--measure);
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

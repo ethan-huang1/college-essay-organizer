@@ -1,0 +1,382 @@
+/* Forms, panels and confirmations. Every field name and control is unchanged;
+   this is layout and type only. */
+
+.add-college-panel {
+  display: grid;
+  max-width: var(--content-max);
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.add-college-panel h2 {
+  margin: 0;
+  font-size: var(--text-section);
+}
+
+.crud-form {
+  display: grid;
+  gap: var(--s3) var(--s4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.crud-form > div {
+  display: grid;
+  gap: 5px;
+}
+
+.crud-form label {
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crud-form input {
+  width: 100%;
+  height: 42px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-body);
+}
+
+.crud-form button {
+  height: 42px;
+  padding: 0 var(--s6);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.crud-form button:hover {
+  background: var(--nav);
+}
+
+.classification-help {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------- disclosure panel */
+
+.add-panel-row {
+  max-width: var(--content-max);
+  margin-bottom: var(--s6);
+}
+
+.add-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.add-panel > summary {
+  padding: var(--s4) var(--s6);
+  color: var(--ink);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-panel > summary:hover {
+  color: var(--brand);
+}
+
+.add-panel[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.add-panel > form,
+.add-panel > .prompt-form {
+  padding: var(--s6);
+}
+
+/* ------------------------------------------------------------------- fields */
+
+.prompt-form {
+  display: grid;
+  gap: var(--s4);
+}
+
+.prompt-fields {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.prompt-fields label,
+.inline-edit-form label {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  color: var(--ink-soft);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.prompt-fields label > span,
+.inline-edit-form label > span {
+  font-size: var(--text-small);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.prompt-fields input,
+.prompt-fields select,
+.prompt-fields textarea,
+.inline-edit-form input,
+.inline-edit-form select,
+.prompt-form > label input,
+.prompt-form > label textarea {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.prompt-fields textarea,
+.prompt-form > label textarea {
+  min-height: 88px;
+  font-family: var(--font-prose);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field-group > summary {
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+
+.field-secondary {
+  color: var(--ink-soft);
+}
+
+.prompt-form > button,
+.inline-edit-form button {
+  justify-self: start;
+  padding: var(--s2) var(--s6);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.prompt-form > button:hover,
+.inline-edit-form button:hover {
+  background: var(--nav);
+}
+
+.inline-edit-form {
+  display: grid;
+  gap: var(--s3);
+  min-width: 260px;
+  margin-top: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface-sunk);
+}
+
+.status-form {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  margin-bottom: var(--s4);
+}
+
+.status-form select {
+  padding: 6px var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--text-meta);
+}
+
+.status-form button {
+  padding: 6px var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+
+.status-form button:hover {
+  background: var(--surface-sunk);
+}
+
+/* ------------------------------------------------------------ destructive
+   Deleting is never the quiet default: it is bordered in the risk colour and
+   states what goes with it. */
+
+.delete-form {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s6);
+  padding: var(--s4);
+  border: 1px solid var(--risk-tint);
+  border-radius: var(--r-control);
+  background: var(--risk-tint);
+  color: var(--risk-ink);
+  font-size: var(--text-small);
+}
+
+.delete-form button {
+  justify-self: start;
+  padding: 6px var(--s3);
+  border: 1px solid var(--risk-ink);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--risk-ink);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.delete-form button:hover {
+  background: var(--risk-ink);
+  color: #fff;
+}
+
+.remove-confirm {
+  display: grid;
+  gap: var(--s3);
+  margin: 0 var(--s6) var(--s6);
+  padding: var(--s4);
+  border: 1px solid var(--risk-ink);
+  border-radius: var(--r-control);
+  background: var(--risk-tint);
+}
+
+.remove-confirm-title {
+  margin: 0;
+  color: var(--risk-ink);
+  font-size: var(--text-body);
+  font-weight: 650;
+}
+
+.remove-confirm .detail-note {
+  color: var(--risk-ink);
+}
+
+.remove-confirm-actions {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+}
+
+.remove-confirm-actions button {
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--risk-ink);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- programs
+   A conditional prompt is not counted until the student says whether it
+   applies to them, so this asks rather than guessing. */
+
+.program-panel {
+  display: grid;
+  max-width: var(--content-max);
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+  padding: var(--s4) var(--s6);
+  border: 1px solid var(--warn-ink);
+  border-radius: var(--r-card);
+  background: var(--warn-tint);
+}
+
+.program-panel-title {
+  margin: 0;
+  color: var(--warn-ink);
+  font-size: var(--text-body);
+  font-weight: 650;
+}
+
+.program-panel .detail-note {
+  color: var(--warn-ink);
+}
+
+.program-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  margin-top: var(--s1);
+}
+
+.program-options label {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  font-size: var(--text-meta);
+}
+
+.program-panel > button {
+  justify-self: start;
+  margin-top: var(--s2);
+  padding: 6px var(--s4);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--warn-ink);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .crud-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prompt-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

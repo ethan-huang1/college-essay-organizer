@@ -1,0 +1,258 @@
+/* My Essays: one card per essay, with the reuse ribbon as its signature. */
+
+.essay-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.essay-card .card-head {
+  align-items: flex-start;
+}
+
+.essay-card .card-head-text h2 {
+  font-size: var(--text-section);
+}
+
+.essay-card-body {
+  display: grid;
+  gap: var(--s4);
+  flex: 1 1 auto;
+  padding: 0 var(--s6) var(--s6);
+}
+
+/* Four lines is enough to recognise which essay this is; the whole text is one
+   click away in Write. */
+.essay-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  color: var(--ink-soft);
+  font-family: var(--font-prose);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------ ribbon */
+
+.ribbon-block {
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line-soft);
+}
+
+.ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The band is a ring around the college's own mark, so colour carries two
+   things at once without either overwriting the other. */
+.ribbon-mark {
+  display: block;
+  padding: 2px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.ribbon-mark:hover {
+  transform: translateY(-1px);
+}
+
+.ribbon-mark.assigned {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.ribbon-mark.reusable-slight-edits {
+  border-color: var(--ok-ink);
+}
+
+.ribbon-mark.reusable-edits {
+  border-color: var(--warn-ink);
+}
+
+.ribbon-mark.reusable-significant-edits {
+  border-color: var(--caution-ink);
+}
+
+.ribbon-more {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------- actions */
+
+.record-actions {
+  border-top: 1px solid var(--line);
+}
+
+.record-actions > details + details {
+  border-top: 1px solid var(--line);
+}
+
+.record-actions > details > summary {
+  padding: var(--s3) var(--s6);
+  color: var(--ink);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.record-actions > details > summary:hover {
+  color: var(--brand);
+}
+
+.record-actions > details[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.record-actions > details > form,
+.record-actions > details > .version-list {
+  padding: var(--s6);
+}
+
+.record-actions > details > .prompt-form + .version-list {
+  padding-top: 0;
+}
+
+.record-meta {
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+/* ---------------------------------------------------------------- versions
+   Every save appends an immutable version; nothing is edited in place, so the
+   history is the record. */
+
+.version-list {
+  display: grid;
+  gap: var(--s2);
+}
+
+.version-row {
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+.version-row > summary {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: 108px 132px minmax(0, 1fr);
+  align-items: center;
+  padding: var(--s2) var(--s3);
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.version-row > summary > span:first-child {
+  font-weight: 600;
+}
+
+.version-row > summary > span:nth-child(2) {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.version-row > summary > span:last-child {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-content {
+  max-width: var(--measure);
+  margin: 0;
+  padding: var(--s3);
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-prose);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.version-row .inline-edit-form,
+.version-row > .record-meta {
+  display: block;
+  margin: 0;
+  padding: 0 var(--s3) var(--s3);
+  border: 0;
+  background: none;
+}
+
+@media (max-width: 900px) {
+  .version-row > summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* ------------------------------------------------------------------ editor
+   The one surface built for writing rather than scanning: the reading face at
+   a real measure, and the prompt it answers kept in view above it. */
+
+.essay-editor {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s6);
+}
+
+.editor-prompt {
+  position: sticky;
+  top: calc(var(--nav-h) + var(--s2));
+  z-index: 1;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface-sunk);
+}
+
+.editor-prompt .detail-label {
+  margin-bottom: var(--s1);
+}
+
+.editor-prompt-title {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 650;
+}
+
+.editor-prompt-text {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: var(--measure);
+  margin: var(--s2) 0 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--ink-soft);
+  font-family: var(--font-prose);
+  font-size: var(--text-meta);
+  line-height: 1.55;
+}
+
+.editor-form {
+  padding: 0;
+}
+
+.editor-form textarea {
+  min-height: 420px;
+  max-width: var(--measure);
+  padding: var(--s6);
+  font-family: var(--font-prose);
+  font-size: var(--text-lead);
+  line-height: 1.7;
+}
+
+.editor-count {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
