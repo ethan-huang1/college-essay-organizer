@@ -495,6 +495,18 @@ none of this fixture data was committed):
   control; visible focus everywhere, light on the dark nav; keyboard order
   follows visual order; the account popover opens and closes; no horizontal
   scroll at any of the three widths.
+- `scripts/audit-production-scores.mts` (read-only) reports **1130/1156
+  identical (97.8%)**, not the 1156/1156 the plan expected. The 26
+  disagreements are all **±1 point** and every one sampled keeps the same reuse
+  band, so no recommendation changes. **The redesign cannot be the cause:**
+  `git diff 059f7f1..HEAD --stat src/lib/` shows only the two additive
+  `school-photos` files, and the audit imports neither. The likely explanation
+  is that the stored scores were computed by the ONNX runtime on Vercel's
+  linux/x64 while this audit runs on darwin/arm64, so the semantic factor
+  differs in the last decimal before rounding. Worth confirming before anyone
+  treats a ±1 drift as a regression.
+- **`axe` was not run** — it is not a dependency. Instead the specific rules the
+  plan named were checked directly in the page: see the bullet above.
 - Before/after performance measured against a production build of `059f7f1` in
   a worktree: [docs/evaluation/redesign-performance.md](docs/evaluation/redesign-performance.md).
   CLS 0.00 both. **Two honest negatives recorded there:** warm LCP is +57 ms,
