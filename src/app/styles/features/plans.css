@@ -1,0 +1,59 @@
+/* Plans reader: a developer surface for reading the plan files in
+   ~/.claude/plans. Deliberately plain - it is a utility, not a product view. */
+
+.plans-list {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plans-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4) var(--s6);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+
+.plans-item:hover {
+  border-color: var(--line-strong);
+}
+
+.plans-item strong {
+  font-weight: 600;
+}
+
+.plans-item span {
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
+.plans-item code {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+/* The plan files are markdown and there is no renderer in this project, so
+   they are shown as source in a monospace pane - the same way they read in an
+   editor. */
+.plan-source {
+  margin: 0;
+  padding: var(--s6);
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  font-size: var(--text-small);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  tab-size: 2;
+}

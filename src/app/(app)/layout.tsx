@@ -46,6 +46,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     ["Categories", "/families", snapshot.families.filter((family) => family.promptCount > 0).length],
     ["My essays", "/essays", snapshot.essays.length],
     ["Reuse", "/reuse", openReuse],
+    ["Plans", "/plans", null],
   ];
 
   const schools = [...snapshot.schools].sort((a, b) => a.name.localeCompare(b.name));
