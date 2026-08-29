@@ -16,3 +16,9 @@ data/
 
 # Working screenshots from the redesign; final ones live in docs/
 .screenshots/
+
+# College logos, fetched locally by `npm run logos:fetch`.
+# Never committed: a logo is a trademark, and committing the files would
+# publish them regardless of the SHOW_SCHOOL_LOGOS flag. See
+# docs/school-logos.md.
+public/school-logos/

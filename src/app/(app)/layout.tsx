@@ -94,7 +94,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
               </div>
 
               <div className="account-actions">
-                <Link className="account-link" href="/photo-credits">Photo credits</Link>
+                <Link className="account-link" href="/photo-credits">Image credits</Link>
               </div>
 
               <div className="account-signout">

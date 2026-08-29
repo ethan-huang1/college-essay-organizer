@@ -66,3 +66,25 @@
   color: var(--brand);
   text-decoration: underline;
 }
+
+.credit-section {
+  margin-top: var(--s12);
+}
+
+.credit-section h2 {
+  margin: 0 0 var(--s3);
+  font-size: var(--text-section);
+}
+
+.credit-note {
+  max-width: var(--measure);
+  margin: 0 0 var(--s6);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+}
+
+.credit-entry h3 {
+  margin: 0;
+  font-size: var(--text-lead);
+}

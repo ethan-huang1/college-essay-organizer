@@ -12,7 +12,8 @@
     "db:generate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs migrate",
     "db:studio": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs studio",
-    "prebuild": "node scripts/prune-onnx-binaries.mjs"
+    "prebuild": "node scripts/prune-onnx-binaries.mjs",
+    "logos:fetch": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/fetch-school-logos.mts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.7",

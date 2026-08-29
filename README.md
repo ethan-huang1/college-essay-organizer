@@ -311,9 +311,16 @@ layout shift.
 colours, picked deterministically from the name. The colours are a vetted list
 rather than a hue derived from a hash, because a free hue can land somewhere
 illegible; `src/app/contrast.test.ts` asserts that every one carries white
-initials at AA and sits at 3:1 against the card surface. A campus photograph
-replaces the initials where one is registered — none currently is, see
-[docs/school-photos.md](docs/school-photos.md).
+initials at AA and sits at 3:1 against the card surface.
+
+A college's own logo replaces the initials where one is available — 51 of the
+100 researched colleges publish an icon large enough to use, taken from the
+icon their own homepage declares, so it cannot be another school's mark. **This
+is off by default and no logo files are committed**, because a logo is a
+trademark rather than a licensable image: see
+[docs/school-logos.md](docs/school-logos.md) for the three gates and the
+reasoning. Campus photography is a separate question with its own answer in
+[docs/school-photos.md](docs/school-photos.md); no photographs are in use.
 
 **The reuse ribbon** is the one place the design raises its voice. Each essay
 card carries a row of college marks showing where that essay can actually go,
@@ -387,7 +394,7 @@ src/app/
   (app)/page.tsx        Overview dashboard
   (app)/[section]/      Your Prompts / Categories / My Essays / Reuse
   (app)/plans/          reads the local plan files in ~/.claude/plans
-  (app)/photo-credits/  photograph attribution, and the independence notice
+  (app)/photo-credits/  image attribution, and the independence notice
   prompt-ui.tsx         the shared prompt row used by two views
   school-mark.tsx       a college's identity mark: initials on a vetted colour
   catalogue-state.tsx   what a college with no prompts on file actually means
@@ -405,6 +412,7 @@ src/lib/
   auth.ts               scrypt hashing + stateless signed sessions
   users.ts              accounts and their personal workspaces
   school-photos.ts      campus photographs and their required provenance
+  school-logos.ts       college logos, off by default; see docs/school-logos.md
   db/                   Drizzle schema, migrations, seeds, demo workspace
     client.ts           Neon pool for the app, PGlite for tests
     server.ts           cached pool + one-time workspace initialization

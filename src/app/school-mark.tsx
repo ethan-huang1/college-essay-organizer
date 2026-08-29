@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { logoForSchool } from "@/lib/school-logos";
 import { photoForSchool } from "@/lib/school-photos";
 
 /**
@@ -90,22 +91,33 @@ export function markColour(name: string): string {
  * show the mark, which is a finished state rather than a gap.
  */
 export function SchoolMark({ name, small }: { name: string; small?: boolean }) {
-  const photo = photoForSchool(name);
+  // A logo outranks a photograph at this size: in a 44px circle an institutional
+  // mark is legible and a campus scene is mush. Both are off by default, so in
+  // practice this renders initials - see src/lib/school-logos.ts.
+  const logo = logoForSchool(name);
+  const photo = logo ? undefined : photoForSchool(name);
   const size = small ? 30 : 44;
+  const image = logo ?? photo;
+
   return (
     <span
-      className={`mark${small ? " small" : ""}`}
-      style={{ background: markColour(name), color: "#fff" }}
+      className={`mark${small ? " small" : ""}${logo ? " mark-logo" : ""}`}
+      // A logo sits on white so a transparent PNG does not pick up the mark
+      // colour behind it; the colour stays as the placeholder for a photograph.
+      style={logo ? undefined : { background: markColour(name), color: "#fff" }}
       aria-hidden="true"
     >
-      {photo ? (
+      {image ? (
         <Image
-          src={photo.file}
+          src={image.file}
           alt=""
           width={size}
           height={size}
           sizes={`${size}px`}
-          style={{ objectPosition: photo.focus }}
+          style={photo ? { objectPosition: photo.focus } : undefined}
+          // A logo is a fixed asset with no responsive variants worth
+          // generating at 44px, and several are SVG.
+          unoptimized={Boolean(logo)}
         />
       ) : (
         schoolInitials(name)
