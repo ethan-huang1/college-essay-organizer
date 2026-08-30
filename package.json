@@ -13,7 +13,9 @@
     "db:migrate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs migrate",
     "db:studio": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs studio",
     "prebuild": "node scripts/prune-onnx-binaries.mjs",
-    "logos:fetch": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/fetch-school-logos.mts"
+    "logos:fetch": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/fetch-school-logos.mts",
+    "logos:sheet": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/logo-contact-sheet.mts",
+    "auth:set-password": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs --env-file-if-exists=.env.local scripts/set-password.mts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.7",

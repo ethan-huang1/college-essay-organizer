@@ -110,7 +110,16 @@ function PreviousCycleWarning({ cycleLabel }: { cycleLabel: string }) {
  * progressbar with an accessible name, so the arc is never the only carrier of
  * the information.
  */
-export function ProgressRing({ progress, label }: { progress: WorkloadSummary; label: string }) {
+export function ProgressRing({
+  progress,
+  label,
+  caption,
+}: {
+  progress: WorkloadSummary;
+  label: string;
+  /** Word under the fraction, e.g. "Complete". Decorative: the accessible name already says it. */
+  caption?: string;
+}) {
   const { requiredComplete: done, requiredTotal: total } = progress;
 
   // A progressbar with aria-valuemax="0" is not a valid progressbar, and "0 of
@@ -136,6 +145,7 @@ export function ProgressRing({ progress, label }: { progress: WorkloadSummary; l
       aria-label={`${label}: ${done} of ${total} required ${total === 1 ? "prompt" : "prompts"} complete`}
     >
       <span className="ring-value">{done}/{total}</span>
+      {caption ? <span className="ring-caption" aria-hidden="true">{caption}</span> : null}
     </span>
   );
 }

@@ -19,10 +19,14 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   const reuse = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
   const openReuse = reuse.reduce((total, group) => total + group.open.length, 0);
 
-  // The wordmark leads to Overview, so the four product sections are the four
-  // tabs. Same routes as before: renaming /schools would break every
-  // ?school= link and any bookmark.
-  const sections: [string, string, number][] = [
+  // Overview is a tab in its own right rather than something you reach only by
+  // clicking the wordmark. Same routes as before: renaming /schools would break
+  // every ?school= link and any bookmark.
+  //
+  // A null count means the tab carries no badge - Overview is the whole picture,
+  // so there is no single number that belongs to it.
+  const sections: [string, string, number | null][] = [
+    ["Overview", "/", null],
     ["Your Prompts", "/schools", overall.requiredTotal],
     ["Categories", "/families", snapshot.families.filter((family) => family.promptCount > 0).length],
     ["My Essays", "/essays", snapshot.essays.length],
@@ -40,16 +44,16 @@ export default async function AppLayout({ children }: Readonly<{ children: React
             <span className="wordmark-mark" aria-hidden="true">
               E
             </span>
-            <span className="wordmark-text">
-              <strong>College Essay</strong> <span>Organizer</span>
-            </span>
+            <span className="wordmark-text">College Essay Organizer</span>
           </Link>
 
           <nav className="sections" aria-label="Primary navigation">
             {sections.map(([label, href, count]) => (
               <NavLink className="section-tab" href={href} key={href}>
-                <span>{label}</span>
-                <span className="tab-count">{count}</span>
+                {/* data-label lets CSS reserve the bold width at all times, so
+                    marking a tab active cannot shift the tabs after it. */}
+                <span className="tab-label" data-label={label}>{label}</span>
+                {count === null ? null : <span className="tab-count">{count}</span>}
               </NavLink>
             ))}
           </nav>

@@ -61,18 +61,11 @@
 
 /* ------------------------------------------------------------ college cards */
 
-/* Cards in a row stretch to match, so a two-line college name or a state pill
-   does not leave a ragged edge. The pill sits at the bottom of its card. */
-.school-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.school-card .pill {
-  align-self: flex-start;
-  margin: 0 var(--s6) var(--s4);
-}
+/* Card layout and the status badge's placement now live in bands.css, where the
+   fixed alignment rows are defined. The badge used to be a row of its own at the
+   card's foot, and the margin that positioned it there survived the move into
+   the header - adding 16px below the badge and knocking it out of line with the
+   sentence beside it. */
 
 /* ------------------------------------------------------------- two columns */
 

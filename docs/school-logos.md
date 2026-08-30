@@ -2,10 +2,31 @@
 
 ## The short version
 
-Logos are **off by default** and no logo files are in this repository. Turning
-them on is a deliberate act with a trademark question attached, and this
-document is here so that decision is made with the facts rather than by
-accident.
+**Logos are live.** All 100 researched colleges ship a real mark, the asset
+files are committed under `public/school-logos/`, and the app renders them
+whenever the registry is populated.
+
+This is a deliberate change from how the feature was first built. It originally
+had three independent gates — an environment flag, an empty committed registry,
+and gitignored asset files — so that trademarked marks could not reach a
+deployment by accident. The owner has since opened all three on purpose:
+coverage and recognisability were the priority, and licensing analysis was
+explicitly deprioritised for that pass.
+
+What remains:
+
+- **`SHOW_SCHOOL_LOGOS=0` turns every logo off**, everywhere, with no code
+  change and no asset redeploy. That is the switch to reach for if a takedown
+  request arrives.
+- **`DECLINED_SCHOOLS`** removes one school's mark and is enforced at read time,
+  so it works even against a stale registry entry.
+- An empty registry renders generated initials, which are a finished state
+  rather than a placeholder.
+- Every mark is credited on the in-app **Image credits** page, with the
+  institution named as the trademark holder and the independence disclaimer.
+
+**The trademark position has not changed and is not resolved by any of this.**
+See below.
 
 ## Why this is not the same problem as photographs
 
@@ -38,32 +59,27 @@ use is permitted.** Two facts worth knowing before enabling it: most
 universities' brand guidelines prohibit third-party use outright, and
 admissions-adjacent products are the category they police most actively.
 
-## The three gates
+## Turning them off
 
-Any one of these alone keeps logos off a deployment:
+`SHOW_SCHOOL_LOGOS=0` in the deployment environment renders initials for every
+school immediately, with no code change and no asset redeploy. It is checked
+before anything else.
 
-1. **`SHOW_SCHOOL_LOGOS` is unset.** `logosEnabled()` requires the exact string
-   `"1"`; `"true"`, `"yes"` and `" 1"` are all still off, so no truthy-looking
-   config value can switch trademarks on by accident.
-2. **`SCHOOL_LOGOS` is empty in the committed source.** `npm run logos:fetch`
-   rewrites that array locally, so it shows up as an uncommitted change — a
-   visible decision rather than a silent one.
-3. **`public/school-logos/` is gitignored.** The image files are never
-   committed, so they never reach a build even if the flag were set. Committing
-   the registry without the files fails
-   `src/lib/school-logos.test.ts` rather than shipping broken images.
+For a single school, add its exact name to `DECLINED_SCHOOLS` in
+`src/lib/school-logos.ts`. That is enforced twice: the fetcher skips it, and
+`logoForSchool` refuses it even if a stale registry entry survives, so honouring
+a request never depends on remembering to re-run a script.
 
-## Enabling it
+## Refreshing them
 
 ```bash
-npm run logos:fetch                 # writes public/school-logos/, rewrites the registry
-SHOW_SCHOOL_LOGOS=1 npm run dev     # preview locally
+npm run logos:fetch          # re-resolves every school; merges, does not wipe
+npm run logos:fetch -- brown # just one, leaving the other 99 alone
+npm run logos:sheet          # contact sheets, for looking at all 100 at once
 ```
 
-To ship them you must additionally commit the registry *and* arrange for the
-files to exist in the build — either by committing them (which publishes them)
-or by running the fetch during `prebuild`. Both are deliberate steps. Neither
-has been taken.
+The fetcher rewrites both `public/school-logos/` and the registry, so a refresh
+shows up as a normal reviewable diff.
 
 ## Removal requests
 
@@ -75,25 +91,104 @@ from `public/school-logos/`.
 
 ## Coverage
 
-**51 of 100** researched colleges resolve a usable logo. The rest fall back to
-their generated mark, which was built to be a finished state rather than a
-placeholder, so a mixed grid reads as deliberate.
+**97 of 100** researched colleges have a real mark: **64 from the institution's
+own website**, **33 from a secondary source**. Three show generated initials.
 
-Why the other 49 miss:
+### How each asset was found
 
-| Reason | Count |
+| Strategy | Count |
 |---|---|
-| Largest icon the site publishes is under 64px | 27 |
-| Blocked the request (403 / 405) | 8 |
-| Connection failed | 6 |
-| Icon URL 404s | 6 |
-| No icon declared anywhere | 2 |
+| Icon declared by `<link rel="icon">` | 41 |
+| Wikidata claim or Wikipedia infobox (secondary) | 33 |
+| Web app manifest icon | 9 |
+| Official brand / identity page | 6 |
+| Conventional `/apple-touch-icon.png` | 4 |
+| Header logo on the homepage | 4 |
 
-The 64px floor is deliberate. Of the 27 too-small cases, 18 publish nothing
-larger than 16px, which is unusable at 44px. Seven sit at 48–57px and *could*
-be admitted by lowering the floor — but they would render visibly softer than
-the crisp 180px ones, and inconsistency *within* the logo set looks worse than
-the honest logo-or-mark mix. 51 crisp logos beat 58 with seven blurry ones.
+### The three on initials
+
+- **Boston College** — its site publishes only a 2.6:1 horizontal lockup, and
+  the only square alternative is a 74-colour engraved seal that is an
+  unreadable smudge at 44px.
+- **Villanova University** — same shape of problem; its seal measures 97
+  distinct colours.
+- **University of California, Santa Barbara** — recorded in `NO_USABLE_LOGO`
+  by hand. Its own site publishes only 14:1 and 20:1 wordmarks, its favicon is
+  unreadable, and the only square candidate is the UC *system* seal, which
+  belongs to seven campuses. Its brand page offers an external-link arrow that
+  passes every automated test.
+
+## Normalisation
+
+Sources are wildly inconsistent — 180×180 opaque app icons, transparent
+wordmark SVGs, a 229×256 favicon, seals carrying 20% built-in whitespace.
+Handing those to one CSS box is what made Penn look zoomed and cropped: a
+229×256 image under `object-fit: cover` loses its sides.
+
+So every asset is normalised once, at fetch time, into a **512×512 PNG whose
+content occupies a known fraction of the frame**. Rendering then has nothing
+left to decide. Two classes are treated differently, because treating them
+alike is what looks wrong:
+
+- **Full-bleed app icons** (21 of 97) — opaque, with a colour field running to
+  the edge. Designed to fill a rounded square, so they keep their field and are
+  only *padded* to square, never cropped. Yale's blue Y is one.
+- **Free-standing marks** (76 of 97) — transparent or on white. Trimmed to
+  their real content and re-inset to a fixed fraction, so a seal shipping
+  generous whitespace and one shipping none end up the same perceived size.
+
+A mark wider than 2.5:1 is rejected: in a 44px disc it would be about 17px
+tall. Anything below 64px of real content is rejected as too small to upscale.
+
+### Rendering overrides
+
+Three schools publish a white mark drawn for a dark header, which is invisible
+on a white disc. Each gets a dark plate in the school's own vetted palette
+colour — the same colour its initials would have used:
+
+| School | Override |
+|---|---|
+| George Washington University | `background: #7a322d` |
+| Middlebury College | `background: #7a322d` |
+| Reed College | `background: #2b5578` |
+
+These are detected automatically (mean luminance above 225 with low variance),
+not hand-listed. `render.scale` exists for a mark that needs resizing; nothing
+currently needs it.
+
+## What automated checks cannot do
+
+Everything in this list was caught by looking at the rendered discs, not by a
+test:
+
+- Notre Dame resolved to a **photograph**, Bowdoin to a **grid of partner brand
+  icons**, Carnegie Mellon to a **collage**. Colour counting now rejects these
+  (a real mark uses 8–31 distinct colours at 64×64; those used 78–130), but the
+  defect was invisible in the metadata.
+- New York University resolved to a **"brand toolkit" promotional tile** that
+  contained the logo rather than being it — correctly NYU, and still wrong.
+- Washington and Lee resolved to a **fundraising campaign banner**, and UCLA to
+  an **Instagram glyph** whose filename read as `instagram--brand.svg`.
+- Santa Barbara's brand page offers an **external-link arrow** that passes every
+  automated test — colour count, aspect ratio, ink coverage all sit in the
+  normal range for a monogram.
+- Five UC campuses initially shared the **UC system logo**, because their prompt
+  records cite `universityofcalifornia.edu` rather than each campus's own
+  domain.
+
+`npm run logos:sheet` renders every mark as a 44px disc, with the same plate or
+full-bleed treatment the app applies, onto four contact sheets. Run it and look
+at them before trusting a change.
+
+### Marks that are legible but faint
+
+These are genuine institutional seals, drawn as fine engraved lines that ink
+under 10% of their frame. They read as a light grey smudge at 44px. They are
+correct, and they are the school's real mark, but a person may prefer initials:
+Scripps College (3.5%), University of Miami (3.6%), Carleton College (6.7%),
+Vanderbilt University (9.1%), Carnegie Mellon (9.1%), Case Western (9.3%),
+George Washington (10.1%), Williams College (10.6%). New York University's seal
+belongs in the same group.
 
 ## What the tests do and do not establish
 

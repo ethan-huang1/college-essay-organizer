@@ -17,6 +17,12 @@ export default defineConfig({
     // Each persistence test boots an in-process Postgres and applies every
     // migration; the 10s default is too tight for that on a busy machine.
     hookTimeout: 30_000,
+    // Same reason, for the tests themselves. The semantic-matching case
+    // rescores the whole demo workspace four times with real embeddings: about
+    // 4.4s alone, which cleared the 5s default only until another file was
+    // competing for the CPU. Raising it fixes a flake rather than hiding one -
+    // the test passes, it just does genuinely slow work.
+    testTimeout: 30_000,
     // Semantic similarity is switched off for the suite so that every assertion
     // holds identically on a machine with the embedding model cached and one
     // without. A test whose result depends on whether a 25MB download has

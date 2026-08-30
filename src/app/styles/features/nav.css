@@ -41,39 +41,59 @@
   font-weight: 700;
 }
 
+/* One weight across the whole product name: "Organizer" used to be lighter and
+   a different colour, which read as two separate words rather than one mark. */
 .wordmark-text {
   font-size: 15px;
-  letter-spacing: -0.01em;
-}
-
-.wordmark-text strong {
   font-weight: 650;
-}
-
-.wordmark-text span {
-  color: var(--nav-ink-soft);
-  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 /* ---------------------------------------------------------------- section tabs */
 
+/* One gap value, applied once. The tabs previously carried 16px of their own
+   horizontal padding on top of a 4px gap, so the distance between two labels
+   depended on how wide each tab's count badge happened to be. */
 .sections {
   display: flex;
   align-items: stretch;
-  gap: var(--s1);
+  gap: var(--s6);
   height: 100%;
 }
 
+/* Every tab is the same height and aligns on the same centreline, with one
+   internal gap between label and badge. The strip's own gap is the only
+   horizontal spacing in play - no per-item margins. */
 .section-tab {
   position: relative;
   display: flex;
-  align-items: center;
+  height: 100%;
   gap: var(--s2);
-  padding: 0 var(--s4);
+  align-items: center;
   color: var(--nav-ink-soft);
   font-size: var(--text-meta);
   font-weight: 550;
+  white-space: nowrap;
   transition: color 120ms ease;
+}
+
+/* Reserves the width of the bold form under the regular one, so switching a tab
+   to active changes its weight without moving anything. */
+.tab-label {
+  display: inline-grid;
+}
+
+.tab-label::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  font-weight: 650;
+  visibility: hidden;
+}
+
+.tab-label,
+.tab-label::after {
+  grid-area: 1 / 1;
 }
 
 .section-tab:hover {
@@ -89,7 +109,7 @@
 .section-tab[aria-current="page"]::after {
   content: "";
   position: absolute;
-  bottom: 12px;
+  bottom: 10px;
   left: 50%;
   width: 5px;
   height: 5px;
@@ -98,16 +118,20 @@
   transform: translateX(-50%);
 }
 
+/* A fixed width, so a one-digit and a three-digit count occupy the same space
+   and the gaps between tabs stay identical as the numbers change. */
 .tab-count {
-  min-width: 21px;
-  padding: 1px 6px;
+  display: grid;
+  width: 26px;
+  height: 20px;
+  place-items: center;
   border-radius: var(--r-pill);
   background: rgb(255 255 255 / 13%);
   color: var(--nav-ink);
   font-size: var(--text-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  text-align: center;
+  line-height: 1;
 }
 
 /* -------------------------------------------------------------------- utility */
@@ -261,12 +285,12 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    gap: var(--s4);
     overflow-x: auto;
   }
 
   .section-tab {
     flex: 0 0 auto;
-    padding: var(--s2) var(--s3);
   }
 
   .section-tab[aria-current="page"]::after {

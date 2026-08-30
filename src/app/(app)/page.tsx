@@ -6,8 +6,10 @@ import { reuseOpportunities } from "@/lib/progress";
 import { canonicalPromptGroups, workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { assignEssayAction } from "../assignment-actions";
+import { availabilitySentence, schoolAvailability } from "@/lib/schools";
 import { CatalogueStateBadge } from "../catalogue-state";
-import { AddCollegeForm, ProgressLine, ProgressRing } from "../prompt-ui";
+import { AddCollegeForm, ProgressRing } from "../prompt-ui";
+import { workloadBands } from "../workload-bands";
 import { SchoolMark } from "../school-mark";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +20,9 @@ export const dynamic = "force-dynamic";
 // no headroom for a cold database wake. 60s is the Vercel Hobby ceiling.
 export const maxDuration = 60;
 
+
+/** Availability kinds whose sentence is a count, so a status badge adds to it. */
+const countKinds = new Set(["required", "optional-only", "awaiting-programs"]);
 
 export default async function Overview() {
   const snapshot = await getActiveWorkspaceSnapshot();
@@ -75,40 +80,73 @@ export default async function Overview() {
     );
   }
 
-  // Required essays, not prompt rows: a choose-4-of-8 set counts as four and a
-  // question five campuses share counts once.
-  const tiles: [string, number, string?][] = [
-    ["Required essays", overall.requiredTotal, "this cycle"],
-    ["Done", overall.requiredComplete],
-    ["To go", overall.requiredRemaining],
-    ["Optional", overall.optionalExtra, "not asked for"],
-    ["Reusable now", overall.reusable, "an essay already fits"],
-    ["Essays", snapshot.essays.length, `${overall.assigned} assigned`],
-  ];
+  const bands = workloadBands(snapshot, overall);
+  const totalBanded = bands.reduce((sum, band) => sum + band.count, 0);
 
   return (
     <div className="page-frame">
-      <header className="section-heading">
+      <header className="overview-head">
         <div>
           <h1>Overview</h1>
           <p className="lede">
-            {snapshot.schools.length} {snapshot.schools.length === 1 ? "school" : "schools"} ·{" "}
-            {overall.requiredTotal} required {overall.requiredTotal === 1 ? "essay" : "essays"} this cycle. You are
-            building a reusable library, not starting over at every college.
+            {overall.requiredRemaining > 0
+              ? `Of your ${overall.requiredTotal} required ${overall.requiredTotal === 1 ? "essay" : "essays"}, ${overall.requiredRemaining} remain. See which ones need a quick edit, a bigger rewrite, or a fresh start.`
+              : `All ${overall.requiredTotal} required ${overall.requiredTotal === 1 ? "essay" : "essays"} are done. Anything below is optional or from a previous cycle.`}
           </p>
         </div>
-        <ProgressLine className="section-progress" progress={overall} />
+        <p className="overview-total">
+          <strong>{overall.requiredTotal}</strong>
+          <span>required {overall.requiredTotal === 1 ? "essay" : "essays"} total</span>
+        </p>
       </header>
 
-      <dl className="stat-tiles tile-grid">
-        {tiles.map(([label, value, note]) => (
-          <div className="card stat-tile" key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-            {note ? <span>{note}</span> : null}
+      <section className="band-panel" aria-labelledby="status-heading">
+        <div className="band-panel-head">
+          <h2 id="status-heading">Application status</h2>
+          <span className="muted">
+            {overall.requiredTotal} required {overall.requiredTotal === 1 ? "essay" : "essays"}
+          </span>
+        </div>
+
+        {/* The same five numbers as the tiles, at a glance. Decorative: every
+            band is named and counted below, so nothing here is the only
+            carrier of the information. */}
+        {totalBanded > 0 ? (
+          <div className="band-bar" aria-hidden="true">
+            {bands.filter((band) => band.count > 0).map((band) => (
+              <span
+                className={`band-bar-part band-${band.key}`}
+                key={band.key}
+                style={{ flexGrow: band.count }}
+              />
+            ))}
           </div>
-        ))}
-      </dl>
+        ) : null}
+
+        <dl className="band-grid">
+          {bands.map((band) => (
+            <div className={`band-tile band-${band.key}`} key={band.key}>
+              <dt>
+                {band.title}
+                <span className="band-dot" aria-hidden="true" />
+              </dt>
+              <dd>{band.count}</dd>
+              <span className="band-caption">{band.caption}</span>
+            </div>
+          ))}
+        </dl>
+
+        <p className="band-meta">
+          <span><strong>{snapshot.essays.length}</strong> {snapshot.essays.length === 1 ? "essay" : "essays"} in library</span>
+          <span><strong>{overall.assigned}</strong> assigned</span>
+          <span><strong>{overall.optionalExtra}</strong> optional</span>
+          {overall.programSpecific > 0 ? <span><strong>{overall.programSpecific}</strong> program-specific</span> : null}
+          {overall.unresolvedConditional > 0 ? (
+            <span className="band-meta-flag"><strong>{overall.unresolvedConditional}</strong> unresolved</span>
+          ) : null}
+          {overall.previousCycle > 0 ? <span><strong>{overall.previousCycle}</strong> previous cycle</span> : null}
+        </p>
+      </section>
 
       <section className="overview-section" aria-labelledby="colleges-heading">
         <div className="section-bar">
@@ -119,7 +157,25 @@ export default async function Overview() {
           </span>
         </div>
         <div className="card-grid">
-          {bySchool.map(({ school, progress }) => (
+          {bySchool.map(({ school, progress }) => {
+            // The same five bands as the Overview, scoped to this college.
+            // "Completed" is the ring rather than a tile, matching how a student
+            // reads a card: how far along, then what is left and how hard.
+            const availability = schoolAvailability({
+              catalogueState: school.catalogueState,
+              promptCount: school.promptCount,
+              requiredTotal: progress.requiredTotal,
+              optionalExtra: progress.optionalExtra,
+              programSpecific: progress.programSpecific,
+              unresolvedConditional: progress.unresolvedConditional,
+            });
+            const schoolBands = workloadBands(snapshot, progress);
+            const remaining = schoolBands.filter((band) => band.key !== "completed");
+            const reusable = remaining
+              .filter((band) => band.key === "slight" || band.key === "moderate")
+              .reduce((sum, band) => sum + band.count, 0);
+
+            return (
             <article className="card school-card" key={school.id}>
               <div className="card-head">
                 <SchoolMark name={school.name} />
@@ -127,18 +183,63 @@ export default async function Overview() {
                   <h3>
                     <Link href={`/schools?school=${school.id}`}>{school.name}</Link>
                   </h3>
-                  <p className="card-meta">
-                    {progress.requiredTotal > 0
-                      ? `${progress.requiredTotal} required · ${progress.requiredRemaining} to go`
-                      : "No required essays on file"}
-                    {progress.reusable > 0 ? ` · ${progress.reusable} reusable` : ""}
+                  {/* One metadata row: the workload sentence and the status
+                      badge sit together, so the badge never adds a card row or
+                      shifts the workload boxes below it. */}
+                  <p className="card-meta card-meta-row">
+                    <span>{availabilitySentence(availability)}</span>
+                    {/* The badge only earns its place when the sentence is a
+                        count. For the status kinds the sentence already carries
+                        the state, and showing both said the same thing twice -
+                        "Prompts not yet published" beside a badge reading
+                        "Wording not published". */}
+                    {countKinds.has(availability.kind) ? <CatalogueStateBadge school={school} /> : null}
                   </p>
                 </div>
-                <ProgressRing progress={progress} label={school.name} />
+                <ProgressRing progress={progress} label={school.name} caption="Complete" />
               </div>
-              <CatalogueStateBadge school={school} />
+
+              {progress.requiredRemaining > 0 ? (
+                <div className="school-bands">
+                  <dl className="band-grid compact">
+                    {remaining.map((band) => (
+                      <div className={`band-tile band-${band.key}`} key={band.key}>
+                        <dd>{band.count}</dd>
+                        <dt>{band.title}</dt>
+                      </div>
+                    ))}
+                  </dl>
+
+                  <div className="band-bar thin" aria-hidden="true">
+                    {remaining.filter((band) => band.count > 0).map((band) => (
+                      <span
+                        className={`band-bar-part band-${band.key}`}
+                        key={band.key}
+                        style={{ flexGrow: band.count }}
+                      />
+                    ))}
+                  </div>
+
+                  <p className="school-bands-note">
+                    {reusable > 0
+                      ? `${reusable} can reuse existing ${reusable === 1 ? "essay" : "essays"}`
+                      : "None can reuse an existing essay yet"}
+                  </p>
+                </div>
+              ) : (
+                /* A college with nothing left to break down still reserves the
+                   row, so its card matches the height of the ones beside it. */
+                <div className="school-bands-empty">
+                  <p className="school-bands-note">
+                    {progress.requiredTotal > 0
+                      ? "All required essays are done"
+                      : "Nothing to break down yet"}
+                  </p>
+                </div>
+              )}
             </article>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -213,22 +314,12 @@ export default async function Overview() {
         </section>
       </div>
 
-      {overall.previousCycle > 0 || attention > 0 ? (
+      {attention > 0 ? (
         <p className="overview-note">
-          {overall.previousCycle > 0 ? (
-            <>
-              <strong>{overall.previousCycle}</strong> prompt{overall.previousCycle === 1 ? "" : "s"} came from a previous
-              cycle and are excluded from the counts above until the school publishes 2026–27 wording.
-            </>
-          ) : null}
-          {attention > 0 ? (
-            <>
-              {" "}
-              <strong>{attention}</strong> imported prompt{attention === 1 ? "" : "s"} need a source check.
-            </>
-          ) : null}
+          <strong>{attention}</strong> imported prompt{attention === 1 ? "" : "s"} need a source check.
         </p>
       ) : null}
+
     </div>
   );
 }

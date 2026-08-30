@@ -46,6 +46,102 @@ export function schoolCatalogueState(
   }
 }
 
+/**
+ * What a college's card should actually say about its workload.
+ *
+ * "No required essays on file" was being shown for five unrelated situations,
+ * which made a school whose supplement is genuinely optional indistinguishable
+ * from one whose prompts simply failed to import. Two of those situations are
+ * real workload the count deliberately excludes:
+ *
+ * - **Conditional and program-specific prompts.** `summarizeWorkload` leaves
+ *   these out of `requiredTotal` until the student says which programs they are
+ *   applying to, which is correct - guessing would inflate the count. But
+ *   Amherst has three conditional prompts and Georgetown seven
+ *   program-specific ones, and telling a student they have nothing to write is
+ *   false. They have a question to answer first.
+ * - **Optional-only prompts.** Bowdoin, Trinity, Colorado College and NYU each
+ *   publish prompts that are genuinely optional. "None required" is true; "none
+ *   on file" is not.
+ *
+ * Verification states are kept apart from all of that, because "we confirmed
+ * there is no supplement" and "we could not read the prompts" are opposite
+ * facts. Columbia is the case that matters here: it publishes its questions
+ * only inside the Common App, so nothing could be imported and its record
+ * carries no prompts at all. That is unverified data, never zero work.
+ */
+export type SchoolAvailability =
+  | { kind: "required"; count: number }
+  | { kind: "optional-only"; count: number }
+  | { kind: "awaiting-programs"; count: number }
+  | { kind: "no-supplement" }
+  | { kind: "not-published" }
+  | { kind: "previous-cycle" }
+  | { kind: "unverified" };
+
+export type AvailabilityInput = {
+  catalogueState: SchoolCatalogueState;
+  /** Prompt rows on file for this college, of any kind. */
+  promptCount: number;
+  /** From summarizeWorkload, unchanged. */
+  requiredTotal: number;
+  optionalExtra: number;
+  programSpecific: number;
+  unresolvedConditional: number;
+};
+
+export function schoolAvailability(input: AvailabilityInput): SchoolAvailability {
+  // Real, countable work always wins: a college with required essays is
+  // described by that, whatever else is also true of its catalogue entry.
+  if (input.requiredTotal > 0) return { kind: "required", count: input.requiredTotal };
+
+  // A verified absence of a supplement is a finished state and the only case
+  // that may say so.
+  if (input.catalogueState === "no-supplement") return { kind: "no-supplement" };
+
+  // Work that exists but is gated on a question only the student can answer.
+  const gated = input.unresolvedConditional + input.programSpecific;
+  if (gated > 0) return { kind: "awaiting-programs", count: gated };
+
+  if (input.optionalExtra > 0) return { kind: "optional-only", count: input.optionalExtra };
+
+  // No countable work left, so the reason has to come from the catalogue.
+  switch (input.catalogueState) {
+    case "not-published":
+      return { kind: "not-published" };
+    case "previous-cycle-only":
+      return { kind: "previous-cycle" };
+    case "needs-review":
+    case "manual":
+      return { kind: "unverified" };
+    default:
+      // catalogueState "current" with nothing countable means the catalogue
+      // claimed prompts and none survived import. That is a failed import, not
+      // a school with no work.
+      return input.promptCount > 0 ? { kind: "unverified" } : { kind: "unverified" };
+  }
+}
+
+/** One sentence per state, worded for a student rather than for the importer. */
+export function availabilitySentence(availability: SchoolAvailability): string {
+  switch (availability.kind) {
+    case "required":
+      return `${availability.count} required ${availability.count === 1 ? "essay" : "essays"}`;
+    case "optional-only":
+      return `${availability.count} optional, none required`;
+    case "awaiting-programs":
+      return `${availability.count} depend on your programs`;
+    case "no-supplement":
+      return "No supplemental essay required";
+    case "not-published":
+      return "Prompts not yet published";
+    case "previous-cycle":
+      return "Current prompts not yet verified";
+    case "unverified":
+      return "Prompt information not yet verified";
+  }
+}
+
 function cleanName(name: string) {
   const value = name.trim().replace(/\s+/g, " ");
   if (value.length < 2 || value.length > 120) throw new Error("School name must be between 2 and 120 characters.");

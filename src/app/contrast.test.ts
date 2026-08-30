@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { MARK_COLOURS, schoolInitials } from "./school-mark";
+import { MARK_COLOURS, schoolInitials } from "./mark-palette";
 
 // Parses the real token file rather than a copy of the values, so a colour
 // cannot be changed in the design system without this test seeing it.
@@ -126,7 +126,10 @@ describe("school initials", () => {
   it.each([
     ["New York University", "NY"],
     ["University of Pennsylvania", "Pe"],
-    ["University of California, Berkeley", "CB"],
+    // The campus after the comma is the identifying part.
+    ["University of California, Berkeley", "Be"],
+    ["University of California, Santa Barbara", "SB"],
+    ["University of California, Los Angeles", "LA"],
     ["Massachusetts Institute of Technology", "MT"],
     ["Brown University", "Br"],
     ["Boston College", "Bo"],

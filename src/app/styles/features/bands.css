@@ -1,0 +1,411 @@
+/* The five workload bands: finished, then light / medium / heavy edit, then
+   write from scratch. Used at page scale on the Overview and compactly inside
+   each college card, so one set of colours serves both. */
+
+:root {
+  /* Drawn from the existing state tokens rather than a new palette, so a band
+     tile and a reuse pill of the same meaning are the same colour. */
+  --band-completed: var(--ok-ink);
+  --band-completed-tint: var(--ok-tint);
+  --band-slight: var(--info-ink);
+  --band-slight-tint: var(--info-tint);
+  --band-moderate: var(--warn-ink);
+  --band-moderate-tint: var(--warn-tint);
+  --band-major: var(--caution-ink);
+  --band-major-tint: var(--caution-tint);
+  --band-scratch: var(--risk-ink);
+  --band-scratch-tint: var(--risk-tint);
+}
+
+/* ----------------------------------------------------------- overview head */
+
+.overview-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4) var(--s8);
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--s6);
+}
+
+.overview-head h1 {
+  margin: 0;
+  font-size: var(--text-display);
+}
+
+.overview-total {
+  margin: 0;
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.overview-total strong {
+  display: block;
+  font-size: var(--text-display);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.overview-total span {
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+/* ---------------------------------------------------------------- the panel */
+
+.band-panel {
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.band-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--s3);
+}
+
+.band-panel-head h2 {
+  margin: 0;
+  font-size: var(--text-lead);
+}
+
+.band-panel-head span {
+  font-size: var(--text-meta);
+}
+
+/* ------------------------------------------------------------------- the bar
+   Segment widths come from flex-grow, so they are exactly proportional to the
+   counts without any arithmetic in the markup. */
+
+.band-bar {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  margin-bottom: var(--s6);
+}
+
+.band-bar.thin {
+  height: 6px;
+  margin: 0;
+}
+
+.band-bar-part {
+  border-radius: var(--r-pill);
+  /* A single band would otherwise be a hairline at low counts. */
+  min-width: 6px;
+}
+
+/* ----------------------------------------------------------------- the tiles */
+
+.band-grid {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+}
+
+.band-grid.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.band-tile {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s4);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+}
+
+/* "Completed" is one line and "Moderate edits needed" is three, so the title
+   reserves the tallest of them. Without this the numbers sat at five different
+   heights across the row. */
+.band-tile dt {
+  display: flex;
+  min-height: 3.75em;
+  gap: var(--s2);
+  align-items: flex-start;
+  justify-content: space-between;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* Pushes the number and caption to the bottom of every tile, so a row of tiles
+   shares one baseline however the titles wrap. */
+.band-tile dd {
+  margin: auto 0 0;
+  font-size: var(--text-display);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.band-caption {
+  margin-top: var(--s1);
+  min-height: 1.2em;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+}
+
+.band-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  margin-top: 5px;
+  border-radius: 50%;
+}
+
+/* One rule per band, driving tile fill, dot and bar segment together. */
+.band-completed { background: var(--band-completed-tint); }
+.band-slight { background: var(--band-slight-tint); }
+.band-moderate { background: var(--band-moderate-tint); }
+.band-major { background: var(--band-major-tint); }
+.band-scratch { background: var(--band-scratch-tint); }
+
+.band-completed .band-dot,
+.band-bar-part.band-completed { background: var(--band-completed); }
+.band-slight .band-dot,
+.band-bar-part.band-slight { background: var(--band-slight); }
+.band-moderate .band-dot,
+.band-bar-part.band-moderate { background: var(--band-moderate); }
+.band-major .band-dot,
+.band-bar-part.band-major { background: var(--band-major); }
+.band-scratch .band-dot,
+.band-bar-part.band-scratch { background: var(--band-scratch); }
+
+.band-completed dt { color: var(--band-completed); }
+.band-slight dt { color: var(--band-slight); }
+.band-moderate dt { color: var(--band-moderate); }
+.band-major dt { color: var(--band-major); }
+.band-scratch dt { color: var(--band-scratch); }
+
+/* ------------------------------------------------------------------ the meta */
+
+.band-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s6);
+  margin: var(--s6) 0 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+.band-meta strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.band-meta-flag,
+.band-meta-flag strong {
+  color: var(--caution-ink);
+}
+
+/* ------------------------------------------------- inside a college card
+   The compact form drops the caption and puts the number first, because at
+   this size the number is what is being scanned. */
+
+.school-bands {
+  display: grid;
+  align-content: start;
+  gap: var(--s3);
+  padding: 0 var(--s6) var(--s6);
+}
+
+.school-bands .band-tile {
+  padding: var(--s3);
+  text-align: center;
+  align-items: center;
+}
+
+.school-bands .band-tile dd {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.school-bands .band-tile dt {
+  display: block;
+  min-height: 2.6em;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.school-bands-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+
+/* A college with nothing to break down still reserves the same space, so its
+   card matches the height of the ones beside it. */
+/* Anchored to the bottom, like the reuse sentence it stands in for, so the
+   footer line sits at the same height in every card of a row. */
+.school-bands-empty {
+  display: grid;
+  align-content: end;
+  padding: 0 var(--s6) var(--s6);
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+
+.ring-caption {
+  position: relative;
+  z-index: 1;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+/* The ring holds two lines now, so it needs more room inside and a thinner
+   stroke: at 62px with a 6px band the arc ran right up against "Complete".
+   A larger disc with a 4px band leaves the caption clear of it. */
+.school-card .ring {
+  width: 72px;
+  height: 72px;
+}
+
+.school-card .ring::after {
+  inset: 4px;
+}
+
+.school-card .ring-value {
+  font-size: var(--text-meta);
+  line-height: 1.1;
+}
+
+/* --------------------------------------------------- college card alignment
+   Every card is built from the same fixed rows, so a two-line school name, a
+   status badge or a missing workload section cannot shift anything in a
+   neighbouring card. The header reserves its height whatever it contains.
+
+   The rows, top to bottom:
+     1. header  - mark, name (up to two lines), metadata row, ring
+     2. bands   - the four workload tiles
+     3. bar     - the proportional strip
+     4. footer  - the reuse sentence
+*/
+
+.school-card {
+  display: grid;
+  /* header / bands+bar+footer, with the second row absorbing spare height so
+     every card in a row ends at the same place. */
+  grid-template-rows: auto 1fr;
+}
+
+.school-card .card-head {
+  display: grid;
+  min-height: 118px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: start;
+  padding: var(--s6) var(--s4) var(--s4) var(--s6);
+}
+
+/* The mark keeps its box whether it holds a logo or initials. */
+.school-card .card-head > .mark {
+  grid-row: 1;
+}
+
+.school-card .card-head-text {
+  min-width: 0;
+}
+
+/* Two lines reserved, always: "MIT" and "Massachusetts Institute of
+   Technology" leave the metadata row at the same height. */
+.school-card .card-head-text h3 {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 2.5em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--text-lead);
+  line-height: 1.25;
+}
+
+/* The workload sentence and the status badge share one line. They must not
+   wrap on a desktop card: dropping the badge onto a second line was what pushed
+   the workload boxes down relative to neighbouring cards. The sentence gives way
+   with an ellipsis instead, since the badge is the shorter and more urgent of
+   the two. */
+.card-meta-row {
+  display: flex;
+  flex-wrap: nowrap;
+  min-height: 22px;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.card-meta-row > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta-row .pill {
+  flex: 0 0 auto;
+  padding: 2px var(--s2);
+  font-size: 11px;
+}
+
+/* Pinned to the top right of the header, so it never moves with the name. */
+.school-card .card-head > .ring {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+@media (max-width: 1180px) {
+  .band-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  /* One card per row on a phone, so wrapping the metadata cannot make one card
+     taller than its neighbour - and the header reserves the second line. */
+  /* Enough for a two-line name plus a wrapped metadata row, so a card whose
+     badge drops to a second line still has the same header height as one whose
+     badge does not. */
+  .school-card .card-head {
+    min-height: 152px;
+  }
+
+  .card-meta-row {
+    flex-wrap: wrap;
+  }
+
+  .card-meta-row > span:first-child {
+    white-space: normal;
+  }
+
+  .band-grid,
+  .band-grid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .band-tile dd {
+    margin-top: var(--s4);
+    font-size: var(--text-title);
+  }
+
+  .overview-total {
+    text-align: left;
+  }
+}

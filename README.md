@@ -313,13 +313,16 @@ rather than a hue derived from a hash, because a free hue can land somewhere
 illegible; `src/app/contrast.test.ts` asserts that every one carries white
 initials at AA and sits at 3:1 against the card surface.
 
-A college's own logo replaces the initials where one is available — 51 of the
-100 researched colleges publish an icon large enough to use, taken from the
-icon their own homepage declares, so it cannot be another school's mark. **This
-is off by default and no logo files are committed**, because a logo is a
-trademark rather than a licensable image: see
-[docs/school-logos.md](docs/school-logos.md) for the three gates and the
-reasoning. Campus photography is a separate question with its own answer in
+A college's own logo replaces the initials: **all 100** researched colleges have
+one, 54 taken from the institution's own website and 46 from Wikidata or a
+Wikipedia infobox. Every asset is normalised to a 512×512 frame and sized by its
+diagonal, so a wide wordmark and a square shield carry the same visual weight in
+a 44px disc.
+
+A logo is a trademark rather than a licensable image, so the position is set out
+in full in [docs/school-logos.md](docs/school-logos.md), along with the switch
+that turns every one of them off (`SHOW_SCHOOL_LOGOS=0`). Campus photography is
+a separate question with its own answer in
 [docs/school-photos.md](docs/school-photos.md); no photographs are in use.
 
 **The reuse ribbon** is the one place the design raises its voice. Each essay
@@ -412,7 +415,7 @@ src/lib/
   auth.ts               scrypt hashing + stateless signed sessions
   users.ts              accounts and their personal workspaces
   school-photos.ts      campus photographs and their required provenance
-  school-logos.ts       college logos, off by default; see docs/school-logos.md
+  school-logos.ts       college logos and the switch that disables them
   db/                   Drizzle schema, migrations, seeds, demo workspace
     client.ts           Neon pool for the app, PGlite for tests
     server.ts           cached pool + one-time workspace initialization

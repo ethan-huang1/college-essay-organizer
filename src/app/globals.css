@@ -13,6 +13,7 @@
 @import "./styles/features/nav.css";
 @import "./styles/features/auth.css";
 @import "./styles/features/overview.css";
+@import "./styles/features/bands.css";
 @import "./styles/features/filters.css";
 @import "./styles/features/prompts.css";
 @import "./styles/features/prompt-detail.css";

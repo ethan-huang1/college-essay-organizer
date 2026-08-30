@@ -113,6 +113,16 @@ export type WorkloadGroup = {
   completed: number;
   remaining: number;
   schools: { id: string; name: string }[];
+  /**
+   * The prompts this group counted, and whether each is already answered.
+   *
+   * Additive, and derived from nothing new: it records what the loop below
+   * already decided. A view that wants to break `remaining` down by how much
+   * editing each essay needs can then do it against the same prompts this
+   * count used, instead of re-deriving which prompts are countable and
+   * disagreeing about the total.
+   */
+  prompts: { id: string; done: boolean }[];
 };
 
 export type UnresolvedProgram = {
@@ -135,6 +145,12 @@ export type WorkloadSummary = PromptProgress & {
   unresolvedConditional: number;
   unresolvedPrograms: UnresolvedProgram[];
   groups: WorkloadGroup[];
+  /**
+   * Required prompts that stand alone, rather than belonging to a choose-N
+   * group. Same purpose as `WorkloadGroup.prompts`: it lets a view break the
+   * required count down without recomputing which prompts are required.
+   */
+  requiredSingles: { id: string; done: boolean }[];
 };
 
 type Scope = "aggregate" | "school";
@@ -212,6 +228,7 @@ export function summarizeWorkload(
   // identity is the application rather than the school. Otherwise seven UC
   // campuses would form seven groups of eight and require 28 essays.
   const groups = new Map<string, WorkloadGroup>();
+  const requiredSingles: { id: string; done: boolean }[] = [];
   let requiredTotal = 0;
   let requiredComplete = 0;
   let optionalExtra = 0;
@@ -224,6 +241,7 @@ export function summarizeWorkload(
       else {
         requiredTotal += 1;
         if (done) requiredComplete += 1;
+        requiredSingles.push({ id: prompt.id, done });
       }
       continue;
     }
@@ -241,10 +259,12 @@ export function summarizeWorkload(
         completed: 0,
         remaining: 0,
         schools: [],
+        prompts: [],
       };
       groups.set(key, group);
     }
     group.size += 1;
+    group.prompts.push({ id: prompt.id, done });
     // Deterministic if rows in one group ever disagree - possible only after a
     // catalogue change reaches some of a shared application's schools before
     // the others. Whichever row iterated first used to win, which made the
@@ -275,6 +295,7 @@ export function summarizeWorkload(
     unresolvedConditional,
     unresolvedPrograms: [...unresolvedPrograms.values()],
     groups: [...groups.values()],
+    requiredSingles,
   };
 }
 
