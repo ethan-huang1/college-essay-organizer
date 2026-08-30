@@ -48,5 +48,11 @@ export const config = {
   // they were rendered on, so they are covered by this matcher - but note the
   // Next.js guidance that a matcher change can silently drop coverage. If a
   // route handler is ever added under /api it must be added here too.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  //
+  // school-logos is excluded because it is a directory of public university
+  // marks served straight from the CDN. Without it every one of the hundred
+  // logos on the Overview invoked this middleware on every page load - a
+  // measurable cost for no gain, since a college's logo is not private and
+  // gating it protects nothing.
+  matcher: ["/((?!_next/static|_next/image|school-logos|favicon.ico).*)"],
 };
