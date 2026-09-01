@@ -41,7 +41,7 @@ try {
   const allWorkspaces = await db.select({ id: workspaces.id, name: workspaces.name }).from(workspaces);
   console.log(`${allWorkspaces.length} workspace(s) to visit${dryRun ? " (dry run)" : ""}.`);
 
-  const totals = { schools: 0, created: 0, updated: 0, unchanged: 0, flagged: 0, failed: 0, recomputed: 0 };
+  const totals = { schools: 0, created: 0, updated: 0, unchanged: 0, flagged: 0, retired: 0, removed: 0, failed: 0, recomputed: 0 };
 
   for (const workspace of allWorkspaces) {
     if (!dryRun) {
@@ -69,8 +69,15 @@ try {
         totals.updated += result.counts.updated;
         totals.unchanged += result.counts.unchanged;
         totals.flagged += result.counts.flagged;
-        const changed = result.counts.created + result.counts.updated;
-        if (changed > 0) console.log(`  ${school.name}: +${result.counts.created} ~${result.counts.updated}`);
+        // Retired/removed are the prune's two outcomes for a prompt the
+        // catalogue no longer carries - reported per school because a large
+        // number at one school is worth a human look before it ships.
+        totals.retired += result.counts.retired;
+        totals.removed += result.counts.removed;
+        const changed = result.counts.created + result.counts.updated + result.counts.retired + result.counts.removed;
+        if (changed > 0) {
+          console.log(`  ${school.name}: +${result.counts.created} ~${result.counts.updated} -${result.counts.removed} retired ${result.counts.retired}`);
+        }
       } catch (error) {
         // One bad school must not abandon the rest half-done.
         totals.failed += 1;

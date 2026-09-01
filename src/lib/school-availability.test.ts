@@ -98,42 +98,48 @@ describe("the catalogue's own schools land in the right state", () => {
     return schoolAvailability({ ...base, catalogueState });
   };
 
-  it("Columbia is unverified, not a school with no supplement", () => {
-    // Columbia publishes its questions only inside the Common App, so its
-    // record carries no prompts. That is missing information, and the card must
-    // not imply Columbia asks for nothing.
-    const source = record("Columbia University");
-    expect(source.prompts).toHaveLength(0);
-    expect(source.verificationStatus).toBe("needs-review");
-    expect(fromRecordWithNoPrompts("Columbia University")).toEqual({ kind: "unverified" });
-    expect(availabilitySentence(fromRecordWithNoPrompts("Columbia University")))
-      .toBe("Prompt information not yet verified");
-  });
-
-  it.each([
-    "Arizona State University",
-    "Carleton College",
-    "University of North Carolina at Chapel Hill",
-  ])("%s is a verified no-supplement school", (name) => {
-    expect(record(name).verificationStatus).toBe("no-supplement-confirmed");
-    expect(fromRecordWithNoPrompts(name)).toEqual({ kind: "no-supplement" });
-  });
-
-  it.each([
-    "Boston University",
-    "Cornell University",
-    "University of Virginia",
-  ])("%s has unverified prompt information", (name) => {
-    expect(record(name).verificationStatus).toBe("needs-review");
-    expect(fromRecordWithNoPrompts(name)).toEqual({ kind: "unverified" });
-  });
-
-  it("a previous-cycle-only school says its current prompts are unverified", () => {
-    const previousCycle = listCoveredSchoolNames()
+  it("maps every zero-prompt school to the state its own record justifies", () => {
+    // Derived from the catalogue rather than naming schools: the 2026-27 rebuild
+    // moved most of the old fixtures (Columbia, Arizona State, Carleton, Boston
+    // University and Cornell all publish prompts now), and a test that pins
+    // names goes stale every cycle while a test that pins the *mapping* does
+    // not. What must never happen is a zero-prompt school reading as a verified
+    // absence when nobody verified it.
+    const empty = listCoveredSchoolNames()
       .map((name) => ({ name, source: lookupSchoolSource(name)! }))
-      .find((entry) => entry.source.verificationStatus === "previous-cycle" && entry.source.prompts.length > 0);
-    expect(previousCycle, "the catalogue no longer has a previous-cycle school").toBeTruthy();
+      .filter(({ source }) => source.prompts.length === 0);
+    expect(empty.length, "expected the catalogue to contain zero-prompt schools").toBeGreaterThan(0);
 
+    for (const { name, source } of empty) {
+      const availability = fromRecordWithNoPrompts(name);
+      if (source.verificationStatus === "no-supplement-confirmed") {
+        expect(availability, `${name}`).toEqual({ kind: "no-supplement" });
+      } else {
+        expect(availability.kind, `${name} claims a verified absence`).not.toBe("no-supplement");
+        expect(availabilitySentence(availability)).not.toMatch(/No supplemental essay/);
+      }
+    }
+  });
+
+  it("confirms a no-supplement school is confirmed, never merely unresearched", () => {
+    const confirmed = listCoveredSchoolNames()
+      .map((name) => ({ name, source: lookupSchoolSource(name)! }))
+      .filter(({ source }) => source.verificationStatus === "no-supplement-confirmed");
+    // Five for 2026-27: Colby, Middlebury, Tulane (which dropped its "Why
+    // Tulane?" this cycle), Georgia and Wesleyan.
+    expect(confirmed).toHaveLength(5);
+    for (const { name, source } of confirmed) {
+      expect(source.prompts, `${name}`).toEqual([]);
+      expect(source.sourceUrl, `${name} needs a citation for the absence`).toBeTruthy();
+      expect(fromRecordWithNoPrompts(name)).toEqual({ kind: "no-supplement" });
+    }
+  });
+
+  it("says a previous-cycle-only school's current prompts are unverified", () => {
+    // No catalogue record is previous-cycle for 2026-27, but a workspace can
+    // still hold previous-cycle prompts: pruneStalePrompts re-files a prompt the
+    // catalogue dropped under the previous cycle when the student has already
+    // worked on it. So this pins the state's own sentence, not a fixture.
     const availability = schoolAvailability({ ...base, catalogueState: "previous-cycle-only", promptCount: 3 });
     expect(availability).toEqual({ kind: "previous-cycle" });
     expect(availabilitySentence(availability)).toBe("Current prompts not yet verified");

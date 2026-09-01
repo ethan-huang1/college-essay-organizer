@@ -584,8 +584,11 @@ describe("local persistence foundation", () => {
   });
 
   it("imports and auto-classifies a verified school's prompts, idempotently", async () => {
-
-    const first = await importCollege(connection.db, PERSONAL, "Stanford University");
+    // Princeton rather than Stanford: for 2026-27 Stanford's prompts are
+    // corroborated across current-cycle sources rather than read off its own
+    // page, so its record is common-app-verified. Princeton publishes them
+    // itself, which is what this test is about.
+    const first = await importCollege(connection.db, PERSONAL, "Princeton University");
     expect(first.verificationStatus).toBe("officially-verified");
     expect(first.counts.created).toBeGreaterThan(0);
     expect(first.counts.updated).toBe(0);
@@ -603,12 +606,23 @@ describe("local persistence foundation", () => {
 
     // Re-adding the same school does not duplicate its school row or prompts -
     // every prompt is recognized as unchanged (deduplication + idempotency).
-    const second = await importCollege(connection.db, PERSONAL, "  stanford university  ".trim());
+    const second = await importCollege(connection.db, PERSONAL, "  princeton university  ".trim());
     expect(second.counts.created).toBe(0);
     expect(second.counts.updated).toBe(0);
     expect(second.counts.unchanged).toBe(first.counts.created);
     expect(await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL))).toHaveLength(1);
     expect(await connection.db.select().from(prompts).where(eq(prompts.schoolId, first.schoolId))).toHaveLength(first.counts.created);
+  });
+
+  it("keeps a corroborated record distinct from one read off the school's own page", async () => {
+    // The catalogue draws the distinction the research does: 83 schools publish
+    // their prompts, 12 are corroborated across current-cycle sources. A
+    // student sees which, so the two must not collapse into one badge.
+    const corroborated = await importCollege(connection.db, PERSONAL, "Stanford University");
+    expect(corroborated.verificationStatus).toBe("common-app-verified");
+    expect(corroborated.counts.created).toBeGreaterThan(0);
+    const imported = await connection.db.select().from(prompts).where(eq(prompts.schoolId, corroborated.schoolId));
+    expect(imported.every((prompt) => prompt.verificationStatus === "common-app-verified")).toBe(true);
   });
 
   it("adds a school with no verified prompts as 'not yet verified' rather than guessing", async () => {
@@ -625,51 +639,110 @@ describe("local persistence foundation", () => {
   // opposite things to a student. Each has to be readable from a column, never
   // from the prose in schools.notes.
   it("distinguishes every zero-prompt college state from structured data alone", async () => {
+    // Colby confirmed it asks for nothing; an unlisted college is whatever the
+    // student typed. The other two states (not-published, previous-cycle) have
+    // no catalogue record for 2026-27 - every researched school either
+    // published its prompts or confirmed it has none - so they are covered
+    // where they can still arise: previous-cycle through pruning below, and
+    // not-published through schoolAvailability in school-availability.test.ts.
     const noSupplement = await importCollege(connection.db, PERSONAL, "Colby College");
-    const notPublished = await importCollege(connection.db, PERSONAL, "Boston University");
-    const previousOnly = await importCollege(connection.db, PERSONAL, "Harvard University");
     const manual = await importCollege(connection.db, PERSONAL, "Some Unlisted College");
+    const current = await importCollege(connection.db, PERSONAL, "Harvard University");
 
     const byId = new Map(
       (await connection.db.select().from(schools).where(eq(schools.workspaceId, PERSONAL))).map((row) => [row.id, row]),
     );
     expect(byId.get(noSupplement.schoolId)?.catalogueStatus).toBe("no-supplement");
-    expect(byId.get(notPublished.schoolId)?.catalogueStatus).toBe("not-published");
-    expect(byId.get(previousOnly.schoolId)?.catalogueStatus).toBe("previous-cycle");
     expect(byId.get(manual.schoolId)?.catalogueStatus).toBe("manual");
+    expect(byId.get(current.schoolId)?.catalogueStatus).toBe("current");
 
     const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     const stateOf = (schoolId: string) => snapshot?.schools.find((school) => school.id === schoolId)?.catalogueState;
     expect(stateOf(noSupplement.schoolId)).toBe("no-supplement");
-    expect(stateOf(notPublished.schoolId)).toBe("not-published");
     expect(stateOf(manual.schoolId)).toBe("manual");
-    // Harvard has prompts, all previous-cycle, so the state comes from the
-    // prompt rows rather than the stored status.
-    expect(stateOf(previousOnly.schoolId)).toBe("previous-cycle-only");
+    expect(stateOf(current.schoolId)).toBe("current");
   });
 
-  it("imports confirmed previous-cycle prompts, distinctly cycle-labeled and never as current", async () => {
-    const result = await importCollege(connection.db, PERSONAL, "Harvard University");
-    expect(result.verificationStatus).toBe("previous-cycle");
-    expect(result.counts.created).toBeGreaterThan(0);
-
+  /**
+   * What happens to a prompt the catalogue drops.
+   *
+   * Both halves matter. A stale prompt nobody touched has to disappear, or the
+   * import can only ever add and the student answers a question their school no
+   * longer asks. A stale prompt they *have* worked on must not be deleted: the
+   * assignment is their own record of what an essay was written for, and
+   * deleting the prompt cascades it away and nulls the essay's originPromptId.
+   * So one is removed and the other is re-filed under the previous cycle, where
+   * it stays visible and counts toward nothing.
+   */
+  it("removes a dropped prompt nobody touched, and retires one the student has worked on", async () => {
+    const result = await importCollege(connection.db, PERSONAL, "Yale University");
     const imported = await connection.db.select().from(prompts).where(eq(prompts.schoolId, result.schoolId));
-    expect(imported).toHaveLength(result.counts.created);
-    expect(imported.every((prompt) => prompt.verificationStatus === "previous-cycle")).toBe(true);
+    expect(imported.length).toBeGreaterThan(3);
 
-    const promptCycle = await connection.db.select().from(applicationCycles).where(eq(applicationCycles.id, imported[0].cycleId!)).then((rows) => rows[0]);
-    const currentCycle = (await connection.db.select().from(applicationCycles)
-      .where(eq(applicationCycles.workspaceId, PERSONAL)))
+    // Two prompts the current catalogue does not contain: one the student has
+    // answered, one they have not.
+    const answeredRef = "retired-answered";
+    const untouchedRef = "retired-untouched";
+    const essayId = await createEssay(connection.db, PERSONAL, {
+      title: "Essay for a retired prompt", content: "Written for a question Yale has since dropped.",
+      status: "draft", designation: "canonical",
+    });
+    const stale = [answeredRef, untouchedRef].map((externalRef) => ({
+      id: crypto.randomUUID(),
+      workspaceId: PERSONAL,
+      schoolId: result.schoolId,
+      cycleId: imported[0].cycleId,
+      title: `Dropped prompt ${externalRef}`,
+      promptText: `A question Yale asked last cycle (${externalRef}).`,
+      requirement: "required" as const,
+      externalRef,
+    }));
+    await connection.db.insert(prompts).values(stale);
+    const answeredId = stale[0].id;
+    const untouchedId = stale[1].id;
+    await assignEssayToPrompt(connection.db, PERSONAL, answeredId, essayId);
+    await saveEssayVersion(connection.db, PERSONAL, essayId, { content: "Written for a question Yale has since dropped.", reason: "before the prune" });
+
+    const reimport = await importCollege(connection.db, PERSONAL, "Yale University");
+    expect(reimport.counts.created).toBe(0);
+    expect(reimport.counts.removed).toBe(1);
+    expect(reimport.counts.retired).toBe(1);
+
+    // The untouched one is gone outright.
+    expect(await connection.db.select().from(prompts).where(eq(prompts.id, untouchedId))).toHaveLength(0);
+
+    // The answered one survives, re-filed under the previous cycle and labeled
+    // as such, with the student's work attached exactly as it was.
+    const retired = await connection.db.select().from(prompts).where(eq(prompts.id, answeredId)).then((rows) => rows[0]);
+    expect(retired?.verificationStatus).toBe("previous-cycle");
+    const retiredCycle = await connection.db.select().from(applicationCycles)
+      .where(eq(applicationCycles.id, retired!.cycleId!)).then((rows) => rows[0]);
+    const currentCycle = (await connection.db.select().from(applicationCycles).where(eq(applicationCycles.workspaceId, PERSONAL)))
       .find((cycle) => cycle.label === "2026–27");
-    expect(promptCycle?.label).toBe("2025–26");
-    expect(promptCycle?.id).not.toBe(currentCycle?.id);
+    expect(retiredCycle?.label).toBe("2025–26");
+    expect(retiredCycle?.id).not.toBe(currentCycle?.id);
 
-    // Previous-cycle prompts are visible/matchable but excluded from the
-    // "current cycle" prompt stat.
+    expect(await connection.db.select().from(assignedEssayResponses).where(eq(assignedEssayResponses.promptId, answeredId))).toHaveLength(1);
+    expect(await connection.db.select().from(essays).where(eq(essays.id, essayId))).toHaveLength(1);
+    expect((await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId))).length).toBeGreaterThan(0);
+
+    // Visible for planning, but counting toward nothing in this cycle.
     const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
-    expect(snapshot?.prompts.some((prompt) => prompt.schoolId === result.schoolId)).toBe(true);
-    expect(snapshot?.stats.prompts).toBe(0);
-    expect(snapshot?.stats.previousCyclePrompts).toBe(result.counts.created);
+    expect(snapshot?.prompts.some((prompt) => prompt.id === answeredId)).toBe(true);
+    expect(snapshot?.stats.previousCyclePrompts).toBe(1);
+    expect(snapshot?.stats.prompts).toBe(imported.length);
+  });
+
+  it("leaves a prompt the student typed in alone when the catalogue changes", async () => {
+    // Pruning is scoped to catalogue rows: a prompt with no externalRef came
+    // from the student, and the catalogue has no opinion about it.
+    const result = await importCollege(connection.db, PERSONAL, "Colby College");
+    const ownPromptId = await createPrompt(connection.db, PERSONAL, {
+      schoolId: result.schoolId, title: "My own note", promptText: "Something Colby asked me in an interview.",
+      requirement: "required", status: "not-started",
+    });
+    await importCollege(connection.db, PERSONAL, "Colby College");
+    expect(await connection.db.select().from(prompts).where(eq(prompts.id, ownPromptId))).toHaveLength(1);
   });
 
   it("imports genuinely conditional, degree-dependent prompts with their note intact", async () => {
@@ -692,9 +765,18 @@ describe("local persistence foundation", () => {
   it("shares one canonical prompt set across UC campuses without cross-campus id collisions", async () => {
     const berkeley = await importCollege(connection.db, PERSONAL, "University of California, Berkeley");
     const ucla = await importCollege(connection.db, PERSONAL, "University of California, Los Angeles");
-    expect(berkeley.counts.created).toBe(8);
+    // Eight shared Personal Insight Questions each, plus Berkeley's own M.E.T.
+    // dual-degree essay, which is campus-specific and not part of the shared set.
+    expect(berkeley.counts.created).toBe(9);
     expect(ucla.counts.created).toBe(8);
-    expect(await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL))).toHaveLength(16);
+    expect(await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL))).toHaveLength(17);
+
+    // The shared eight are one question per campus pair, so they collapse by
+    // canonicalKey; the M.E.T. essay has no counterpart at UCLA.
+    const canonicalKeys = (await connection.db.select().from(prompts).where(eq(prompts.workspaceId, PERSONAL)))
+      .map((prompt) => prompt.canonicalKey)
+      .filter((key): key is string => Boolean(key));
+    expect(new Set(canonicalKeys).size).toBe(9);
   });
 
   it("flags a changed prompt as needs-review and records the prior wording, without duplicating it", async () => {

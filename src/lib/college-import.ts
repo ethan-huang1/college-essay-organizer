@@ -1,9 +1,9 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
-import { classifyText } from "./classification";
-import { CURRENT_CYCLE_LABEL } from "./cycle";
+import { classifyUnreviewedPrompt } from "./classification";
+import { CURRENT_CYCLE_LABEL, PREVIOUS_CYCLE_LABEL } from "./cycle";
 import type { AppDatabase } from "./db/client";
-import { applicationCycles, assignedEssayResponses, promptChangeLog, promptFamilies, promptFamilyLinks, promptTagLinks, promptTags, prompts, schools } from "./db/schema";
+import { applicationCycles, assignedEssayResponses, essays, promptChangeLog, promptFamilies, promptFamilyLinks, promptTagLinks, promptTags, prompts, schools } from "./db/schema";
 import { categoryReview } from "./retrieval/category-review";
 import { promptContentChanged } from "./retrieval/normalize";
 import { lookupSchoolSource } from "./retrieval/registry";
@@ -77,8 +77,9 @@ async function loadFamilyIds(db: Pick<AppDatabase, "select">, workspaceId: strin
  *    judgements beat any set of regex patterns, and the rules were measurably
  *    wrong on some of them - MIT's "field of study that appeals to you"
  *    classified as Why Us because "appeals to you" fired first.
- * 2. The keyword rules, for prompts a student adds that are not in the
- *    catalogue. Then `other` if nothing matched.
+ * 2. The keyword rules, for prompts a student adds and for catalogue prompts
+ *    not yet reviewed. Then `other` if nothing matched. Personal Statement is
+ *    withheld from this tier - see classifyUnreviewedPrompt for why.
  *
  * `Other` at confidence 0 is deliberately distinct from `Other` at a real
  * confidence: the first means "nothing recognised this", which is what the
@@ -98,7 +99,7 @@ function classifyPrompt(
     // review deliberately left out back into matching.
     return { primarySlug, secondarySlugs: secondaryFamilySlugs, tags: secondaryTags, confidence: 100 };
   }
-  const classification = classifyText(`${raw.title} ${raw.promptText}`);
+  const classification = classifyUnreviewedPrompt(`${raw.title} ${raw.promptText}`);
   return {
     primarySlug: classification.primarySlug ?? "other",
     secondarySlugs: classification.secondarySlugs,
@@ -158,7 +159,7 @@ async function loadTagIds(db: Pick<AppDatabase, "select">, workspaceId: string) 
   return new Map(rows.map((row) => [row.name, row.id]));
 }
 
-type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number };
+type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number; retired: number; removed: number };
 
 /**
  * Copies existing canonical siblings' response state onto rows about to be
@@ -243,7 +244,7 @@ async function upsertPrompts(
   familyIds: Map<string, string>,
   tagIds: Map<string, string>,
 ) {
-  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0 };
+  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0, retired: 0, removed: 0 };
   const externalRefs = rawPrompts.map((raw) => raw.externalRef);
   const existingRows = externalRefs.length
     ? await db.select().from(prompts)
@@ -290,6 +291,10 @@ async function upsertPrompts(
         groupRequiredCount: group?.requiredCount ?? null,
         programKey: raw.programKey ?? null,
         programLabel: raw.programLabel ?? null,
+        // Written on create only. notes is student-editable, so a re-import
+        // must never overwrite what they typed there - the update path below
+        // deliberately leaves it alone.
+        notes: raw.note ?? null,
         classificationSource: "deterministic",
         // Previously computed and discarded, so every imported prompt sat at 0
         // and there was no way to tell a confident classification from a
@@ -373,6 +378,77 @@ async function upsertPrompts(
   return counts;
 }
 
+/**
+ * Removes catalogue prompts the current catalogue no longer contains.
+ *
+ * Without this the import can only ever add: `upsertPrompts` matches on
+ * externalRef, so a question the school dropped (or reworded past recognition)
+ * would stay live next to its replacement and the student would answer both.
+ *
+ * Two outcomes, decided by whether the student has anything invested in the
+ * row - which is why this is not a plain delete:
+ *
+ *   - Nothing invested (not started, no essay assigned, no essay claiming it as
+ *     its origin): deleted, so it simply disappears.
+ *   - Anything invested: re-filed under the previous cycle and marked
+ *     previous-cycle. That is the app's existing "not this cycle's work" state,
+ *     so it drops out of every count (see progress.ts, workload.ts) and renders
+ *     with the "do not treat as a current requirement" warning, while the
+ *     essay, its versions and the assignment all survive untouched. Deleting it
+ *     would cascade the assignment away and null the essay's originPromptId -
+ *     losing the student's own record of what they wrote it for.
+ *
+ * Only ever touches rows with an externalRef, so a prompt the student typed in
+ * themselves is never in scope.
+ */
+async function pruneStalePrompts(
+  db: AppDatabase,
+  workspaceId: string,
+  schoolId: string,
+  liveRefs: readonly string[],
+) {
+  const catalogueRows = await db.select({ id: prompts.id, externalRef: prompts.externalRef, status: prompts.status })
+    .from(prompts)
+    .where(and(eq(prompts.workspaceId, workspaceId), eq(prompts.schoolId, schoolId), isNotNull(prompts.externalRef)));
+  const live = new Set(liveRefs);
+  const stale = catalogueRows.filter((row) => row.externalRef && !live.has(row.externalRef));
+  if (stale.length === 0) return { retired: 0, removed: 0 };
+
+  const staleIds = stale.map((row) => row.id);
+  const [assigned, origins] = await Promise.all([
+    db.select({ promptId: assignedEssayResponses.promptId }).from(assignedEssayResponses)
+      .where(inArray(assignedEssayResponses.promptId, staleIds)),
+    db.select({ originPromptId: essays.originPromptId }).from(essays)
+      .where(inArray(essays.originPromptId, staleIds)),
+  ]);
+  const invested = new Set<string>([
+    ...assigned.map((row) => row.promptId),
+    ...origins.map((row) => row.originPromptId).filter((id): id is string => Boolean(id)),
+    ...stale.filter((row) => row.status !== "not-started").map((row) => row.id),
+  ]);
+
+  const removable = staleIds.filter((id) => !invested.has(id));
+  const retirable = staleIds.filter((id) => invested.has(id));
+  const previousCycleId = retirable.length > 0
+    ? await getOrCreateCycle(db, workspaceId, PREVIOUS_CYCLE_LABEL)
+    : null;
+
+  await db.transaction(async (tx) => {
+    if (removable.length > 0) {
+      await tx.delete(prompts).where(and(eq(prompts.workspaceId, workspaceId), inArray(prompts.id, removable)));
+    }
+    if (retirable.length > 0 && previousCycleId) {
+      await tx.update(prompts).set({
+        cycleId: previousCycleId,
+        verificationStatus: "previous-cycle",
+        updatedAt: new Date(),
+      }).where(and(eq(prompts.workspaceId, workspaceId), inArray(prompts.id, retirable)));
+    }
+  });
+
+  return { retired: retirable.length, removed: removable.length };
+}
+
 export type ImportCollegeResult = {
   schoolId: string;
   schoolName: string;
@@ -404,6 +480,13 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
 
   if (!source || source.prompts.length === 0) {
     const note = source?.note ?? "Current prompts not yet verified for this school. Add prompts manually below.";
+    // A school that dropped its supplement (Tulane did for 2026-27) still has
+    // last cycle's prompts in workspaces that imported it, so the prune runs
+    // here too. A school with no source record at all is left alone: it holds
+    // nothing but prompts the student typed in.
+    const pruned = source
+      ? await pruneStalePrompts(db, workspaceId, school.id, [])
+      : { retired: 0, removed: 0 };
     // catalogueStatus is the structured reason this school has no prompts, so
     // the UI never has to guess (or parse `notes`) whether a zero-prompt
     // college is confirmed supplement-free or merely unresearched. It is
@@ -419,7 +502,7 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
       verificationStatus: source?.verificationStatus ?? "manual",
       sourceUrl: source?.sourceUrl ?? null,
       note,
-      counts: { created: 0, updated: 0, unchanged: 0, flagged: 0 },
+      counts: { created: 0, updated: 0, unchanged: 0, flagged: 0, ...pruned },
     };
   }
 
@@ -440,6 +523,9 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
     sharedApplicationKey: source.sharedApplicationKey,
     promptGroups: source.promptGroups,
   }, familyIds, tagIds);
+  const pruned = await pruneStalePrompts(db, workspaceId, school.id, source.prompts.map((prompt) => prompt.externalRef));
+  counts.retired = pruned.retired;
+  counts.removed = pruned.removed;
   await db.update(schools).set({ catalogueStatus: catalogueStatusFor(source) }).where(eq(schools.id, school.id));
 
   return {
