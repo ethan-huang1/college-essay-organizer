@@ -1,456 +1,380 @@
 import { describe, expect, it } from "vitest";
 
-import { type MatchInput, SCORING, scoreMatch } from "./matching";
+import { ADAPTATION_LABELS, type MatchInput, SCORING, adaptationEffort, scoreMatch } from "./matching";
 
-// A same-category pair, in range, with no school-specific material. Semantic
-// similarity and both functions are left unset, which is the shipped state: no
-// embedding provider is configured and an unassigned essay has no known
-// function. Both then score their neutral value - see `neutral` in matching.ts.
+/**
+ * Unit tests for the two-factor content-fit score and its three ceilings.
+ *
+ * The design is docs/reuse-scoring.md; the measurements behind every constant
+ * are docs/evaluation/scoring-sweep.md. What this file pins is the arithmetic
+ * and the invariants - that a perfect score is exactly 100, that nothing is ever
+ * subtracted, and that word count and school specificity cannot touch the score.
+ * Whether the advice is *useful* is the regression set's job
+ * (src/lib/reuse-cases.test.ts), and neither replaces reading real output.
+ */
+
+/** A pair with everything neutral or in range, so one factor can be varied. */
 const base: MatchInput = {
   essayWordCount: 300,
   essayPrimaryFamilySlug: "community",
-  essaySecondaryFamilySlugs: ["diversity"],
+  essaySecondaryFamilySlugs: [],
+  essayTags: [],
   essaySchoolSpecificPhrases: [],
-  promptSchoolName: "Lakeview University",
+  essayFunction: "reflect",
+  promptSchoolName: "Duke University",
   promptPrimaryFamilySlug: "community",
   promptSecondaryFamilySlugs: [],
-  promptMinWordCount: 200,
-  promptMaxWordCount: 350,
+  promptTags: [],
+  promptFunction: "reflect",
+  promptMinWordCount: null,
+  promptMaxWordCount: 300,
+  semanticZScore: 0,
 };
 
-/** The z-score that yields exactly `points` from the semantic factor. */
-const zFor = (points: number, weight = SCORING.WEIGHTS.normal.semantic) => (points * 3) / weight - 1;
+/** The z-score that earns exactly `points` of the semantic weight. */
+const zFor = (points: number, weight = SCORING.WEIGHTS.semantic) => (points * 3) / weight - 1;
 
-describe("deterministic essay-prompt match scoring", () => {
-  it("is deterministic: identical input always produces an identical score", () => {
-    expect(scoreMatch(base)).toEqual(scoreMatch(base));
+describe("content-fit score", () => {
+  it("sums to exactly 100 on a perfect pair, and never above it", () => {
+    // Load-bearing. Every band threshold is defined on a 0-100 range, so a
+    // maximum anywhere else silently reshifts all three of them.
+    const perfect = scoreMatch({ ...base, semanticZScore: 9 });
+    expect(perfect.score).toBe(100);
+    expect(perfect.factors).toEqual({ category: 35, semantic: 45, function: 20 });
+    expect(SCORING.WEIGHTS.category + SCORING.WEIGHTS.semantic + SCORING.WEIGHTS.function).toBe(100);
   });
 
-  // A weight change that leaves the maximum anywhere but 100 silently reshifts
-  // every band boundary, since the bands are absolute scores.
-  it("keeps a perfect score at exactly 100, and Other's ceiling at 85", () => {
-    const perfect = scoreMatch({
+  it("has one weight vector, so `Other` cannot be penalised twice", () => {
+    // The superseded design switched to a reduced vector capped at 85 whenever
+    // either side was `Other`, which charged such a pair twice: no category
+    // points *and* a lower ceiling. There is now no second vector at all.
+    const other = scoreMatch({
       ...base,
-      essaySecondaryFamilySlugs: [],
-      essayTags: ["contribution", "service", "leadership"],
-      promptTags: ["contribution", "service", "leadership"],
-      semanticZScore: 5,
-      essayFunction: "reflect",
-      promptFunction: "reflect",
+      essayPrimaryFamilySlug: "other",
+      promptPrimaryFamilySlug: "other",
+      essayTags: ["service", "contribution"],
+      promptTags: ["service", "contribution"],
+      semanticZScore: 9,
     });
-    expect(perfect.factors).toEqual({ primary: 25, semantic: 40, secondary: 20, function: 15 });
-    expect(perfect.contentFitScore).toBe(100);
+    expect(other.score).toBe(Math.round(35 * 0.5 + 45 + 20));
+  });
+});
 
-    // `as const` on WEIGHTS narrows the values to literal unions, so summing
-    // them needs an explicit number accumulator.
-    const sum = (weights: Record<string, number>) => Object.values(weights).reduce<number>((a, b) => a + b, 0);
-    expect(sum(SCORING.WEIGHTS.normal)).toBe(100);
-    expect(sum(SCORING.WEIGHTS.other)).toBe(85);
+describe("the category ladder", () => {
+  const rung = (input: Partial<MatchInput>) =>
+    scoreMatch({ ...base, ...input, semanticZScore: null }).factors.category;
+  const full = SCORING.WEIGHTS.category;
+
+  it("pays a shared primary the most", () => {
+    expect(rung({})).toBe(full);
   });
 
-  // The whole point of the redesign. The previous formula gave a shared primary
-  // 60 points on top of a 20 baseline, landing exactly on the 80-point "ready
-  // to reuse" threshold - so two prompts sharing a broad category were called
-  // ready to submit unchanged, with 106 of 255 prompts in one category.
-  describe("a shared category is the weakest of the four signals", () => {
-    it("scores a shared primary category at 25 and nothing more", () => {
-      expect(scoreMatch(base).factors.primary).toBe(25);
-      expect(scoreMatch({ ...base, promptPrimaryFamilySlug: "why-major" }).factors.primary).toBe(0);
-    });
-
-    it("cannot reach the top band on category and perfect semantic fit alone", () => {
-      // 25 + 40 + 0 shared themes + 0 (functions differ across groups) = 65,
-      // and the cross-group mismatch caps the band regardless.
-      const result = scoreMatch({
-        ...base,
-        essaySecondaryFamilySlugs: [],
-        semanticZScore: 3,
-        essayFunction: "reflect",
-        promptFunction: "discuss-future-contribution",
-      });
-      expect(result.factors.semantic).toBe(40);
-      expect(result.contentFitScore).toBe(65);
-      expect(result.recommendedAction).toBe("reusable-edits");
-    });
+  it("pays a primary that is the other side's stated theme nearly as much", () => {
+    // The rung the redesign turns on. An essay whose whole subject is one of the
+    // prompt's sub-themes is strongly relevant, and the superseded formula paid
+    // it 7 points against 25 for a shared primary - which is what kept
+    // Princeton's service prompt out of reach of the activity essays that
+    // answer it.
+    expect(rung({
+      essayPrimaryFamilySlug: "activities-impact",
+      promptPrimaryFamilySlug: "community",
+      promptSecondaryFamilySlugs: ["activities-impact"],
+    })).toBeCloseTo(full * 0.85);
+    // Symmetric: it reads either direction.
+    expect(rung({
+      essayPrimaryFamilySlug: "community",
+      essaySecondaryFamilySlugs: ["activities-impact"],
+      promptPrimaryFamilySlug: "activities-impact",
+    })).toBeCloseTo(full * 0.85);
   });
 
-  // The specification for factor 4, from the product owner: a reflective
-  // Community essay must not be labelled "reusable with slight edits" for a
-  // Community prompt asking what the student will contribute in future, however
-  // strongly topic and themes overlap.
-  describe("prompt function", () => {
-    const duke: MatchInput = {
-      ...base,
+  it("pays several shared themes more than one", () => {
+    const two = rung({
+      essayPrimaryFamilySlug: "community", promptPrimaryFamilySlug: "why-major",
+      essaySecondaryFamilySlugs: ["diversity", "challenge-growth"],
+      promptSecondaryFamilySlugs: ["diversity", "challenge-growth"],
+    });
+    const one = rung({
+      essayPrimaryFamilySlug: "community", promptPrimaryFamilySlug: "why-major",
       essaySecondaryFamilySlugs: ["diversity"],
-      essayTags: ["contribution"],
       promptSecondaryFamilySlugs: ["diversity"],
-      promptTags: ["contribution"],
-      semanticZScore: zFor(25),
+    });
+    expect(two).toBeGreaterThan(one);
+    expect(one).toBeCloseTo(full * 0.65);
+  });
+
+  it("pays shared tags less than a shared category, and caps them", () => {
+    const tags = (n: number) => rung({
+      essayPrimaryFamilySlug: "community", promptPrimaryFamilySlug: "why-major",
+      essayTags: ["service", "contribution", "leadership", "creativity"].slice(0, n),
+      promptTags: ["service", "contribution", "leadership", "creativity"].slice(0, n),
+    });
+    expect(tags(1)).toBeCloseTo(full * 0.4);
+    expect(tags(2)).toBeCloseTo(full * 0.5);
+    expect(tags(4)).toBeCloseTo(full * 0.6);
+    expect(tags(4)).toBeLessThan(rung({
+      essayPrimaryFamilySlug: "community", promptPrimaryFamilySlug: "why-major",
+      essaySecondaryFamilySlugs: ["diversity"], promptSecondaryFamilySlugs: ["diversity"],
+    }));
+  });
+
+  it("gives no overlap a floor rather than a zero", () => {
+    // A weak signal, not an assertion of incompatibility. Six of 35 cannot
+    // carry a pair anywhere on its own.
+    expect(rung({ essayPrimaryFamilySlug: "community", promptPrimaryFamilySlug: "why-major" }))
+      .toBeCloseTo(full * 0.15);
+  });
+
+  it("scores a missing category neutral, and `Other` as a finding", () => {
+    // The distinction the plan asked for and the one that matters most in
+    // aggregate. Nobody recording a category is the absence of a signal; a
+    // reviewer recording `Other` is the presence of one - they read the prompt
+    // and found no category fits. Treating them alike handed a free half-weight
+    // to 42% of all pairs.
+    const missing = rung({ essayPrimaryFamilySlug: null });
+    expect(missing).toBeCloseTo(full * 0.5);
+
+    const other = rung({ essayPrimaryFamilySlug: "other" });
+    expect(other).toBeCloseTo(full * 0.15);
+    expect(other).toBeLessThan(missing);
+  });
+
+  it("does not treat two Why Us prompts as sharing anything", () => {
+    // Institutional fit essays share a form and not a word of substance, and
+    // Why Us is the one thing a student must not recycle. Before this rule Why
+    // Us was involved in 27.8% of every top-band pair in the catalogue.
+    expect(rung({ essayPrimaryFamilySlug: "why-us", promptPrimaryFamilySlug: "why-us" }))
+      .toBeCloseTo(full * 0.15);
+    // A genuinely shared category still pays, for contrast.
+    expect(rung({ essayPrimaryFamilySlug: "why-major", promptPrimaryFamilySlug: "why-major" })).toBe(full);
+  });
+});
+
+describe("the semantic factor", () => {
+  it("scores neutral when no provider is configured", () => {
+    // Not zero: with no embeddings every pair would read as "nothing you have
+    // written fits". This is the shipped path for a workspace whose prompts
+    // have no committed vectors.
+    expect(scoreMatch({ ...base, semanticZScore: null }).factors.semantic).toBe(SCORING.WEIGHTS.semantic / 2);
+    expect(scoreMatch({ ...base, semanticZScore: undefined }).factors.semantic).toBe(SCORING.WEIGHTS.semantic / 2);
+  });
+
+  it("saturates at z=2 and floors at z=-1", () => {
+    expect(scoreMatch({ ...base, semanticZScore: 2 }).factors.semantic).toBe(SCORING.WEIGHTS.semantic);
+    expect(scoreMatch({ ...base, semanticZScore: 9 }).factors.semantic).toBe(SCORING.WEIGHTS.semantic);
+    expect(scoreMatch({ ...base, semanticZScore: -1 }).factors.semantic).toBe(0);
+    expect(scoreMatch({ ...base, semanticZScore: -3 }).factors.semantic).toBe(0);
+  });
+
+  it("cannot reach the reuse floor on its own", () => {
+    // The concrete argument against letting similarity dominate. An essay about
+    // rebuilding a free library ranks "list five books" second of ten prompts
+    // because it is full of the word *books*; saturated similarity plus the
+    // category floor must not add up to a recommendation.
+    const unrelated = scoreMatch({
+      ...base,
+      essayPrimaryFamilySlug: "community",
+      promptPrimaryFamilySlug: "why-major",
       essayFunction: "reflect",
-    };
-
-    it("keeps a reflective essay out of the top band for a future-contribution prompt", () => {
-      const result = scoreMatch({ ...duke, promptFunction: "discuss-future-contribution" });
-      // 25 primary + 25 semantic + 14 (two shared themes) + 0 function = 64.
-      expect(result.contentFitScore).toBe(64);
-      expect(result.recommendedAction).toBe("reusable-edits");
-      expect(result.ceilings).toContain("the prompt asks for something this essay does not do");
+      promptFunction: "connect-to-school",
+      semanticZScore: 9,
     });
+    expect(unrelated.factors.semantic).toBe(SCORING.WEIGHTS.semantic);
+    expect(unrelated.score).toBeLessThan(60);
+  });
+});
 
-    it("caps the band even when the score alone would clear 70", () => {
-      // Same pair with three shared themes: 25 + 25 + 20 + 0 = 70, which would
-      // otherwise be the top band. The ceiling is what stops it, so this is
-      // asserted independently of the score.
-      const result = scoreMatch({
-        ...duke,
-        essayTags: ["contribution", "service", "leadership"],
-        promptTags: ["contribution", "service", "leadership"],
-        promptFunction: "discuss-future-contribution",
-      });
-      expect(result.contentFitScore).toBeGreaterThanOrEqual(70);
-      expect(result.recommendedAction).toBe("reusable-edits");
-    });
+describe("the function factor", () => {
+  const fn = (essayFunction: MatchInput["essayFunction"], promptFunction: MatchInput["promptFunction"]) =>
+    scoreMatch({ ...base, essayFunction, promptFunction }).factors.function;
 
-    it("does not cap for a mismatch within the same group", () => {
-      // describe -> reflect is a step, not a rewrite.
-      const result = scoreMatch({ ...duke, essayFunction: "describe", promptFunction: "reflect" });
-      expect(result.factors.function).toBe(0);
-      expect(result.ceilings).not.toContain("the prompt asks for something this essay does not do");
-    });
-
-    it("treats an unknown function as neutral, never as a mismatch", () => {
-      const unknown = scoreMatch({ ...duke, essayFunction: null, promptFunction: "discuss-future-contribution" });
-      // Exactly half of 15, unrounded. Rounding the factor to 8 would put every
-      // unknown-function pair half a point above true half credit, and that is
-      // most pairs, since an essay has no function until it is linked.
-      expect(unknown.factors.function).toBe(7.5);
-      expect(unknown.ceilings).not.toContain("the prompt asks for something this essay does not do");
-      // Neutral has to sit strictly between a mismatch and a match, or an essay
-      // with no recorded function is either punished or flattered.
-      const mismatch = scoreMatch({ ...duke, promptFunction: "discuss-future-contribution" });
-      const match = scoreMatch({ ...duke, promptFunction: "reflect" });
-      expect(unknown.contentFitScore).toBeGreaterThan(mismatch.contentFitScore);
-      expect(unknown.contentFitScore).toBeLessThan(match.contentFitScore);
-    });
-
-    it("groups every function, so no pair is unclassifiable", () => {
-      for (const fn of SCORING.PROMPT_FUNCTIONS) expect(SCORING.FUNCTION_GROUPS[fn]).toBeTruthy();
-    });
+  it("pays an exact match in full", () => {
+    expect(fn("reflect", "reflect")).toBe(SCORING.WEIGHTS.function);
   });
 
-  describe("secondary theme overlap", () => {
-    it("counts families and tags in one pool, at 7 points each, capped at 20", () => {
-      const shared = (n: number) => scoreMatch({
-        ...base,
-        essaySecondaryFamilySlugs: [],
-        essayTags: ["contribution", "service", "leadership", "creativity"].slice(0, n),
-        promptTags: ["contribution", "service", "leadership", "creativity"].slice(0, n),
-      }).factors.secondary;
-      expect(shared(0)).toBe(0);
-      expect(shared(1)).toBe(7);
-      expect(shared(2)).toBe(14);
-      expect(shared(3)).toBe(20);
-      expect(shared(4)).toBe(20);
-    });
-
-    it("counts a primary that appears in the other side's secondaries", () => {
-      // An essay whose main subject is one of the prompt's stated sub-themes is
-      // genuinely relevant, even though the primaries differ.
-      const result = scoreMatch({
-        ...base,
-        essayPrimaryFamilySlug: "diversity",
-        essaySecondaryFamilySlugs: [],
-        promptPrimaryFamilySlug: "community",
-        promptSecondaryFamilySlugs: ["diversity"],
-      });
-      expect(result.factors.primary).toBe(0);
-      expect(result.factors.secondary).toBe(7);
-    });
-
-    it("never counts Other as a shared theme", () => {
-      const result = scoreMatch({
-        ...base,
-        essayPrimaryFamilySlug: "other",
-        essaySecondaryFamilySlugs: ["other"],
-        promptPrimaryFamilySlug: "other",
-        promptSecondaryFamilySlugs: ["other"],
-      });
-      expect(result.factors.secondary).toBe(0);
-    });
+  it("charges only a little for a difference inside a group", () => {
+    // The defect this redesign fixes. `describe` against `reflect` used to earn
+    // zero of 15 for a difference the grouping itself calls "a step, not a
+    // rewrite", and that cost three of the twelve activity-family pairs a band.
+    expect(fn("describe", "reflect")).toBeCloseTo(SCORING.WEIGHTS.function * SCORING.SAME_GROUP_FRACTION);
+    expect(fn("describe", "reflect")).toBeGreaterThan(0);
+    expect(fn("describe", "reflect")).toBeLessThan(fn("reflect", "reflect"));
   });
 
-  // Other is 94 of the 255 catalogue prompts. Excluding it from matching - as
-  // the previous NOT_A_SHARED_THEME rule did for the primary factor alone -
-  // would tell a student that 37% of their prompts match nothing they have ever
-  // written. Reweighting is the middle ground: no free points for sharing "no
-  // meaningful category", but no prohibition either.
-  describe("the Other weight vector", () => {
-    const otherPair: MatchInput = { ...base, essayPrimaryFamilySlug: "other", promptPrimaryFamilySlug: "other", essaySecondaryFamilySlugs: [] };
-
-    it("awards no primary points for two prompts that both fit nowhere", () => {
-      expect(scoreMatch(otherPair).factors.primary).toBe(0);
-    });
-
-    it("reweights onto the signals that carry information, for a ceiling of 85", () => {
-      const best = scoreMatch({
-        ...otherPair,
-        semanticZScore: 5,
-        essayTags: ["contribution", "service", "leadership"],
-        promptTags: ["contribution", "service", "leadership"],
-        essayFunction: "reflect",
-        promptFunction: "reflect",
-      });
-      expect(best.factors).toEqual({ primary: 0, semantic: 45, secondary: 20, function: 20 });
-      expect(best.contentFitScore).toBe(85);
-      expect(best.recommendedAction).toBe("reusable-slight-edits");
-    });
-
-    it("applies when either side is Other, not only both", () => {
-      expect(scoreMatch({ ...base, promptPrimaryFamilySlug: "other", semanticZScore: 5 }).factors.semantic).toBe(45);
-      expect(scoreMatch({ ...base, essayPrimaryFamilySlug: "other", semanticZScore: 5 }).factors.semantic).toBe(45);
-    });
-
-    it("does not reweight a pair whose categories merely differ", () => {
-      // "No category exists" and "the categories disagree" are different
-      // situations. Reweighting the second would reward genuine mismatch.
-      const mismatch = scoreMatch({ ...base, promptPrimaryFamilySlug: "why-major", semanticZScore: 5 });
-      expect(mismatch.factors.semantic).toBe(40);
-      expect(mismatch.factors.primary).toBe(0);
-    });
+  it("pays nothing across groups, and caps the band", () => {
+    const crossed = scoreMatch({ ...base, essayFunction: "reflect", promptFunction: "discuss-future-contribution", semanticZScore: 9 });
+    expect(crossed.factors.function).toBe(0);
+    // Asserted independently of the score: the owner's specification is that a
+    // reflective Community essay is never "slight edits" for a Community prompt
+    // asking what the student will contribute, however well the topic matches.
+    expect(crossed.recommendedAction).not.toBe("reusable-slight-edits");
+    expect(crossed.ceilings).toContain("the prompt asks for something this essay does not do");
   });
 
-  describe("semantic similarity", () => {
-    it("scores neutral, not zero, when no provider is configured", () => {
-      expect(scoreMatch(base).factors.semantic).toBe(20);
-      expect(scoreMatch({ ...base, semanticZScore: null }).factors.semantic).toBe(20);
-    });
-
-    it("reads a calibrated z-score, saturating at both ends", () => {
-      expect(scoreMatch({ ...base, semanticZScore: -3 }).factors.semantic).toBe(0);
-      expect(scoreMatch({ ...base, semanticZScore: 0 }).factors.semantic).toBe(13);
-      expect(scoreMatch({ ...base, semanticZScore: 2 }).factors.semantic).toBe(40);
-      expect(scoreMatch({ ...base, semanticZScore: 9 }).factors.semantic).toBe(40);
-    });
+  it("scores an unknown function neutral and caps nothing", () => {
+    // An essay predating onboarding has no recorded function. Neutral, never
+    // mismatched, or every such essay would be locked out of the top band.
+    const unknown = scoreMatch({ ...base, essayFunction: null, semanticZScore: 9 });
+    expect(unknown.factors.function).toBe(SCORING.WEIGHTS.function / 2);
+    expect(unknown.ceilings).toEqual([]);
   });
 
-  // Word count is editing cost, not content mismatch. The previous curve
-  // saturated at -25, so 500 -> 300 and 500 -> 50 were scored identically and
-  // it could not tell condensing from rewriting.
-  describe("word count never changes the score, only the band", () => {
-    // Scores high on the other three factors, so the band observed here is the
-    // ceiling's doing and not just a low score. Asserting the band on the plain
-    // base fixture would prove nothing: it scores 53, which is already below
-    // every ceiling under test.
-    const p = (max: number) => ({
+  it("groups every function", () => {
+    for (const name of SCORING.PROMPT_FUNCTIONS) expect(SCORING.FUNCTION_GROUPS[name]).toBeTruthy();
+  });
+});
+
+describe("format incompatibility", () => {
+  it("caps a list against an essay below the reuse floor", () => {
+    // No signal in the formula is evidence here: not the vocabulary the
+    // embeddings see, and not the fact that both prompts say "describe". Zeroing
+    // only the category factor left this pair at 50.
+    const listed = scoreMatch({
       ...base,
-      essayWordCount: 500,
-      promptMinWordCount: null,
-      promptMaxWordCount: max,
-      semanticZScore: 5,
-      essayFunction: "reflect" as const,
-      promptFunction: "reflect" as const,
+      essayPrimaryFamilySlug: "reading-list",
+      promptPrimaryFamilySlug: "why-major",
+      essayFunction: "describe",
+      promptFunction: "describe",
+      semanticZScore: 9,
     });
-
-    it("scores an over-length essay exactly as it scores an in-range one", () => {
-      expect(scoreMatch(p(300)).contentFitScore).toBe(scoreMatch(p(500)).contentFitScore);
-      expect(scoreMatch(p(50)).contentFitScore).toBe(scoreMatch(p(500)).contentFitScore);
-    });
-
-    it("treats ordinary shortening as free and fundamental compression as costly", () => {
-      // 500 -> 400, 300 and 250 are ordinary editing: no ceiling, top band.
-      for (const max of [400, 300, 250]) {
-        expect(scoreMatch(p(max)).ceilings, `${max}w`).toEqual([]);
-        expect(scoreMatch(p(max)).recommendedAction, `${max}w`).toBe("reusable-slight-edits");
-      }
-      // 500 -> 200 is 60% cut and still ordinary; 150 is substantial; 50 is a
-      // different essay.
-      expect(scoreMatch(p(200)).ceilings).toEqual([]);
-      expect(scoreMatch(p(150)).recommendedAction).toBe("reusable-edits");
-      expect(scoreMatch(p(50)).recommendedAction).toBe("reusable-significant-edits");
-    });
-
-    it("reports the difference either way", () => {
-      expect(scoreMatch(p(300)).wordCountDifference).toBe(200);
-
-      expect(scoreMatch({ ...base, essayWordCount: 100 }).wordCountDifference).toBe(100 - 350);
-    });
+    expect(listed.score).toBeLessThanOrEqual(SCORING.FORMAT_MISMATCH_CAP);
+    expect(listed.recommendedAction).toBe("new-response");
   });
 
-  // The single most misleading output the matcher could produce: telling a
-  // student a stub is finished work. A 15-word note once scored 80 against a
-  // 650-word prompt and was recommended as ready to reuse. Removing the
-  // word-count penalty without this ceiling would reintroduce it.
-  describe("an essay that is not shortened but unwritten", () => {
-    const longPrompt = { ...base, promptMinWordCount: null, promptMaxWordCount: 650 };
-
-    it("calls a 15-word stub a new response for a 650-word prompt", () => {
-      expect(scoreMatch({ ...longPrompt, essayWordCount: 15 }).recommendedAction).toBe("new-response");
-    });
-
-    it("does not second-guess a prompt that states its own minimum", () => {
-      // The school has already said the length is acceptable.
-      const stated = scoreMatch({ ...base, essayWordCount: 180, promptMinWordCount: 100, promptMaxWordCount: 300 });
-      expect(stated.ceilings).toEqual([]);
-    });
-
-    it("still caps an essay that misses a stated minimum", () => {
-      const short = scoreMatch({
-        ...base,
-        essayWordCount: 15,
-        promptMinWordCount: 600,
-        promptMaxWordCount: 650,
-        semanticZScore: 5,
-        essayFunction: "reflect",
-        promptFunction: "reflect",
-      });
-      expect(short.ceilings).toContain("length: is well short of the stated minimum");
-      expect(short.recommendedAction).toBe("reusable-edits");
-    });
-
-    it("does not cap a small shortfall against a stated minimum", () => {
-      // 590 against a 600-word minimum is a paragraph, not an adaptation cost.
-      const nearly = scoreMatch({
-        ...base,
-        essayWordCount: 590,
-        promptMinWordCount: 600,
-        promptMaxWordCount: 650,
-        semanticZScore: 5,
-        essayFunction: "reflect",
-        promptFunction: "reflect",
-      });
-      expect(nearly.ceilings).toEqual([]);
-      expect(nearly.recommendedAction).toBe("reusable-slight-edits");
-    });
-
-    it("treats being well under a maximum as acceptable, not as a mismatch", () => {
-      // Schools state a maximum, not a target. A 300-word essay against a
-      // 650-word maximum is a legitimate answer.
-      const under = scoreMatch({
-        ...base,
-        essayWordCount: 300,
-        promptMinWordCount: null,
-        promptMaxWordCount: 650,
-        semanticZScore: 5,
-        essayFunction: "reflect",
-        promptFunction: "reflect",
-      });
-      expect(under.ceilings).toEqual([]);
-      expect(under.recommendedAction).toBe("reusable-slight-edits");
-    });
-
-    it("leaves a character-limited prompt alone: no word maximum to measure against", () => {
-      const noMax = { ...base, promptMinWordCount: null, promptMaxWordCount: null };
-      expect(scoreMatch({ ...noMax, essayWordCount: 15 })).toEqual(scoreMatch({ ...noMax, essayWordCount: 300 }));
-    });
-  });
-
-  // Content fit and adaptation are independent questions. A school name used to
-  // do both jobs: it subtracted 40 points from the content score AND capped the
-  // action, so a perfect content match scored 40 and was filed under "do not
-  // reuse". A strong Stanford "Why Us" essay is a genuinely useful starting
-  // point for Duke - it just cannot be submitted unchanged.
-  describe("content fit is independent of adaptation required", () => {
-    const strongFitOtherSchool: MatchInput = {
+  it("treats two different formats as incompatible too", () => {
+    // A roommate note is not a list of five favourite things. Lumping the three
+    // format categories into one bucket left this pair scoring 70.
+    const crossFormat = scoreMatch({
       ...base,
-      promptPrimaryFamilySlug: "why-us",
-      essayPrimaryFamilySlug: "why-us",
-      essaySchoolSpecificPhrases: ["Stanford University"],
-      promptSchoolName: "Duke University",
-    };
-
-    it("does not let a school reference reduce the content-fit score", () => {
-      const clean = scoreMatch({ ...strongFitOtherSchool, essaySchoolSpecificPhrases: [] });
-      const named = scoreMatch(strongFitOtherSchool);
-      expect(named.contentFitScore).toBe(clean.contentFitScore);
+      essayPrimaryFamilySlug: "roommate",
+      promptPrimaryFamilySlug: "shorts",
+      essayFunction: "describe",
+      promptFunction: "describe",
+      semanticZScore: 9,
     });
-
-    it("keeps a strong content match reusable rather than a new response", () => {
-      const result = scoreMatch(strongFitOtherSchool);
-      expect(result.recommendedAction).not.toBe("new-response");
-      expect(result.adaptationRequired).toBe(true);
-      expect(result.schoolSpecificityRisk).toBe("high");
-      expect(result.explanation.toLowerCase()).toContain("adapt");
-    });
-
-    it("caps a fit prompt naming another school at significant edits", () => {
-      const result = scoreMatch({ ...strongFitOtherSchool, semanticZScore: 5, essayFunction: "reflect", promptFunction: "reflect" });
-      expect(result.contentFitScore).toBeGreaterThanOrEqual(70);
-      expect(result.recommendedAction).toBe("reusable-significant-edits");
-    });
-
-    it("caps a non-fit prompt naming another school one band lower only", () => {
-      const result = scoreMatch({
-        ...strongFitOtherSchool,
-        promptPrimaryFamilySlug: "community",
-        essayPrimaryFamilySlug: "community",
-        semanticZScore: 5,
-        essayFunction: "reflect",
-        promptFunction: "reflect",
-      });
-      expect(result.schoolSpecificityRisk).toBe("medium");
-      expect(result.recommendedAction).toBe("reusable-edits");
-    });
-
-    it("does not penalise an essay already tailored to this school", () => {
-      const result = scoreMatch({ ...strongFitOtherSchool, essaySchoolSpecificPhrases: ["Duke University"] });
-      expect(result.schoolSpecificityRisk).toBe("low");
-      expect(result.ceilings).toEqual([]);
-    });
-
-    // The other half of the requirement: school detection must not rescue an
-    // essay whose substance does not answer the prompt.
-    it("still recommends a new response when the content does not fit, school name or not", () => {
-      const weak: MatchInput = {
-        ...base,
-        essayPrimaryFamilySlug: "shorts",
-        essaySecondaryFamilySlugs: [],
-        promptPrimaryFamilySlug: "why-major",
-        essayWordCount: 12,
-        promptMinWordCount: null,
-        promptMaxWordCount: 650,
-      };
-      expect(scoreMatch(weak).recommendedAction).toBe("new-response");
-      expect(scoreMatch({ ...weak, essaySchoolSpecificPhrases: ["Stanford University"] }).recommendedAction).toBe("new-response");
-    });
+    expect(crossFormat.score).toBeLessThanOrEqual(SCORING.FORMAT_MISMATCH_CAP);
   });
 
-  describe("bands and ceilings", () => {
-    it("maps scores onto the four bands at 70, 60 and 50", () => {
-      const at = (points: number) => scoreMatch({
-        ...base,
-        essaySecondaryFamilySlugs: [],
-        essayFunction: "reflect",
-        promptFunction: "reflect",
-        semanticZScore: zFor(points - 25 - 15),
-      });
-      expect(at(70).recommendedAction).toBe("reusable-slight-edits");
-      expect(at(69).recommendedAction).toBe("reusable-edits");
-      expect(at(60).recommendedAction).toBe("reusable-edits");
-      expect(at(59).recommendedAction).toBe("reusable-significant-edits");
-      expect(at(50).recommendedAction).toBe("reusable-significant-edits");
-      expect(at(49).recommendedAction).toBe("new-response");
+  it("leaves two prompts of the same format alone", () => {
+    // A roommate note is a perfectly good start on another roommate note.
+    const sameFormat = scoreMatch({
+      ...base,
+      essayPrimaryFamilySlug: "roommate",
+      promptPrimaryFamilySlug: "roommate",
+      semanticZScore: 9,
     });
+    expect(sameFormat.score).toBe(100);
+  });
+});
 
-    it("takes the lowest band any ceiling allows", () => {
-      // A fit prompt naming another school (significant edits) and a function
-      // mismatch (edits) together must yield the lower of the two.
-      const result = scoreMatch({
-        ...base,
-        promptPrimaryFamilySlug: "why-us",
-        essayPrimaryFamilySlug: "why-us",
-        essaySchoolSpecificPhrases: ["Stanford University"],
-        promptSchoolName: "Duke University",
-        semanticZScore: 5,
-        essayFunction: "reflect",
-        promptFunction: "connect-to-school",
-      });
-      expect(result.ceilings.length).toBeGreaterThan(1);
-      expect(result.recommendedAction).toBe("reusable-significant-edits");
-    });
+describe("word count is editing cost, never content mismatch", () => {
+  it("scores identically however far the lengths differ", () => {
+    // The acceptance criterion in docs/reuse-scoring.md: contentFitScore is
+    // identical for a 500-word essay against a 300-word and a 500-word prompt
+    // of the same content. Only the ceiling and the adaptation label differ.
+    const long = scoreMatch({ ...base, essayWordCount: 500, promptMaxWordCount: 500 });
+    const squeezed = scoreMatch({ ...base, essayWordCount: 500, promptMaxWordCount: 300 });
+    const crushed = scoreMatch({ ...base, essayWordCount: 500, promptMaxWordCount: 50 });
+    expect(squeezed.score).toBe(long.score);
+    expect(crushed.score).toBe(long.score);
+    expect(crushed.recommendedAction).not.toBe(long.recommendedAction);
+  });
 
-    it("explains why a band is lower than its score", () => {
-      const result = scoreMatch({ ...base, essayWordCount: 5000, promptMinWordCount: null, promptMaxWordCount: 250 });
-      expect(result.explanation).toContain("Limited by");
+  it("reports adaptation effort as its own axis", () => {
+    expect(adaptationEffort(300, null, 300)).toBe("minimal");
+    expect(adaptationEffort(500, null, 300)).toBe("some");
+    expect(adaptationEffort(500, null, 150)).toBe("significant-shortening");
+    expect(adaptationEffort(60, null, 650)).toBe("expansion");
+    expect(adaptationEffort(400, 600, 900)).toBe("expansion");
+    expect(ADAPTATION_LABELS["significant-shortening"]).toBe("Significant shortening required");
+  });
+
+  it("calls a prompt with no numeric limit minimal rather than inventing one", () => {
+    // 41 catalogue prompts state their limit in pages, paragraphs or sentences
+    // and carry it in the prompt's note, leaving both numeric columns null.
+    // Reading a null maximum as zero words would label every one of them as
+    // needing shortening.
+    expect(adaptationEffort(600, null, null)).toBe("minimal");
+    expect(scoreMatch({ ...base, essayWordCount: 600, promptMaxWordCount: null }).ceilings).toEqual([]);
+  });
+
+  it("still refuses to call a 15-word note reusable", () => {
+    // A defect this repo fixed once: a 15-word note scored 80 against a
+    // 650-word prompt and was recommended as ready to reuse. It is not
+    // shortened, it is not written.
+    const note = scoreMatch({ ...base, essayWordCount: 15, promptMaxWordCount: 650, semanticZScore: 9 });
+    expect(note.score).toBeGreaterThan(70);
+    expect(note.recommendedAction).toBe("new-response");
+  });
+});
+
+describe("school specificity is editing cost, never content mismatch", () => {
+  it("leaves the score alone and caps the band", () => {
+    const clean = scoreMatch({ ...base, semanticZScore: 9 });
+    const named = scoreMatch({ ...base, semanticZScore: 9, essaySchoolSpecificPhrases: ["Stanford University"] });
+    expect(named.score).toBe(clean.score);
+    expect(named.adaptationRequired).toBe(true);
+    expect(named.recommendedAction).not.toBe("reusable-slight-edits");
+  });
+
+  it("does not flag an essay that names this very school", () => {
+    const own = scoreMatch({ ...base, essaySchoolSpecificPhrases: ["Duke University is where"] });
+    expect(own.schoolSpecificityRisk).toBe("low");
+  });
+});
+
+describe("bands", () => {
+  it("splits at exactly 70, 60 and 50", () => {
+    // A shared primary (35) plus an unrecorded function (neutral 10) is 45, so
+    // the semantic factor supplies whole points and each boundary is hit
+    // exactly rather than approached through rounding.
+    const at = (semanticPoints: number) => {
+      const result = scoreMatch({ ...base, essayFunction: null, promptFunction: null, semanticZScore: zFor(semanticPoints) });
+      expect(result.score, `semantic ${semanticPoints}`).toBe(45 + semanticPoints);
+      return result.recommendedAction;
+    };
+    expect(at(25)).toBe("reusable-slight-edits");
+    expect(at(24)).toBe("reusable-edits");
+    expect(at(15)).toBe("reusable-edits");
+    expect(at(14)).toBe("reusable-significant-edits");
+    expect(at(5)).toBe("reusable-significant-edits");
+    expect(at(4)).toBe("new-response");
+  });
+
+  it("is unchanged by the redesign", () => {
+    // Recall was bought by fixing the factors and the classification, never by
+    // lowering a threshold - which is what makes the before-and-after numbers
+    // comparable at all.
+    expect(SCORING.BAND_ORDER).toEqual(["new-response", "reusable-significant-edits", "reusable-edits", "reusable-slight-edits"]);
+  });
+});
+
+describe("explainability", () => {
+  it("never subtracts, so the factors always reconstruct the score", () => {
+    const cases: MatchInput[] = [
+      base,
+      { ...base, semanticZScore: 9, essaySchoolSpecificPhrases: ["Yale"] },
+      { ...base, essayPrimaryFamilySlug: "other", promptTags: ["service"], essayTags: ["service"] },
+      { ...base, essayWordCount: 900, promptMaxWordCount: 100 },
+      { ...base, essayFunction: "describe", promptFunction: "state-a-future-goal" },
+    ];
+    for (const input of cases) {
+      const result = scoreMatch(input);
+      const total = result.factors.category + result.factors.semantic + result.factors.function;
+      // Equal unless a cap applied, and never greater.
+      expect(result.score).toBeLessThanOrEqual(Math.round(total));
+    }
+  });
+
+  it("names the shared themes and every binding ceiling", () => {
+    const result = scoreMatch({
+      ...base,
+      essayWordCount: 900,
+      promptMaxWordCount: 100,
+      essaySchoolSpecificPhrases: ["Princeton University"],
     });
+    expect(result.explanation).toContain("Community");
+    expect(result.ceilings.length).toBeGreaterThan(0);
+    expect(result.explanation).toContain("Limited by");
   });
 });

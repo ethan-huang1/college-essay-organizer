@@ -22,8 +22,8 @@ import { caseLabel, scoreCase } from "./reuse-cases-scoring";
  * "expected 60, got 46" is not actionable and "category 0 of 40, semantic 39 of
  * 60, z=1.63" says exactly which signal is missing.
  */
-const detail = (from: PositiveCase["from"], to: PositiveCase["to"]) => {
-  const result = scoreCase(from, to);
+const detail = (from: PositiveCase["from"], to: PositiveCase["to"], phrases: string[] = []) => {
+  const result = scoreCase(from, to, phrases);
   const factors = Object.entries(result.factors).map(([name, points]) => `${name} ${points}`).join(", ");
   return `${caseLabel(from, to)}\n  score ${result.score} (${factors}), z=${result.z?.toFixed(2) ?? "none"}, band ${result.recommendedAction}`;
 };
@@ -42,15 +42,16 @@ describe("reuse regression set — calibration", () => {
 
   it.each(CALIBRATION_NEGATIVES.map((c) => [caseLabel(c.from, c.to), c] as [string, NegativeCase]))(
     "holds down %s", (_label, testCase) => {
-      const result = scoreCase(testCase.from, testCase.to);
+      const phrases = testCase.essaySchoolSpecificPhrases ?? [];
+      const result = scoreCase(testCase.from, testCase.to, phrases);
       // Score first: a ceiling must not be what rescues a negative. A bad match
       // scoring 78 and held to `reusable-edits` by a word-count ceiling is
       // still a bad match - change the lengths and it surfaces.
-      expect(result.score, `${testCase.why}\n${detail(testCase.from, testCase.to)}`)
+      expect(result.score, `${testCase.why}\n${detail(testCase.from, testCase.to, phrases)}`)
         .toBeLessThanOrEqual(testCase.maxScore);
       expect(
         atOrBelow(result.recommendedAction, testCase.maxBand),
-        `${testCase.why}: band ${result.recommendedAction} is above the ${testCase.maxBand} ceiling\n${detail(testCase.from, testCase.to)}`,
+        `${testCase.why}: band ${result.recommendedAction} is above the ${testCase.maxBand} ceiling\n${detail(testCase.from, testCase.to, phrases)}`,
       ).toBe(true);
     },
   );
@@ -77,12 +78,13 @@ holdout("reuse regression set — sealed holdout", () => {
 
   it.each(HOLDOUT_NEGATIVES.map((c) => [caseLabel(c.from, c.to), c] as [string, NegativeCase]))(
     "holds down %s", (_label, testCase) => {
-      const result = scoreCase(testCase.from, testCase.to);
-      expect(result.score, `${testCase.why}\n${detail(testCase.from, testCase.to)}`)
+      const phrases = testCase.essaySchoolSpecificPhrases ?? [];
+      const result = scoreCase(testCase.from, testCase.to, phrases);
+      expect(result.score, `${testCase.why}\n${detail(testCase.from, testCase.to, phrases)}`)
         .toBeLessThanOrEqual(testCase.maxScore);
       expect(
         atOrBelow(result.recommendedAction, testCase.maxBand),
-        `${testCase.why}: band ${result.recommendedAction} is above the ${testCase.maxBand} ceiling\n${detail(testCase.from, testCase.to)}`,
+        `${testCase.why}: band ${result.recommendedAction} is above the ${testCase.maxBand} ceiling\n${detail(testCase.from, testCase.to, phrases)}`,
       ).toBe(true);
     },
   );

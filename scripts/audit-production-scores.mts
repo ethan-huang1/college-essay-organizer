@@ -27,8 +27,7 @@ const { db, close } = openDatabase();
 
 try {
   const sum = (w: Record<string, number>) => Object.values(w).reduce<number>((a, b) => a + b, 0);
-  console.log(`weights normal ${JSON.stringify(SCORING.WEIGHTS.normal)} = ${sum(SCORING.WEIGHTS.normal)}`);
-  console.log(`weights other  ${JSON.stringify(SCORING.WEIGHTS.other)} = ${sum(SCORING.WEIGHTS.other)}\n`);
+  console.log(`weights ${JSON.stringify(SCORING.WEIGHTS)} = ${sum(SCORING.WEIGHTS)}\n`);
 
   const semanticOn = await embeddingsAvailable();
   console.log(`embedding model available in this process: ${semanticOn ? "yes" : "no"}\n`);
@@ -117,7 +116,7 @@ try {
         semanticZScore: zByEssay.get(essay.id)?.get(prompt.id) ?? null,
       });
       checked += 1;
-      const factorTotal = Math.round(result.factors.primary + result.factors.semantic + result.factors.secondary + result.factors.function);
+      const factorTotal = Math.round(result.factors.category + result.factors.semantic + result.factors.function);
       if (result.score > 100 || factorTotal > 100) overMax += 1;
       if (result.score === row.score && result.recommendedAction === row.recommendedAction) agreed += 1;
       else if (disagreements.length < 5) {

@@ -285,10 +285,10 @@ if (otherTop.length === 0) {
 } else {
   w(`${otherTop.length.toLocaleString()} at the semantic upper bound. A sample, with factor breakdowns:`);
   w();
-  w("| Essay (stand-in) | Prompt | Score | primary/semantic/secondary/function |");
+  w("| Essay (stand-in) | Prompt | Score | category/semantic/function |");
   w("|---|---|---|---|");
   for (const r of otherTop.slice(0, 8)) {
-    w(`| ${r.essay.school}: ${r.essay.title} | ${r.prompt.school}: ${r.prompt.title} | ${r.score} | ${r.factors.primary}/${r.factors.semantic}/${r.factors.secondary}/${r.factors.function} |`);
+    w(`| ${r.essay.school}: ${r.essay.title} | ${r.prompt.school}: ${r.prompt.title} | ${r.score} | ${r.factors.category}/${r.factors.semantic}/${r.factors.function} |`);
   }
 }
 w();
@@ -300,29 +300,27 @@ w("earning close to its maximum everywhere is not discriminating; one earning");
 w("almost nothing is not paying for its weight.");
 w();
 const factorStats = (rows: typeof semantic.scored, label: string) => {
-  const sum = { primary: 0, semantic: 0, secondary: 0, function: 0 };
+  const sum = { category: 0, semantic: 0, function: 0 };
   for (const row of rows) {
-    sum.primary += row.factors.primary;
+    sum.category += row.factors.category;
     sum.semantic += row.factors.semantic;
-    sum.secondary += row.factors.secondary;
+
     sum.function += row.factors.function;
   }
   const n = Math.max(rows.length, 1);
-  const totalPoints = sum.primary + sum.semantic + sum.secondary + sum.function;
+  const totalPoints = sum.category + sum.semantic + sum.function;
   return { label, n, sum, n_: n, mean: {
-    primary: sum.primary / n, semantic: sum.semantic / n,
-    secondary: sum.secondary / n, function: sum.function / n,
+    category: sum.category / n, semantic: sum.semantic / n, function: sum.function / n,
   }, share: {
-    primary: sum.primary / totalPoints, semantic: sum.semantic / totalPoints,
-    secondary: sum.secondary / totalPoints, function: sum.function / totalPoints,
+    category: sum.category / totalPoints, semantic: sum.semantic / totalPoints, function: sum.function / totalPoints,
   } };
 };
 const allPairs = factorStats(semantic.scored, "all pairs");
 const topBand = factorStats(semantic.scored.filter((r) => r.action === "reusable-slight-edits"), "top-band pairs only");
 w("| Factor | Max | Mean, all pairs | Share of points | Mean, top-band pairs | Share of points |");
 w("|---|---|---|---|---|---|");
-for (const key of ["primary", "semantic", "secondary", "function"] as const) {
-  const max = SCORING.WEIGHTS.normal[key];
+for (const key of ["category", "semantic", "function"] as const) {
+  const max = SCORING.WEIGHTS[key];
   w(`| ${key} | ${max} | ${allPairs.mean[key].toFixed(1)} | ${(allPairs.share[key] * 100).toFixed(1)}% | ${topBand.mean[key].toFixed(1)} | ${(topBand.share[key] * 100).toFixed(1)}% |`);
 }
 w();
@@ -335,7 +333,7 @@ w("floor nor its ceiling:");
 w();
 w("| Factor | At floor | In between | At ceiling |");
 w("|---|---|---|---|");
-for (const key of ["primary", "semantic", "secondary", "function"] as const) {
+for (const key of ["category", "semantic", "function"] as const) {
   const max = maxOf(semantic.scored.map((r) => r.factors[key]));
   let floor = 0, mid = 0, ceil = 0;
   for (const row of semantic.scored) {
@@ -348,11 +346,11 @@ for (const key of ["primary", "semantic", "secondary", "function"] as const) {
 }
 w();
 
-w("### 3c. Distribution of the secondary and function factors");
+w("### 3c. Distribution of the category and function factors");
 w();
 w("Asked for directly: how often each factor lands on each of its possible values.");
 w();
-for (const key of ["secondary", "function"] as const) {
+for (const key of ["category", "function"] as const) {
   const counts = new Map<number, number>();
   for (const row of semantic.scored) counts.set(row.factors[key], (counts.get(row.factors[key]) ?? 0) + 1);
   w(`**${key}**`);
@@ -720,18 +718,23 @@ findings.push("### What each factor is doing");
 findings.push("");
 findings.push(`Full table in §3b. In one line each, across all ${total.toLocaleString()} pairs:`);
 findings.push("");
-findings.push(`- **Semantic (35)** earns ${(allPairs.share.semantic * 100).toFixed(0)}% of all points awarded and sits strictly`);
-findings.push(`  between its floor and ceiling on ${(85.7).toFixed(0)}% of pairs. It is the factor doing the`);
-findings.push("  discriminating, which is what a 35 weight should buy.");
-findings.push(`- **Function (20)** earns ${(allPairs.share.function * 100).toFixed(0)}% overall but ${(topBand.share.function * 100).toFixed(0)}% among top-band pairs - it acts`);
-findings.push("  mostly as a gate on the strong end rather than a spread across the middle.");
-findings.push(`- **Primary (25)** is at its floor on 91% of pairs, which is arithmetic rather`);
-findings.push("  than weakness: with ten categories, most pairs of prompts do not share one.");
-findings.push(`- **Secondary (20)** is the weak factor. It earns a mean of ${allPairs.mean.secondary.toFixed(1)} of 20 and is at`);
-findings.push("  its floor on 82% of pairs. Recorded, not acted on: the weights are fixed for");
-findings.push("  this run, and the likeliest cause is thin theme data rather than a wrong");
-findings.push("  weight - the review gives most prompts one or two secondaries, so two prompts");
-findings.push("  sharing two of them is genuinely uncommon.");
+findings.push(`- **Semantic (${SCORING.WEIGHTS.semantic})** earns ${(allPairs.share.semantic * 100).toFixed(0)}% of all points awarded. It is the factor`);
+findings.push("  doing most of the discriminating, which is what the largest weight should buy -");
+findings.push("  and the reason it is not larger still is that it cannot be allowed to carry a");
+findings.push("  pair alone. Saturated similarity plus the category floor has to land below the");
+findings.push("  reuse floor, or an essay about rebuilding a library gets recommended for");
+findings.push("  \"list five books\" on shared vocabulary.");
+findings.push(`- **Category (${SCORING.WEIGHTS.category})** earns ${(allPairs.share.category * 100).toFixed(0)}% overall and a mean of ${allPairs.mean.category.toFixed(1)}. One graded ladder,`);
+findings.push("  replacing an all-or-nothing primary factor plus a 7-per-shared-theme secondary");
+findings.push("  one that overlapped it. The rung that matters is \"one side's primary is the");
+findings.push("  other's stated theme\", which the superseded formula priced at 7 points against");
+findings.push("  25 for a shared primary - the same relationship at a quarter of the price.");
+findings.push(`- **Function (${SCORING.WEIGHTS.function})** earns ${(allPairs.share.function * 100).toFixed(0)}% overall and ${(topBand.share.function * 100).toFixed(0)}% among top-band pairs. Graded now:`);
+findings.push("  a difference inside a group costs most of the factor but not all of it, and");
+findings.push("  only a cross-group mismatch zeroes it and caps the band. All-or-nothing cost");
+findings.push("  three of the twelve activity-family pairs a whole band for `describe` against");
+findings.push("  `reflect`; removing it from the score entirely handed full marks to half the");
+findings.push("  corpus and inflated everything. See docs/evaluation/scoring-sweep.md.");
 findings.push("");
 findings.push("### The remaining gap is `Other`, not the weights");
 findings.push("");

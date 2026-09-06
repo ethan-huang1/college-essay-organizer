@@ -108,7 +108,7 @@ const lookup = ([school, ref]: PromptKey) => {
   return item;
 };
 
-export function scoreCase(from: PromptKey, to: PromptKey): MatchResult & { z: number | null } {
+export function scoreCase(from: PromptKey, to: PromptKey, essaySchoolSpecificPhrases: string[] = []): MatchResult & { z: number | null } {
   const essay = lookup(from);
   const prompt = lookup(to);
   // The unique representative carries the vector, so a case naming a duplicate
@@ -119,7 +119,7 @@ export function scoreCase(from: PromptKey, to: PromptKey): MatchResult & { z: nu
     essayWordCount: 300,
     promptMinWordCount: null,
     promptMaxWordCount: 300,
-    essaySchoolSpecificPhrases: [],
+    essaySchoolSpecificPhrases,
     essayPrimaryFamilySlug: essay.primary,
     essaySecondaryFamilySlugs: essay.secondaryFamilies,
     essayTags: essay.tags,

@@ -851,13 +851,24 @@ describe("local persistence foundation", () => {
     await recomputeWorkspaceMatches(connection.db, PERSONAL);
     const matches = await connection.db.select().from(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, PERSONAL));
     expect(matches).toHaveLength(1);
-    // Same primary category (25), in range so no length ceiling, semantic
-    // similarity unavailable so neutral (18), and an unassigned essay so the
-    // function factor is neutral too (10). 53 - a real recommendation, and
-    // honestly short of the top band, because two of the four factors have no
-    // evidence behind them.
-    expect(matches[0]).toMatchObject({ essayId, promptId, recommendedAction: "reusable-significant-edits" });
-    expect(matches[0].score).toBe(53);
+    // Same primary category, so the category ladder's top rung (35 of 35). In
+    // range, so no length ceiling. Semantic similarity unavailable in the test
+    // process, so neutral (22.5 of 45), and an unassigned essay whose function
+    // nobody recorded, so neutral there too (10 of 20). 68.
+    //
+    // Worth being explicit that 32.5 of those 68 points are neutrals - the
+    // value for a signal nobody has recorded. That is deliberate: scoring an
+    // unknown as zero would tell a student that nothing they have written fits,
+    // for a fact the app simply does not have. It does mean a pair whose only
+    // real evidence is a shared category lands in "Reusable with edits" rather
+    // than below it, which is the honest reading of "these are both Why Major
+    // essays and we know nothing else".
+    //
+    // This was 53 and `reusable-significant-edits` under the superseded
+    // four-factor formula, which paid a shared primary 25 of 100 and charged
+    // the full function weight for an unknown function.
+    expect(matches[0]).toMatchObject({ essayId, promptId, recommendedAction: "reusable-edits" });
+    expect(matches[0].score).toBe(68);
     expect(matches[0].wordCountDifference).toBeLessThan(0);
 
     // Recomputing again after nothing changed must not accumulate duplicate rows.

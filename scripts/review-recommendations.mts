@@ -14,7 +14,7 @@ import { classifyText } from "../src/lib/classification.ts";
 import { DEMO_ESSAYS } from "../src/lib/db/demo-workspace.ts";
 import { calibrate, cosine, decodeVector, embedTexts } from "../src/lib/embedding.ts";
 import { PROMPT_FAMILIES } from "../src/lib/db/taxonomy.ts";
-import { type MatchInput, scoreMatch } from "../src/lib/matching.ts";
+import { type MatchInput, scoreMatch , SCORING } from "../src/lib/matching.ts";
 import { categoryReview } from "../src/lib/retrieval/category-review.ts";
 import { PROMPT_VECTORS } from "../src/lib/retrieval/prompt-vectors.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
@@ -123,7 +123,7 @@ function table(title: string, note: string, selected: Case[]) {
     const f = c.result.factors;
     const scoreBand = c.result.score >= 70 ? "reusable-slight-edits" : c.result.score >= 60 ? "reusable-edits" : c.result.score >= 50 ? "reusable-significant-edits" : "new-response";
     const binds = c.result.ceilings.length > 0 && scoreBand !== c.result.recommendedAction;
-    w(`| ${i + 1} | ${c.essay.title} | ${c.prompt.school}: ${c.prompt.title} | ${c.essay.primary} | ${c.prompt.primary} | ${c.cos.toFixed(3)} | ${c.z.toFixed(2)} | ${f.primary} | ${f.semantic} | ${f.secondary} | ${f.function} | ${c.result.ceilings.join("; ") || "—"} ${c.result.ceilings.length ? (binds ? "**(binds)**" : "(no)") : ""} | **${c.result.score}** | \`${c.result.recommendedAction}\` |`);
+    w(`| ${i + 1} | ${c.essay.title} | ${c.prompt.school}: ${c.prompt.title} | ${c.essay.primary} | ${c.prompt.primary} | ${c.cos.toFixed(3)} | ${c.z.toFixed(2)} | ${f.category}/${f.semantic}/${f.function} | ${c.result.ceilings.join("; ") || "—"} ${c.result.ceilings.length ? (binds ? "**(binds)**" : "(no)") : ""} | **${c.result.score}** | \`${c.result.recommendedAction}\` |`);
   }
   w();
 }
@@ -135,7 +135,7 @@ table("Different primary, semantically close", "Where the old formula scored zer
 table("Why Us and Why Major prompts", "Adjacent categories that the review separates and students conflate.", byScore.filter((c) => c.prompt.primary === "why-us" || c.prompt.primary === "why-major").slice(0, 10));
 table("Personal Statement prompts", "Only two exist; both should attract broad narrative essays.", byScore.filter((c) => c.prompt.primary === "personal-statement").slice(0, 6));
 table("`Other` prompts", "37% of the catalogue and the least reusable category.", byScore.filter((c) => c.prompt.primary === "other").slice(0, 10));
-table("Carried by secondary overlap", "Pairs where the secondary factor is doing real work.", byScore.filter((c) => c.result.factors.secondary >= 14).slice(0, 6));
+table("Carried by category overlap", "Pairs where the category ladder is doing real work.", byScore.filter((c) => c.result.factors.category >= SCORING.WEIGHTS.category * 0.6).slice(0, 6));
 table("High semantic, low composite", "The formula overruling the model. Each one should have a reason.", [...cases].filter((c) => c.z > 2 && c.result.score < 60).sort((a, b) => b.z - a.z).slice(0, 8));
 table("High composite, modest semantic", "The formula outvoting a lukewarm model score.", [...cases].filter((c) => c.result.score >= 65 && c.z < 1).sort((a, b) => b.result.score - a.result.score).slice(0, 8));
 table("Substantial word-count difference", "Editing cost, which must not move the score.", [...cases].filter((c) => c.prompt.max !== null && (c.essay.words / c.prompt.max > 2.5 || c.essay.words / c.prompt.max < 0.4) && c.result.score >= 45).sort((a, b) => b.result.score - a.result.score).slice(0, 8));
