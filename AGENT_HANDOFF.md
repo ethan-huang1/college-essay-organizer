@@ -245,31 +245,114 @@ rows with an `externalRef` so a student's own prompts are never touched:
 `ImportCollegeResult.counts` gained `retired` and `removed`;
 `scripts/reimport-catalogue.mts` reports both per school.
 
-### Classification: 250 reviewed, 303 awaiting review
+### Classification: all 553 records reviewed
 
-The owner's hand review is keyed by `(school, externalRef)`, so the rebuild
-carries refs and titles across for any prompt whose text is unchanged, is a
-recognisable rewording (opening-clause or token-containment match), or is
-named in `REF_CARRYOVER`. **250 of 255 review rows survived**; the 5 that
-retired point at prompts the master no longer contains (two Oberlin BA+BFA,
-two UT Austin, one Yale).
+Every catalogue prompt now has a hand-assigned primary category, uncapped
+secondaries and a prompt function. `category-review.test.ts` asserts zero
+unreviewed prompts and fails until a catalogue rebuild's new prompts are
+covered.
 
-The 303 new prompts import through the existing second tier — the keyword
-classifier, at its own confidence, which is what the needs-review surface
-reads — with **one category withheld**: `classifyUnreviewedPrompt` never
-returns `personal-statement`. That category means "genuinely open topic", the
-rules only see the words "personal statement", and left alone they filed 81
-portfolio and statement-of-purpose prompts as open-topic. Since `matching.ts`
-scores same-category prompts as strong reuse candidates, that would have made
-any two of them read as interchangeable. Reviewed prompts are unaffected and a
-reviewer can still assign it.
+The worksheet is **`docs/evaluation/prompt-review.csv`**, one row per unique
+prompt text (502 rows for 553 records; a row fans out to every record sharing
+its text, so the eight UC Personal Insight Questions are one decision applied
+to seven campuses). It replaced `source-review.csv` and `new-prompt-review.csv`,
+which had different schemas, three secondary slots each and a precedence rule
+between them. Both originals are in git history at `7104142`.
 
-`docs/evaluation/new-prompt-review.csv` is the worksheet for those 303, in the
-same column vocabulary as `source-review.csv`, with the classifier's proposal
-pre-filled. `qa-catalogue.mts` asserts it covers exactly the unreviewed set.
+The pipeline:
 
-`src/lib/retrieval/prompt-vectors.ts` was regenerated: 553 committed
-embeddings, one per prompt.
+| Script | Does |
+|---|---|
+| `build-prompt-review.mts` | (Re)builds the worksheet. Never overwrites a filled `Final *` cell. |
+| `apply-review-decisions.mts` | Merges a TSV of decisions, validating every value against the vocabulary first. |
+| `audit-review-consistency.mts` | Worklist: the `Other` census, secondary counts, vocabulary use, and near-duplicate prompts classified differently. |
+| `regenerate-category-review.mts` | Worksheet → `category-review.ts`. Refuses to write if any row lacks a primary or a function. |
+
+**The near-duplicate check is a review flag, never an assertion.** Prompts above
+cosine 0.75 that got different primaries or functions are printed for a human to
+re-read. Highly similar prompts can legitimately differ - Brown's "Why
+medicine?" and "Why PLME?" are the most similar pair in the whole corpus and
+need opposite categories - so nothing may force a cluster to agree.
+
+What the pass changed, at record grain:
+
+| | Before | After |
+|---|---|---|
+| Unclassified | 303 (55%) | 0 |
+| Effective `other` | 232 (42%) | 136 (24.6%) |
+| No secondary at all | 375 (68%) | 82 (15%) |
+| Two or more secondaries | 40 | 271 |
+| `community` | 7 | 33 |
+| No prompt function | 224 (40.5%) | 0 |
+
+`Other` is now mostly what it should be: portfolio instructions, graded-paper
+submission requirements, audition scenarios and UChicago's riddles.
+
+### Reuse scoring: two factors and three ceilings
+
+`contentFitScore = category(35) + semantic(45) + function(20)`, nothing
+subtracted, bands unchanged at 70/60/50. The design is
+[docs/reuse-scoring.md](docs/reuse-scoring.md); the configuration was chosen by
+`scripts/sweep-scoring.mts` against a 29-case calibration set and reported in
+[docs/evaluation/scoring-sweep.md](docs/evaluation/scoring-sweep.md).
+
+Result on the specification case - one activity-and-service story framed four
+ways - all twelve ordered pairs now clear the reuse floor, where four were
+"New response recommended":
+
+| pair | before | after |
+|---|---|---|
+| Princeton → Harvard | 34 new-response | 61 reusable-edits |
+| Princeton → Stanford | 39 new-response | 66 reusable-edits |
+| Harvard → Princeton | 40 new-response | 67 reusable-edits |
+| Stanford → Princeton | 46 new-response | 73 slight-edits |
+| Georgetown → Stanford | 58 significant-edits | 76 slight-edits |
+
+Precision held: 5.51% of pairs in the top band, 18.26% at or above the floor,
+all nine calibration negatives passing on score *and* band.
+
+**Three things measurement reversed, and they are the ones to know before
+editing `matching.ts`:**
+
+1. **Function could not be removed from the score.** The plan was to make it a
+   band ceiling only. With just two function groups that hands full marks to
+   50.2% of pairs, inflating the share at or above the floor from 18% to 32%,
+   and drops the calibration negatives from 9 of 9 to between 0 and 5 - because
+   same-topic-different-ask pairs are exactly what it was catching.
+   All-or-nothing fails the other way, costing two positives. Within-group
+   credit is 0.25.
+2. **`Other` is not a missing category.** A missing primary means nobody
+   looked - neutral. `Other` means a reviewer read the prompt and found nothing
+   fits - a finding, and it takes the floor rung. Conflating them gave a free
+   half-weight to 42% of all pairs.
+3. **Why Us could not simply be excluded.** Treated as an ordinary category it
+   was involved in 27.8% of every top-band pair. Excluded outright, an essay
+   written for Brown's Open Curriculum stopped ranking Brown's own prompt first.
+   The condition is the *institution*, read off the school-specific phrases
+   already detected in the essay's prose.
+
+A hand-maintained related-category table (Community ↔ Activities and so on) was
+built and then deleted: once every prompt had real secondaries it stopped
+earning its place, and the sweep prefers it off.
+
+**Word count is still never in the score.** `adaptationEffort` is a separate
+axis - Minimal / Some / Significant shortening required / Expansion required -
+derived at render, so no migration. Georgetown's essay scores 76 against
+Stanford's 50-word prompt and reads "Significant shortening required".
+
+### Embedding model: benchmarked, and kept
+
+`scripts/benchmark-embeddings.mts` scores candidates against the frozen scorer.
+`Xenova/all-MiniLM-L6-v2` wins: 29/29 calibration and 8/8 holdout, against
+29/29 + 7/8 for bge-small with its instruction prefix and worse for everything
+else. See [docs/evaluation/embedding-benchmark.md](docs/evaluation/embedding-benchmark.md).
+
+I had called the model upgrade the next lever with the highest expected gain. It
+was not the lever at all on this corpus. **Two caveats before treating that as
+final:** every pair in the benchmark is prompt-against-prompt, while production
+embeds a long essay against a short prompt; and the instruction prefix decides
+the answer, so any future candidate must be run in the form its model card
+specifies.
 
 ## Completed Work
 
@@ -433,6 +516,42 @@ with precise follow-up notes, not blockers.
 
 ## Tests/Verification Performed
 
+### Reuse scoring, end to end on a real database
+
+PGlite, six colleges imported, one real 149-word essay about the Inkstone
+Project (grandparents teaching calligraphy at a senior centre, eleven
+volunteers, intergenerational service), classified Activities & Impact by the
+student. Top suggestions, read as a student would see them:
+
+```
+ 79  Reusable with slight edits   Minimal adaptation               Princeton   Your Voice: service and civic engagement
+ 75  Reusable with slight edits   Minimal adaptation               Harvard     Activities, employment, travel, or family responsibilities
+ 70  Reusable with edits          Significant shortening required  Stanford    An extracurricular, job, or responsibility
+ 66  Reusable with edits          Minimal adaptation               Georgetown  Most significant activity
+ ...
+ 45  New response recommended     Minimal adaptation               Duke        Viewpoints and experiences
+ 44  New response recommended     Minimal adaptation               Georgetown  A differing viewpoint
+ 42  New response recommended     Minimal adaptation               Harvard     A strong disagreement
+```
+
+Reads correctly on all four counts that matter:
+
+- **All four target prompts surface**, and Princeton's - the one that scored 34
+  and "New response recommended" before any of this - is now the single best
+  suggestion at 79.
+- **Stanford's 50-word prompt scores 70 and says "Significant shortening
+  required"**, which is the whole point of separating the two axes: the
+  substance fits, the length is work.
+- **The disagreement prompts correctly sit at 42–45 and "New response
+  recommended".** An intergenerational-service story is not a story about
+  disagreeing with someone, however much category vocabulary they share.
+- **Format guards hold**: Wake Forest's five-book list scores 18 and Harvard's
+  roommate note 16, both `new-response`.
+
+One finding, recorded under Next Steps rather than fixed: Princeton's "submit a
+graded written paper" instruction appears at 60. It is not a prompt.
+
+
 ### 2026–27 catalogue rebuild (2026-09-01, branch `dataset-import-qa`)
 
 `./run_tests.sh` equivalents all green on the rebuilt catalogue:
@@ -587,22 +706,28 @@ none of this fixture data was committed):
 
 ## Next Steps
 
-### Owner action on the 2026–27 rebuild (branch `dataset-import-qa`)
+### Owner action
 
-1. **Review `docs/evaluation/new-prompt-review.csv`** — 303 prompts, the
-   classifier's proposal pre-filled, `Your primary override` blank. 74 of them
-   have no keyword signal at all and import as Other at confidence 0; those are
-   the ones worth reading first. Merge the reviewed rows into
-   `docs/evaluation/source-review.csv` and re-run
-   `scripts/regenerate-category-review.mts`, then
-   `scripts/precompute-prompt-vectors.mts` is unaffected (vectors key off title
-   and text, not category).
-2. **Apply to the live database** with `scripts/reimport-catalogue.mts` (see
-   the verification section for the command). Nothing has been applied yet.
-3. **Merge order matters.** This branch rewrites `src/lib/db/persistence.test.ts`,
-   which the other session also has uncommitted in the shared working tree.
-   Reconcile those two before merging.
-
+1. **Apply the catalogue and the classification to the live database** with
+   `scripts/reimport-catalogue.mts`. **Nothing has been applied yet** - the
+   2026–27 rebuild, the full classification and the rescoring are all committed
+   on `main` and none of them has touched Neon. The reimport rewrites the
+   category links and recomputes every match, so it changes what every existing
+   workspace sees.
+2. **Read the recommendations and judge them.** This is the one check none of
+   the above replaces, and it is still outstanding: every number in
+   `docs/evaluation/` uses catalogue prompts as stand-ins for essays. An
+   end-to-end run with a real 149-word essay is in the verification section and
+   reads correctly, but that is one essay.
+3. **Decide what to do about procedural rows.** The end-to-end run surfaced
+   Princeton's "submit a graded written paper" instruction as a 60-point reuse
+   suggestion. It is not a prompt at all: it is filed `Other`, so the category
+   ladder gives it the floor, but its long paragraph of instructions reads as
+   semantically similar to a long essay. `catalogue-transform.mts` already drops
+   nine "not a prompt" rows by name; the graded-paper requirements, portfolio
+   instructions and AI-disclosure fields are the same kind of thing and there
+   are perhaps twenty of them. Dropping them is a data judgement for the owner,
+   not a scoring change.
 
 > **Both recent objectives are complete**: the reuse-scoring redesign
 > ([docs/reuse-scoring.md](docs/reuse-scoring.md)) and the UI/UX redesign (see
@@ -803,10 +928,18 @@ similarity dominate the formula.
 - Last agent: Claude
 ## Last Verified Commit
 
-`5c0aed9` — "fix: keep the logo assets out of the auth middleware", which is
-also what production runs. The full canonical gate passed on the **uncommitted
-Essay Editor tree** on top of it: lint, strict typecheck, **762 Vitest tests in
-29 files**, production build, 103 orchestration assertions, `EXIT=0`.
+`103f030` — "docs: benchmark two stronger embedding models, and keep the one we
+have". The full gate passed on it: lint clean, strict typecheck clean, **909
+Vitest tests in 43 files** plus the 8 sealed-holdout cases via
+`REUSE_HOLDOUT=1`, production build successful, `scripts/qa-catalogue.mts`
+passing with zero findings.
 
-**The Essay Editor work is not committed and therefore not deployed**
-(`git push origin main` deploys). Everything through `5c0aed9` is live.
+**Nothing is deployed** (`git push origin main` deploys) and **the live database
+has not been touched**. Everything through `5c0aed9` is what production runs.
+
+The 2026–27 catalogue rebuild landed as a fast-forward of `dataset-import-qa`
+into `main` at `72ed32f`, after the uncommitted Essay Editor and AI-coach work
+was committed on its own at `15c0442` so the rebuild could land on a clean tree
+rather than being merged into a dirty one. The persistence-test conflict the old
+handoff warned about did not materialise: the two change sets touch different
+regions of the file and git resolved it.
