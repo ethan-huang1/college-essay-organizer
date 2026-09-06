@@ -90,6 +90,12 @@ function classifyPrompt(
   schoolName: string,
   raw: RawPromptRecord,
 ): { primarySlug: string; secondarySlugs: string[]; tags: string[]; confidence: number } {
+  // Not an essay prompt, so it has no essay family and no confidence to
+  // report about one. Zero here is not "we could not tell"; it is "there is
+  // nothing to tell".
+  if (raw.supportingMaterial) {
+    return { primarySlug: "other", secondarySlugs: [], tags: [], confidence: 0 };
+  }
   const reviewed = categoryReview(schoolName, raw.externalRef);
   if (reviewed) {
     const [, , primarySlug, secondaryFamilySlugs, secondaryTags] = reviewed;
@@ -284,6 +290,7 @@ async function upsertPrompts(
         maxCharCount: raw.maxCharCount ?? null,
         requirement: raw.requirement,
         conditionalNote: raw.conditionalNote ?? null,
+        supportingMaterial: raw.supportingMaterial ?? null,
         sharedApplicationKey: sharedApplicationKey ?? null,
         canonicalKey: canonicalKeyOf(raw),
         groupKey: raw.groupKey ?? null,
@@ -305,8 +312,13 @@ async function upsertPrompts(
         sourceUrl: recordDefaults.sourceUrl,
         retrievedAt: recordDefaults.retrievedAt,
       });
-      newLinks.push(...familyLinkRows(workspaceId, promptId, classification, familyIds));
-      newTagLinks.push(...tagLinkRows(workspaceId, promptId, classification.tags, tagIds));
+      // Supporting material gets no category at all. It is not an essay, so
+      // "which family of essay is it" has no answer, and inventing one would
+      // put a graded-paper requirement into the category explorer.
+      if (!raw.supportingMaterial) {
+        newLinks.push(...familyLinkRows(workspaceId, promptId, classification, familyIds));
+        newTagLinks.push(...tagLinkRows(workspaceId, promptId, classification.tags, tagIds));
+      }
       counts.created += 1;
       continue;
     }
@@ -357,6 +369,7 @@ async function upsertPrompts(
           maxCharCount: raw.maxCharCount ?? null,
           requirement: raw.requirement,
           conditionalNote: raw.conditionalNote ?? null,
+          supportingMaterial: raw.supportingMaterial ?? null,
           // Re-import is how newly encoded group and program metadata reaches a
           // workspace that already holds the row.
           sharedApplicationKey: sharedApplicationKey ?? null,

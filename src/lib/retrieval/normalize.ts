@@ -179,6 +179,7 @@ export function promptContentChanged(
     groupKey?: string | null;
     groupRequiredCount?: number | null;
     programKey?: string | null;
+    supportingMaterial?: string | null;
   },
   next: RawPromptRecord,
   nextGroupRequiredCount: number | null = null,
@@ -191,6 +192,11 @@ export function promptContentChanged(
     (previous.minCharCount ?? null) !== (next.minCharCount ?? null) ||
     (previous.maxCharCount ?? null) !== (next.maxCharCount ?? null) ||
     previous.requirement !== next.requirement ||
+    // Reclassifying a row as supporting material (or back) has to reach an
+    // existing workspace: it decides whether the row is scored, counted and
+    // shown as an essay at all, so a re-import that skipped it would leave a
+    // graded-paper requirement sitting in someone's essay list.
+    (previous.supportingMaterial ?? null) !== (next.supportingMaterial ?? null) ||
     (previous.conditionalNote ?? null) !== (next.conditionalNote ?? null) ||
     (previous.groupKey ?? null) !== (next.groupKey ?? null) ||
     (previous.groupRequiredCount ?? null) !== nextGroupRequiredCount ||

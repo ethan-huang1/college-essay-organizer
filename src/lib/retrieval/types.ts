@@ -34,6 +34,34 @@ export type RawPromptRecord = {
   // guessed at in words - a page count converted to a word count is a number
   // the student would then write to, and it would be invented.
   note?: string;
+  /**
+   * Set when this record is a **supporting-material requirement rather than an
+   * essay prompt**, to a short phrase saying which kind.
+   *
+   * Princeton asks every applicant for a graded written paper; Williams and
+   * UIUC want a writing sample; a dozen art and music programmes want a caption
+   * on each portfolio item. Those are real application requirements with real
+   * deadlines and a student has to see them - but the deliverable is an
+   * existing artefact, metadata attached to one, or an administrative upload,
+   * not prose composed for this application. Nothing about them belongs in an
+   * essay library.
+   *
+   * The test is whether the student **composes original application prose that
+   * could be reused elsewhere**. It keeps in some things that look like
+   * exclusions: "list five books that intrigued you" is a real answer the
+   * student writes, and FSU's screenwriting scenarios are original creative
+   * work. It excludes some things that call themselves essays: UCI's "submit a
+   * short essay that analyses a dramatic text" explicitly accepts one the
+   * student has already written for school.
+   *
+   * Consequences, all of them because this is not an essay rather than because
+   * of anything about scoring: excluded from reuse matching and from
+   * recommendations, from essay-completion counts and progress totals, from the
+   * category explorer, from the committed prompt vectors, and from the
+   * classification worksheet. It is still imported, still tracked, still
+   * deadlined, and shown in its own section of the school's requirements.
+   */
+  supportingMaterial?: string;
   // Ties this prompt into an "answer any N of these" set declared in the
   // school record's promptGroups. Without it every prompt in the set counts as
   // separate work, which is why seven UC campuses read as 56 essays.

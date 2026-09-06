@@ -116,13 +116,32 @@ for (const [school, ref, primary] of CATEGORY_REVIEW) {
   if (!lookupSchoolSource(school)?.prompts.some((prompt) => prompt.externalRef === ref)) F(`review row ${school}/${ref} points at no prompt`);
   if (!slugs.has(primary)) F(`review row ${school}/${ref}: primary ${primary} is outside the taxonomy`);
 }
-const reviewed = catalogue.filter(({ school, prompt }) => categoryReview(school, prompt.externalRef)).length;
+/**
+ * Essay prompts, as opposed to supporting-material requirements.
+ *
+ * Everything downstream of classification and scoring is defined on this
+ * subset: the review covers it, the committed vectors cover it, the worksheet
+ * covers it. Supporting material is still imported and still checked for
+ * catalogue integrity above - it just has no essay category and no vector.
+ */
+const essays = catalogue.filter(({ prompt }) => !prompt.supportingMaterial);
+const supporting = catalogue.filter(({ prompt }) => Boolean(prompt.supportingMaterial));
+for (const { school, prompt } of supporting) {
+  if (categoryReview(school, prompt.externalRef)) {
+    F(`${school}/${prompt.externalRef}: supporting material must not carry an essay classification`);
+  }
+}
+const reviewed = essays.filter(({ school, prompt }) => categoryReview(school, prompt.externalRef)).length;
+if (reviewed !== essays.length) F(`${essays.length - reviewed} essay prompts have no classification`);
 
 // 8. One committed embedding per prompt.
 const vectorKeys = new Set(PROMPT_VECTORS.map(([school, ref]) => `${school}|${ref}`));
-if (PROMPT_VECTORS.length !== catalogue.length) F(`${PROMPT_VECTORS.length} vectors for ${catalogue.length} prompts`);
-for (const { school, prompt } of catalogue) {
+if (PROMPT_VECTORS.length !== essays.length) F(`${PROMPT_VECTORS.length} vectors for ${essays.length} essay prompts`);
+for (const { school, prompt } of essays) {
   if (!vectorKeys.has(`${school}|${prompt.externalRef}`)) F(`${school}/${prompt.externalRef}: no committed vector`);
+}
+for (const { school, prompt } of supporting) {
+  if (vectorKeys.has(`${school}|${prompt.externalRef}`)) F(`${school}/${prompt.externalRef}: supporting material must not have a vector`);
 }
 
 // 9. The review worksheet covers every unique prompt in the catalogue, and
@@ -135,7 +154,7 @@ for (const { school, prompt } of catalogue) {
 const worksheetRows = parseCsv(readFileSync("docs/evaluation/prompt-review.csv", "utf8"));
 const worksheetSignatures = new Set(worksheetRows.map((row) => signatureOf(row["Prompt title"], row["Full written prompt"])));
 const catalogueSignatures = new Map<string, number>();
-for (const { prompt } of catalogue) {
+for (const { prompt } of essays) {
   const signature = signatureOf(prompt.title, prompt.promptText);
   catalogueSignatures.set(signature, (catalogueSignatures.get(signature) ?? 0) + 1);
 }
@@ -151,8 +170,8 @@ for (const signature of worksheetSignatures) {
 const undecided = worksheetRows.filter((row) => !row["Final primary"] || !row["Final function"]).length;
 note.push(`worksheet: ${worksheetRows.length} unique prompts, ${undecided} awaiting classification`);
 
-note.push(`schools: ${schools.length}, prompts: ${catalogue.length}`);
-note.push(`reviewed: ${reviewed}, awaiting review: ${catalogue.length - reviewed}`);
+note.push(`schools: ${schools.length}, prompts: ${catalogue.length} (${essays.length} essay, ${supporting.length} supporting material)`);
+note.push(`classified: ${reviewed} of ${essays.length} essay prompts; ${supporting.length} supporting-material rows excluded by design`);
 note.push(`grouped: ${catalogue.filter(({ prompt }) => prompt.groupKey).length}, program-gated: ${catalogue.filter(({ prompt }) => prompt.programKey).length}, unresolved conditional: ${unresolved.length}`);
 note.push(`requirement mix: ${JSON.stringify(catalogue.reduce<Record<string, number>>((acc, { prompt }) => ({ ...acc, [prompt.requirement]: (acc[prompt.requirement] ?? 0) + 1 }), {}))}`);
 note.push(`verification: ${JSON.stringify(records.reduce<Record<string, number>>((acc, { record }) => ({ ...acc, [record.verificationStatus]: (acc[record.verificationStatus] ?? 0) + 1 }), {}))}`);

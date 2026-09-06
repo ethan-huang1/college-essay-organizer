@@ -117,6 +117,19 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
         .orderBy(assignedEssayResponses.assignedAt)
         .execute(),
     ]);
+  /**
+   * Only essay prompts are scored.
+   *
+   * A graded-paper requirement, a writing sample and a caption on a portfolio
+   * item are not essays, so "which of your essays could answer this" has no
+   * meaning for them. Filtering here rather than penalising them in
+   * matching.ts is the point: it was never a scoring problem. Measured before
+   * this, Princeton's graded-paper instruction surfaced as a 60-point reuse
+   * suggestion, because a long paragraph of submission rules reads as
+   * semantically similar to a long essay.
+   */
+  const scorablePrompts = workspacePrompts.filter((prompt) => prompt.supportingMaterial === null);
+
   const slugById = new Map(workspaceFamilies.map((family) => [family.id, family.slug]));
   const schoolNames = workspaceSchools.map((school) => school.name);
 
@@ -238,7 +251,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
       if (!essayVector) continue;
       // Only prompts with a committed vector take part; a prompt the student
       // added has none and scores neutral.
-      const scored = workspacePrompts
+      const scored = scorablePrompts
         .map((prompt) => ({ prompt, vector: vectorFor(prompt) }))
         .filter((entry): entry is { prompt: typeof entry.prompt; vector: number[] } => Boolean(entry.vector))
         .map((entry) => ({ promptId: entry.prompt.id, similarity: cosine(essayVector, entry.vector) }));
@@ -292,7 +305,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
         ...derived.secondarySlugs.filter((slug) => slug !== essayFamilySlugs.primary),
       ])];
 
-      return workspacePrompts.map((prompt) => {
+      return scorablePrompts.map((prompt) => {
         const promptFamilySlugs = resolveFamilySlugs(promptLinks.filter((link) => link.promptId === prompt.id), slugById);
         const school = workspaceSchools.find((candidate) => candidate.id === prompt.schoolId);
         // What the prompt asks the student to *do*. Null for a prompt the

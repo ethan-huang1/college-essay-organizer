@@ -55,6 +55,10 @@ type Record_ = {
 const records: Record_[] = [];
 for (const school of listCoveredSchoolNames()) {
   for (const prompt of lookupSchoolSource(school)?.prompts ?? []) {
+    // Supporting material is not an essay, so it has no essay category and
+    // nothing to classify. Leaving it in the worksheet would ask a reviewer
+    // which family of essay a graded-paper requirement belongs to.
+    if (prompt.supportingMaterial) continue;
     records.push({
       school, ref: prompt.externalRef, title: prompt.title, text: prompt.promptText,
       min: prompt.minWordCount ?? null, max: prompt.maxWordCount ?? null,

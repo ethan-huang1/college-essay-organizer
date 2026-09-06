@@ -375,7 +375,8 @@ export async function resetDemoWorkspace(db: AppDatabase): Promise<DemoWorkspace
   // summary can never disagree with what actually landed.
   const [schoolRows, promptRows, assignmentRows] = await Promise.all([
     db.select({ id: schools.id }).from(schools).where(eq(schools.workspaceId, DEMO_WORKSPACE_ID)).execute(),
-    db.select({ id: prompts.id }).from(prompts).where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).execute(),
+    db.select({ id: prompts.id, supportingMaterial: prompts.supportingMaterial }).from(prompts)
+      .where(eq(prompts.workspaceId, DEMO_WORKSPACE_ID)).execute(),
     db.select({ id: assignedEssayResponses.id }).from(assignedEssayResponses)
       .where(eq(assignedEssayResponses.workspaceId, DEMO_WORKSPACE_ID)).execute(),
   ]);
@@ -385,6 +386,10 @@ export async function resetDemoWorkspace(db: AppDatabase): Promise<DemoWorkspace
     prompts: promptRows.length,
     essays: DEMO_ESSAYS.length,
     assignments: assignmentRows.length,
-    matches: DEMO_ESSAYS.length * promptRows.length,
+    // Essay prompts only, because that is what recomputeWorkspaceMatches
+    // scores. Multiplying by every prompt row over-reported by exactly the
+    // number of supporting-material requirements the demo colleges ask for -
+    // a graded paper is not something an essay can answer.
+    matches: DEMO_ESSAYS.length * promptRows.filter((row) => row.supportingMaterial === null).length,
   };
 }

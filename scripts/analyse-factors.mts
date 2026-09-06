@@ -41,6 +41,7 @@ type P = { school: string; ref: string; key: string; title: string; text: string
 const records: P[] = [];
 for (const school of listCoveredSchoolNames()) {
   for (const p of lookupSchoolSource(school)?.prompts ?? []) {
+    if (p.supportingMaterial) continue;
     // Reviewed rows win; the rest fall through to the keyword classifier and
     // the function inference, exactly as college-import.ts does. 303 of 553
     // records have no review yet, and a non-null assertion here used to crash

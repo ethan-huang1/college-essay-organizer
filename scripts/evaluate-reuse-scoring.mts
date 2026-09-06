@@ -65,6 +65,11 @@ let unreviewedCount = 0;
 for (const school of listCoveredSchoolNames()) {
   const record = lookupSchoolSource(school);
   for (const prompt of record?.prompts ?? []) {
+    // Essay prompts only. Supporting material - a graded paper, a writing
+    // sample, a caption per portfolio item - never enters matching, so
+    // including it here would report on a population the scorer never sees and
+    // would put it in the z-score calibration distribution besides.
+    if (prompt.supportingMaterial) continue;
     const reviewed = categoryReview(school, prompt.externalRef);
     let primary: string, secondaryFamilies: string[], tags: string[], fn: Item["fn"];
     if (reviewed) {

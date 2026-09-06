@@ -23,6 +23,11 @@ import { promptEmbeddingText } from "../src/lib/semantic.ts";
 const prompts: { school: string; ref: string; text: string }[] = [];
 for (const school of listCoveredSchoolNames()) {
   for (const prompt of lookupSchoolSource(school)?.prompts ?? []) {
+    // Only scored prompts get a committed vector. Supporting material never
+    // enters matching, so a vector for it would be dead weight in a generated
+    // file no reviewer can read, and it would sit in the z-score calibration
+    // population skewing every essay's distribution.
+    if (prompt.supportingMaterial) continue;
     prompts.push({ school, ref: prompt.externalRef, text: promptEmbeddingText(prompt.title, prompt.promptText) });
   }
 }

@@ -341,3 +341,25 @@ a.verification-badge:hover {
   color: var(--caution-ink);
   font-size: var(--text-small);
 }
+/* Supporting material: real application requirements that are not essays -
+   a graded paper, a writing sample, a caption per portfolio item. Set below
+   and apart from a school's essay prompts, because mixing them in is what
+   made "2 of 5 done" mean nothing. */
+.supporting-group {
+  border-top: 1px solid var(--line);
+  margin-top: var(--s4);
+  padding: var(--s4) 0 var(--s2);
+}
+
+.supporting-heading {
+  font-size: var(--text-eyebrow);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 var(--s1);
+}
+
+.supporting-group .rows {
+  margin-top: var(--s3);
+}

@@ -150,6 +150,22 @@ export const prompts = pgTable(
     maxCharCount: integer("max_char_count"),
     requirement: text("requirement", { enum: ["required", "optional", "conditional"] }).notNull().default("required"),
     conditionalNote: text("conditional_note"),
+    /**
+     * Set when this row is a supporting-material requirement rather than an
+     * essay prompt, to a short phrase naming which kind - a graded paper, a
+     * writing sample, a caption per portfolio item, an administrative upload.
+     *
+     * A column rather than a registry lookup because almost everything
+     * downstream needs it: matching skips these rows, progress and completion
+     * counts exclude them, the category explorer omits them, and the school
+     * view groups them into their own section. Reading the catalogue from each
+     * of those places would couple the UI to the registry and would say nothing
+     * at all about a prompt a student typed in themselves.
+     *
+     * Null means "an essay prompt", which is the overwhelming majority (525 of
+     * 553 catalogue rows) and everything hand-entered.
+     */
+    supportingMaterial: text("supporting_material"),
     deadline: optionalStamp("deadline"),
     status: text("status", { enum: ["not-started", "in-progress", "complete", "submitted"] }).notNull().default("not-started"),
     classificationConfidence: integer("classification_confidence").notNull().default(0),

@@ -181,9 +181,13 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
   // flag. Why Us is the one category you must NOT reuse across schools, so an
   // empty Why Us made the reuse map quietly wrong.
   describe("classification coverage", () => {
+    // Essay prompts only. The 28 supporting-material requirements carry no
+    // essay classification by design - "which family of essay is a graded
+    // paper" has no answer - so including them here would report a coverage
+    // gap that is the intended state.
     const classified = listCoveredSchoolNames().flatMap((name) => {
       const record = lookupSchoolSource(name);
-      return (record?.prompts ?? []).map((prompt) => ({
+      return (record?.prompts ?? []).filter((prompt) => !prompt.supportingMaterial).map((prompt) => ({
         school: name,
         prompt,
         result: classifyText(`${prompt.title} ${prompt.promptText}`),
@@ -201,11 +205,11 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
 
     it("takes its category from the review wherever a review exists", () => {
       const reviewed = classified.filter((row) => row.reviewed);
-      expect(reviewed).toHaveLength(553);
+      expect(reviewed).toHaveLength(525);
       for (const row of reviewed) expect(effective(row), `${row.school}: ${row.prompt.title}`).toBe(row.reviewed![2]);
     });
 
-    it("leaves no catalogue prompt to the keyword rules", () => {
+    it("leaves no essay prompt to the keyword rules", () => {
       // The classification pass closed this gap. It was 303 of 553 after the
       // 2026-27 rebuild, and those prompts imported at the classifier's own
       // confidence - 153 of them with no primary at all, so they resolved to

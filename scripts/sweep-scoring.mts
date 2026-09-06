@@ -43,6 +43,7 @@ const unique: Item[] = [];
 const seen = new Set<string>();
 for (const school of listCoveredSchoolNames()) {
   for (const prompt of lookupSchoolSource(school)?.prompts ?? []) {
+    if (prompt.supportingMaterial) continue;
     const reviewed = categoryReview(school, prompt.externalRef);
     const guess = reviewed ? null : classifyUnreviewedPrompt(`${prompt.title} ${prompt.promptText}`);
     const item: Item = {

@@ -52,6 +52,7 @@ const rows = parseCsv(readFileSync(WORKSHEET, "utf8"));
 const recordsBySignature = new Map<string, { school: string; ref: string }[]>();
 for (const school of listCoveredSchoolNames()) {
   for (const prompt of lookupSchoolSource(school)?.prompts ?? []) {
+    if (prompt.supportingMaterial) continue;
     const signature = signatureOf(prompt.title, prompt.promptText);
     if (!recordsBySignature.has(signature)) recordsBySignature.set(signature, []);
     recordsBySignature.get(signature)!.push({ school, ref: prompt.externalRef });

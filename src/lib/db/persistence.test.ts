@@ -318,8 +318,13 @@ describe("local persistence foundation", () => {
     expect(personal?.matches).toHaveLength(0);
     expect(demo?.essays).toHaveLength(DEMO_ESSAYS.length);
     expect(demo?.essays.some((essay) => essay.title === "Private draft")).toBe(false);
-    // Every demo essay is scored against every demo prompt.
-    expect(demo?.matches).toHaveLength(DEMO_ESSAYS.length * (demo?.prompts.length ?? 0));
+    // Every demo essay is scored against every demo *essay* prompt. The
+    // snapshot's prompt list still carries supporting-material requirements
+    // (they are work a student has to do), so the two counts differ by exactly
+    // the number of those.
+    const scorablePrompts = (demo?.prompts ?? []).filter((prompt) => !prompt.supportingMaterial);
+    expect(demo?.matches).toHaveLength(DEMO_ESSAYS.length * scorablePrompts.length);
+    expect(scorablePrompts.length).toBeLessThan(demo?.prompts.length ?? 0);
   });
 
   it("creates, updates, and deletes schools only inside the selected workspace", async () => {
@@ -1029,7 +1034,10 @@ describe("local persistence foundation", () => {
     const snapshot = await getWorkspaceSnapshot(connection.db, PERSONAL);
     expect(snapshot?.prompts.some((prompt) => prompt.id === answeredId)).toBe(true);
     expect(snapshot?.stats.previousCyclePrompts).toBe(1);
-    expect(snapshot?.stats.prompts).toBe(imported.length);
+    // Essay prompts only. Yale asks for an arts portfolio and a document
+    // upload as well, and neither is an essay.
+    expect(snapshot?.stats.prompts).toBe(imported.filter((prompt) => !prompt.supportingMaterial).length);
+    expect(snapshot?.stats.supportingMaterial).toBeGreaterThan(0);
   });
 
   it("leaves a prompt the student typed in alone when the catalogue changes", async () => {

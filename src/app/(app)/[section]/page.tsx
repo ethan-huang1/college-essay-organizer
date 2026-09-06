@@ -414,12 +414,20 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
   const schools = [...snapshot.schools]
     .filter((school) => !filters.school || school.id === filters.school)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((school) => ({
-      school,
-      prompts: visible.filter((prompt) => prompt.schoolId === school.id && !sharedInstanceIds.has(prompt.id)),
-      sharedCount: sharedCountBySchool.get(school.id) ?? 0,
-    }))
-    .filter((group) => group.prompts.length > 0 || group.sharedCount > 0 || !promptFilterActive || Boolean(filters.school));
+    .map((school) => {
+      const own = visible.filter((prompt) => prompt.schoolId === school.id && !sharedInstanceIds.has(prompt.id));
+      return {
+        school,
+        // Split rather than filtered. A graded paper and a portfolio caption
+        // are real requirements with real deadlines, so removing them would
+        // lose work a student has to do - but they are not essays, so listing
+        // them among the essay prompts makes "2 of 5 done" mean nothing.
+        prompts: own.filter((prompt) => !prompt.supportingMaterial),
+        supporting: own.filter((prompt) => Boolean(prompt.supportingMaterial)),
+        sharedCount: sharedCountBySchool.get(school.id) ?? 0,
+      };
+    })
+    .filter((group) => group.prompts.length > 0 || group.supporting.length > 0 || group.sharedCount > 0 || !promptFilterActive || Boolean(filters.school));
 
   return (
     <>
@@ -465,7 +473,7 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
               </ul>
             </section>
           ) : null}
-          {schools.map(({ school, prompts, sharedCount }) => (
+          {schools.map(({ school, prompts, supporting, sharedCount }) => (
             <section className="card school-group" key={school.id}>
               <SchoolHeader
                 snapshot={snapshot}
@@ -503,6 +511,30 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
                   ))}
                 </ul>
               )}
+              {supporting.length > 0 ? (
+                <div className="supporting-group">
+                  <h3 className="supporting-heading">Supporting material</h3>
+                  <p className="detail-note">
+                    Required, but not essays — {school.name} wants documents or portfolio notes here.
+                    These are not counted toward your essay totals and no essay is suggested for them.
+                  </p>
+                  <ul className="rows">
+                    {supporting.map((prompt) => (
+                      <li key={prompt.id}>
+                        <PromptRow
+                          snapshot={snapshot}
+                          prompt={prompt}
+                          schoolName={school.name}
+                          showSchool={false}
+                          editing={filters.edit === prompt.id}
+                          editHref={`${withFilters("/schools", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                          cancelHref={`${withFilters("/schools", filters)}#prompt-${prompt.id}`}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
           ))}
         </div>

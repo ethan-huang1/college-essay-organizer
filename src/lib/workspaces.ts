@@ -55,6 +55,15 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
   const cycleLabelById = new Map(workspaceCycles.map((cycle) => [cycle.id, cycle.label]));
   const isCurrentCyclePrompt = (prompt: (typeof workspacePrompts)[number]) =>
     (prompt.cycleId ? cycleLabelById.get(prompt.cycleId) : CURRENT_CYCLE_LABEL) === CURRENT_CYCLE_LABEL;
+  /**
+   * An essay prompt, as opposed to a supporting-material requirement.
+   *
+   * A graded paper, a writing sample and a caption per portfolio item are all
+   * real application requirements a student has to see and track, but the
+   * deliverable is not prose composed for this application. So they are counted
+   * separately, never as essays: "1 of 2 essays done" must mean essays.
+   */
+  const isEssayPrompt = (prompt: (typeof workspacePrompts)[number]) => prompt.supportingMaterial === null;
 
   return {
     workspace,
@@ -63,8 +72,10 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
       // Current-cycle prompts only - a previous-cycle prompt is visible and
       // usable throughout the app, but must never count toward "how much
       // of this cycle's work is done."
-      prompts: workspacePrompts.filter(isCurrentCyclePrompt).length,
-      previousCyclePrompts: workspacePrompts.filter((prompt) => !isCurrentCyclePrompt(prompt)).length,
+      prompts: workspacePrompts.filter((prompt) => isCurrentCyclePrompt(prompt) && isEssayPrompt(prompt)).length,
+      previousCyclePrompts: workspacePrompts.filter((prompt) => !isCurrentCyclePrompt(prompt) && isEssayPrompt(prompt)).length,
+      // Tracked and shown, never counted as essay work.
+      supportingMaterial: workspacePrompts.filter((prompt) => !isEssayPrompt(prompt)).length,
       essays: workspaceEssays.length,
       assignments: assignments.length,
       // 70 is the top band's floor in matching.ts (see docs/reuse-scoring.md).
@@ -75,6 +86,7 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
     schools: workspaceSchools.map((school) => {
       const schoolPrompts = workspacePrompts
         .filter((prompt) => prompt.schoolId === school.id)
+        .filter(isEssayPrompt)
         .map((prompt) => ({ isCurrentCycle: isCurrentCyclePrompt(prompt), verificationStatus: prompt.verificationStatus }));
       return {
         ...school,
@@ -147,8 +159,10 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
     }),
     families: workspaceFamilies.map((family) => {
       const linkedPromptIds = new Set(familyPromptLinks.filter((link) => link.familyId === family.id).map((link) => link.promptId));
+      // Supporting material carries no category links, so it cannot appear
+      // here anyway; the filter states the intent rather than relying on that.
       const familyPrompts = workspacePrompts
-        .filter((prompt) => linkedPromptIds.has(prompt.id))
+        .filter((prompt) => linkedPromptIds.has(prompt.id) && isEssayPrompt(prompt))
         .map((prompt) => ({
           id: prompt.id,
           title: prompt.title,
