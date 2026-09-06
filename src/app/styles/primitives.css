@@ -303,6 +303,29 @@
   background: var(--nav);
 }
 
+/* Same size and shape as .btn, for an action that sits beside a primary one
+   without competing for attention - "cancel" and "leave it as it is", not a
+   second thing to do. */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
 /* A slow action's button says what it is doing and refuses a second click,
    rather than looking untouched for ten seconds. */
 button[aria-busy="true"],

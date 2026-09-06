@@ -24,7 +24,16 @@ const VIEW = "src/app/(app)/[section]/page.tsx";
 const PROMPT_UI = "src/app/prompt-ui.tsx";
 const OVERVIEW = "src/app/(app)/page.tsx";
 const AUTH = "src/app/auth-form.tsx";
-const markup = [VIEW, PROMPT_UI, OVERVIEW, AUTH]
+// The essay forms moved out of the section view when the Essay Editor took over
+// writing: the shared fields to essay-ui.tsx, the writing surface and its
+// version save to the editor route. The field names are what the Server Actions
+// read, so every file that now renders one has to be in this list or the
+// assertions below would pass on markup nobody serves.
+const ESSAY_UI = "src/app/essay-ui.tsx";
+const EDITOR = "src/app/(app)/editor/[essayId]/page.tsx";
+const DOCUMENT = "src/app/(app)/editor/[essayId]/document-surface.tsx";
+const REUSE_CONFIRM = "src/app/(app)/editor/reuse/page.tsx";
+const markup = [VIEW, PROMPT_UI, OVERVIEW, AUTH, ESSAY_UI, EDITOR, DOCUMENT, REUSE_CONFIRM]
   .map((path) => readFileSync(path, "utf8"))
   .join("\n");
 
@@ -174,6 +183,10 @@ describe("form field names the Server Actions read", () => {
     "email",
     "password",
     "next",
+    // The essay a reuse expects to displace. The write refuses to replace an
+    // answer it was not told about, so losing this field in the markup would
+    // turn every confirmed reuse into another confirmation prompt.
+    "expectedAssignedEssayId",
   ];
 
   it.each(FIELDS)('still renders a control named "%s"', (field) => {
@@ -183,6 +196,15 @@ describe("form field names the Server Actions read", () => {
   it("keeps the routes the filter and navigation submit to", () => {
     expect(markup).toContain('action="/schools"');
     expect(markup).toContain('action="/essays"');
+  });
+
+  it("still writes essay content through a real form field, not client state", () => {
+    // The writing textarea *is* the version form's content field. A hidden
+    // mirror updated by the client would leave the editor useless with
+    // JavaScript off, and this is the assertion that notices.
+    const surface = readFileSync(DOCUMENT, "utf8");
+    expect(surface).toMatch(/<textarea[\s\S]*?name="content"/);
+    expect(surface).toContain("action={saveEssayVersionAction}");
   });
 });
 
@@ -198,6 +220,33 @@ describe("naming is consistent across the interface", () => {
   ])('labels %s consistently in the nav and the page title', (label, route) => {
     expect(layout).toContain(`["${label}", "${route}"`);
     expect(view).toContain(`title: "${label}"`);
+  });
+
+  it("labels Essay Editor consistently in the nav and its own routes", () => {
+    // Its title lives with its route rather than in the section map, because
+    // /editor is not one of the four [section] views.
+    expect(layout).toContain('["Essay Editor", "/editor"');
+    for (const path of ["src/app/(app)/editor/page.tsx", EDITOR]) {
+      expect(readFileSync(path, "utf8")).toContain('title: "Essay Editor"');
+    }
+  });
+
+  it("routes every reuse suggestion through the copying action", () => {
+    // "Use here" copies an essay into a new document for the target prompt.
+    // Posting assignEssayAction instead would silently restore the old
+    // behaviour - one document answering two colleges - and nothing else in
+    // the suite would notice.
+    for (const path of [VIEW, PROMPT_UI, OVERVIEW, EDITOR, ESSAY_UI]) {
+      expect(readFileSync(path, "utf8"), `${path} still assigns from a suggestion`)
+        .not.toContain("action={assignEssayAction}");
+    }
+    expect(readFileSync(ESSAY_UI, "utf8")).toContain("action={reuseEssayForPromptAction}");
+  });
+
+  it("opens essays in the editor rather than the old library anchor", () => {
+    // Every "open this essay" link used to be /essays#essay-<id>, which now
+    // points at a dashboard row instead of a writing surface.
+    expect(markup).not.toContain("/essays#essay-");
   });
 
   it("has retired the pre-redesign labels everywhere", () => {

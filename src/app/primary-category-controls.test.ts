@@ -15,6 +15,9 @@ describe("primary-category UI controls", () => {
   const sources = [
     "src/app/(app)/[section]/page.tsx",
     "src/app/prompt-ui.tsx",
+    // The essay metadata and origin-prompt fields are shared by My Essays and
+    // the Essay Editor, so they live here now.
+    "src/app/essay-ui.tsx",
   ].map((path) => ({ path, text: readFileSync(path, "utf8") }));
 
   it("builds every category select from snapshot.families", () => {
@@ -51,7 +54,7 @@ describe("primary-category UI controls", () => {
   });
 
   it("offers an origin-prompt control on the essay form", () => {
-    const essayForm = sources.find(({ path }) => path.includes("[section]"))!.text;
+    const essayForm = sources.find(({ path }) => path.includes("essay-ui"))!.text;
     expect(essayForm).toContain('name="originPromptId"');
     expect(essayForm).toContain('name="originPromptText"');
     expect(essayForm).toContain('name="originPromptTitle"');

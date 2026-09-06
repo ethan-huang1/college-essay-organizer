@@ -6,10 +6,11 @@ import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { reuseCandidate, workState } from "@/lib/progress";
 import type { WorkloadSummary } from "@/lib/workload";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
-import { assignEssayAction, draftEssayForPromptAction, unassignEssayAction } from "./assignment-actions";
+import { draftEssayForPromptAction, reuseEssayForPromptAction, unassignEssayAction } from "./assignment-actions";
 import { addCollegeAction } from "./college-actions";
 import { PendingButton } from "./pending-button";
 import { deletePromptAction, setPromptStatusAction, updatePromptAction } from "./prompt-actions";
+import { statusLabel } from "./text";
 
 export type WorkspacePrompt = WorkspaceSnapshot["prompts"][number];
 
@@ -206,7 +207,7 @@ function ResponseBlock({ prompt }: { prompt: WorkspacePrompt }) {
         <p className="detail-label">Response</p>
         <p className="assigned-essay-name">{prompt.assignedEssay.title}</p>
         <div className="detail-actions">
-          <Link className="text-link" href={`/essays#essay-${prompt.assignedEssay.id}`}>Open essay <span aria-hidden="true">→</span></Link>
+          <Link className="text-link" href={`/editor/${prompt.assignedEssay.id}`}>Open in editor <span aria-hidden="true">→</span></Link>
           <form action={unassignEssayAction}>
             <input name="promptId" type="hidden" value={prompt.id} />
             <button className="text-link" type="submit">Unassign</button>
@@ -223,15 +224,22 @@ function ResponseBlock({ prompt }: { prompt: WorkspacePrompt }) {
         // One form, one submit button per candidate: the clicked button's
         // name/value is what gets submitted, so this stays a single form
         // instead of one per suggestion on every row of a 100-prompt list.
-        <form action={assignEssayAction}>
+        //
+        // Reuse copies rather than links, so "Use this" ends in a new document
+        // for *this* prompt seeded with that essay's text. This block only
+        // renders when the prompt has no answer yet, so there is nothing to
+        // displace and nothing to confirm; the write checks that again anyway.
+        <form action={reuseEssayForPromptAction}>
           <input name="promptId" type="hidden" value={prompt.id} />
+          <input name="expectedAssignedEssayId" type="hidden" value="" />
+          <input name="from" type="hidden" value="/schools" />
           <ul className="suggestion-list">
             {prompt.suggestedMatches.map((match) => (
               <li key={match.essayId}>
                 <span className="match-score">{match.score}</span>
                 <span className="suggestion-name">{match.essayTitle}</span>
                 <span className="suggestion-action">{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
-                <button className="text-link" type="submit" name="essayId" value={match.essayId}>Use this</button>
+                <button className="text-link suggestion-copy" type="submit" name="essayId" value={match.essayId}>Copy it here</button>
               </li>
             ))}
           </ul>
@@ -244,7 +252,7 @@ function ResponseBlock({ prompt }: { prompt: WorkspacePrompt }) {
       ) : null}
       <form action={draftEssayForPromptAction} className="detail-actions">
         <input name="promptId" type="hidden" value={prompt.id} />
-        <button className="text-link" type="submit">Start a new essay for this prompt <span aria-hidden="true">→</span></button>
+        <PendingButton className="text-link" pendingLabel="Opening…">Start writing this prompt <span aria-hidden="true">→</span></PendingButton>
       </form>
     </div>
   );
@@ -277,7 +285,7 @@ export function PromptRow({
         <span className="cell-title">
           <span className="cell-topline">
             {showSchool ? <span className="cell-school">{schoolName}</span> : null}
-            {prompt.requirement === "required" ? null : <span className="req-tag">{prompt.requirement}</span>}
+            {prompt.requirement === "required" ? null : <span className="req-tag">{statusLabel(prompt.requirement)}</span>}
           </span>
           <span className="cell-prompt">{prompt.title}</span>
         </span>
@@ -312,54 +320,65 @@ export function PromptRow({
       </summary>
 
       <div className="prompt-detail">
-        <p className="prompt-full-text">{prompt.promptText}</p>
-        {prompt.requirement === "conditional" && prompt.conditionalNote ? (
-          <p className="conditional-note">Conditional: {prompt.conditionalNote}</p>
-        ) : null}
-
-        <div className="detail-grid">
-          <ResponseBlock prompt={prompt} />
-
-          <div>
-            <p className="detail-label">Work status</p>
-            <form action={setPromptStatusAction} className="status-form">
-              <input name="promptId" type="hidden" value={prompt.id} />
-              <select name="status" defaultValue={prompt.status} aria-label="Work status">
-                {PROMPT_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <button type="submit">Update</button>
-            </form>
-
-            <p className="detail-label">Categories</p>
-            <div className="family-chips">
-              {prompt.primaryFamily ? (
-                <span className="primary-chip">
-                  <span className="swatch" style={{ backgroundColor: prompt.primaryFamily.color }} aria-hidden="true" />
-                  {prompt.primaryFamily.name}
-                </span>
-              ) : (
-                <span>Unclassified</span>
-              )}
-              {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
-            </div>
+        <div className="detail-top">
+          <div className="detail-prompt">
+            <p className="prompt-full-text">{prompt.promptText}</p>
+            {prompt.requirement === "conditional" && prompt.conditionalNote ? (
+              <p className="conditional-note">Conditional: {prompt.conditionalNote}</p>
+            ) : null}
           </div>
 
-          <div>
-            <p className="detail-label">Source</p>
-            <div className="verification-row">
-              <VerificationBadge prompt={prompt} />
-              <span className="detail-meta">{prompt.cycleLabel} · {prompt.applicationPlatform.replaceAll("-", " ")}</span>
+          <div className="detail-meta-panel">
+            <div className="detail-meta-item">
+              <p className="detail-label">Word count</p>
+              <p className="detail-meta-value">{limitLabel(prompt)}</p>
             </div>
-            <p className="detail-meta">
-              {prompt.classificationSource === "manual"
-                ? "Category set by you"
-                : prompt.classificationConfidence > 0
-                  ? `Category suggested automatically · ${prompt.classificationConfidence}% confidence`
-                  : "Category suggested automatically"}
-            </p>
-            {prompt.notes ? <p className="detail-note">{prompt.notes}</p> : null}
+
+            <div className="detail-meta-item">
+              <p className="detail-label">Work status</p>
+              <form action={setPromptStatusAction} className="status-form">
+                <input name="promptId" type="hidden" value={prompt.id} />
+                <select name="status" defaultValue={prompt.status} aria-label="Work status">
+                  {PROMPT_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <button type="submit">Update</button>
+              </form>
+            </div>
+
+            <div className="detail-meta-item">
+              <p className="detail-label">Categories</p>
+              <div className="family-chips">
+                {prompt.primaryFamily ? (
+                  <span className="primary-chip">
+                    <span className="swatch" style={{ backgroundColor: prompt.primaryFamily.color }} aria-hidden="true" />
+                    {prompt.primaryFamily.name}
+                  </span>
+                ) : (
+                  <span>Unclassified</span>
+                )}
+                {prompt.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+              </div>
+            </div>
+
+            <div className="detail-meta-item">
+              <p className="detail-label">Source</p>
+              <div className="verification-row">
+                <VerificationBadge prompt={prompt} />
+                <span className="detail-meta">{prompt.cycleLabel} · {prompt.applicationPlatform.replaceAll("-", " ")}</span>
+              </div>
+              <p className="detail-meta">
+                {prompt.classificationSource === "manual"
+                  ? "Category set by you"
+                  : prompt.classificationConfidence > 0
+                    ? `Category suggested automatically · ${prompt.classificationConfidence}% confidence`
+                    : "Category suggested automatically"}
+              </p>
+              {prompt.notes ? <p className="detail-note">{prompt.notes}</p> : null}
+            </div>
           </div>
         </div>
+
+        <ResponseBlock prompt={prompt} />
 
         {/* The full edit form is loaded on demand via ?edit=<id> rather than
             inlined under every row - a school list can hold 100+ prompts, and

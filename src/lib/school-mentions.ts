@@ -43,7 +43,7 @@ const GENERIC_WORDS = new Set([
   "technology", "polytechnic", "academy", "a", "for", "in", "north", "south", "east", "west",
 ]);
 
-function escapeForRegExp(value: string) {
+export function escapeForRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
@@ -60,12 +60,6 @@ function distinctiveName(schoolName: string) {
   if (distinctive.length === 0) return null;
   const candidate = distinctive.join(" ");
   return candidate.length >= 4 ? candidate : null;
-}
-
-function mentions(text: string, needle: string, caseSensitive = false) {
-  // Word-boundary matched so "Penn" does not fire inside "Pennsylvania" and
-  // "Rice" does not fire inside "prices".
-  return new RegExp(`\\b${escapeForRegExp(needle)}\\b`, caseSensitive ? "" : "i").test(text);
 }
 
 /**
@@ -97,11 +91,22 @@ const AMBIGUOUS_SINGLE_WORDS = new Set([
   "brown", "rice", "smith", "reed", "duke", "williams", "trinity", "wake", "hope", "union",
 ]);
 
-/** Every index at which `needle` appears as a whole word. */
-function occurrences(text: string, needle: string) {
-  const pattern = new RegExp(`\\b${escapeForRegExp(needle)}\\b`, "g");
-  const found: number[] = [];
-  for (let match = pattern.exec(text); match; match = pattern.exec(text)) found.push(match.index);
+type Occurrence = { start: number; end: number; matchedText: string };
+
+/**
+ * Every place `needle` appears as a whole word, with its exact span.
+ *
+ * Case-sensitive by default, matching the original boolean-only version this
+ * generalises (its one caller, `locateAmbiguousName`, always passed an
+ * already-capitalised `distinctive` name). Callers matching case-insensitively
+ * (full school names, short forms) pass `caseSensitive: false` explicitly.
+ */
+function occurrences(text: string, needle: string, caseSensitive = true): Occurrence[] {
+  const pattern = new RegExp(`\\b${escapeForRegExp(needle)}\\b`, caseSensitive ? "g" : "gi");
+  const found: Occurrence[] = [];
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+    found.push({ start: match.index, end: match.index + match[0].length, matchedText: match[0] });
+  }
   return found;
 }
 
@@ -116,11 +121,52 @@ function opensSentence(text: string, index: number) {
  * the start of a sentence or title, or else followed by a possessive, since an
  * ordinary noun does not open a sentence as "Brown's".
  */
-function mentionsAmbiguousName(text: string, needle: string) {
-  return occurrences(text, needle).some((index) => {
-    if (!opensSentence(text, index)) return true;
-    return /^['’]s\b/.test(text.slice(index + needle.length));
+/** Ambiguous-name occurrences whose capital actually carries information. */
+function locateAmbiguousName(text: string, needle: string): Occurrence[] {
+  return occurrences(text, needle).filter((occurrence) => {
+    if (!opensSentence(text, occurrence.start)) return true;
+    return /^['’]s\b/.test(text.slice(occurrence.end));
   });
+}
+
+export type SchoolMentionLocation = { schoolName: string; start: number; end: number; matchedText: string };
+
+/**
+ * Every place `text` appears to name a school from `schoolNames`, with the
+ * exact span of each occurrence - the positional counterpart to
+ * `detectSchoolMentions`, for callers that need to highlight what was found
+ * rather than just list which schools were named.
+ */
+export function locateSchoolMentions(text: string, schoolNames: readonly string[]): SchoolMentionLocation[] {
+  if (!text.trim()) return [];
+  const found: SchoolMentionLocation[] = [];
+
+  for (const schoolName of schoolNames) {
+    const fullNameHits = occurrences(text, schoolName, false);
+    if (fullNameHits.length > 0) {
+      for (const hit of fullNameHits) found.push({ schoolName, ...hit });
+      continue;
+    }
+    const distinctive = distinctiveName(schoolName);
+    if (!distinctive) continue;
+    const ambiguous = needsCapital(distinctive) && AMBIGUOUS_SINGLE_WORDS.has(distinctive.toLowerCase());
+    const hits = ambiguous
+      ? locateAmbiguousName(text, distinctive)
+      : occurrences(text, distinctive, needsCapital(distinctive));
+    for (const hit of hits) found.push({ schoolName, ...hit });
+  }
+
+  // Short forms are checked against the caller's school list too: flagging
+  // "UCLA" is only useful if UCLA is a school the student might reuse for.
+  for (const [shortName, fullName] of SHORT_NAMES) {
+    const hits = occurrences(text, shortName, false);
+    if (hits.length === 0) continue;
+    const match = schoolNames.find((name) => name === fullName);
+    if (!match) continue;
+    for (const hit of hits) found.push({ schoolName: match, ...hit });
+  }
+
+  return found;
 }
 
 /**
@@ -131,32 +177,7 @@ function mentionsAmbiguousName(text: string, needle: string) {
  * against, so a detected mention behaves exactly like one the student typed.
  */
 export function detectSchoolMentions(text: string, schoolNames: readonly string[]): string[] {
-  if (!text.trim()) return [];
-  const found = new Set<string>();
-
-  for (const schoolName of schoolNames) {
-    if (mentions(text, schoolName)) {
-      found.add(schoolName);
-      continue;
-    }
-    const distinctive = distinctiveName(schoolName);
-    if (!distinctive) continue;
-    const ambiguous = needsCapital(distinctive) && AMBIGUOUS_SINGLE_WORDS.has(distinctive.toLowerCase());
-    const hit = ambiguous
-      ? mentionsAmbiguousName(text, distinctive)
-      : mentions(text, distinctive, needsCapital(distinctive));
-    if (hit) found.add(schoolName);
-  }
-
-  // Short forms are checked against the caller's school list too: flagging
-  // "UCLA" is only useful if UCLA is a school the student might reuse for.
-  for (const [shortName, fullName] of SHORT_NAMES) {
-    if (!mentions(text, shortName)) continue;
-    const match = schoolNames.find((name) => name === fullName);
-    if (match) found.add(match);
-  }
-
-  return [...found];
+  return [...new Set(locateSchoolMentions(text, schoolNames).map((mention) => mention.schoolName))];
 }
 
 /**

@@ -1,25 +1,41 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { reuseOpportunities, type ReuseMatch } from "@/lib/progress";
 import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { canonicalPromptGroups, summarizeWorkloadFor, workspaceWorkload, type WorkloadSummary } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
-import { assignEssayAction } from "../../assignment-actions";
+import { draftEssayForPromptAction } from "../../assignment-actions";
 import { essayMatchesFilters, promptMatchesFilters, type Filters as FilterState } from "../../filtering";
+import { createEssayAction } from "../../essay-actions";
 import {
-  createEssayAction,
-  deleteEssayAction,
-  restoreEssayVersionAction,
-  saveEssayVersionAction,
-  updateEssayMetadataAction,
-} from "../../essay-actions";
+  displacedByReuse,
+  documentName,
+  ESSAY_STATUSES,
+  EssayFields,
+  essayRibbonEntries,
+  matchAdjustments,
+  ReuseHereControl,
+  ReuseRibbon,
+  type WorkspaceEssay,
+} from "../../essay-ui";
+import { sentenceCase, sentenceList, statusLabel } from "../../text";
+import {
+  essaySchoolGroups,
+  ROW_STATES,
+  ROW_STATE_LABEL,
+  unattachedEssays,
+  type EssayRow,
+  type RowState,
+} from "../../essay-dashboard";
 import { createPromptAction } from "../../prompt-actions";
 import { CatalogueStateBadge, CatalogueStateNote } from "../../catalogue-state";
-import { AddCollegeForm, ProgressLine, ProgressRing, PromptFields, PromptRow } from "../../prompt-ui";
+import { LocalTime } from "../../local-time";
+import { PendingButton } from "../../pending-button";
+import { AddCollegeForm, limitLabel, ProgressLine, ProgressRing, PromptFields, PromptRow } from "../../prompt-ui";
 import { SchoolMark } from "../../school-mark";
 import { deleteSchoolAction, setSchoolProgramsAction, updateSchoolAction } from "../../school-actions";
 
@@ -29,7 +45,7 @@ import { deleteSchoolAction, setSchoolProgramsAction, updateSchoolAction } from 
 const sections = {
   schools: { title: "Your Prompts", description: "Every prompt on your list, grouped by college." },
   families: { title: "Categories", description: "The same question, asked by different schools — where one essay can do more work." },
-  essays: { title: "My Essays", description: "Your reusable library: drafts, versions, and the prompts each essay answers." },
+  essays: { title: "My Essays", description: "Where each college's writing has got to — finished, in progress, and not yet started." },
   reuse: { title: "Reuse", description: "Essays you already have that could answer prompts you have not started." },
 } as const;
 
@@ -497,6 +513,65 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
 
 /* --------------------------------------------------------------- categories */
 
+/**
+ * Prompts within a category, grouped by word-count target so prompts of a
+ * similar length sit together instead of one undifferentiated list. Shortest
+ * first; prompts sharing a word count keep whatever order canonicalRows gave
+ * them. Prompts with no word limit fall into a group of their own, last.
+ */
+function groupRowsByWordCount<T extends { prompt: { maxWordCount: number | null } }>(rows: readonly T[]) {
+  const NO_LIMIT = Number.POSITIVE_INFINITY;
+  const buckets = new Map<number, T[]>();
+  for (const row of rows) {
+    const key = row.prompt.maxWordCount ?? NO_LIMIT;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(row);
+    else buckets.set(key, [row]);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([wordCount, groupRows]) => ({
+      label: wordCount === NO_LIMIT ? "Other / no word limit" : `${wordCount} words`,
+      rows: groupRows,
+    }));
+}
+
+/** The rows list shared by every category section - grouped by word count. */
+function CategoryPromptRows({
+  snapshot,
+  rows,
+  filters,
+}: {
+  snapshot: WorkspaceSnapshot;
+  rows: ReturnType<typeof canonicalRows>;
+  filters: Filters;
+}) {
+  const groups = groupRowsByWordCount(rows);
+  return (
+    <ul className="rows">
+      {groups.map((group) => (
+        <Fragment key={group.label}>
+          {/* A single word-count value in the category isn't worth a heading -
+              that's segmentation with nothing to distinguish. */}
+          {groups.length > 1 ? <li className="row-group-heading">{group.label}</li> : null}
+          {group.rows.map(({ prompt, schoolLabel: label }) => (
+            <li key={prompt.id}>
+              <PromptRow
+                snapshot={snapshot}
+                prompt={prompt}
+                schoolName={label}
+                editing={filters.edit === prompt.id}
+                editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
+                cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
+              />
+            </li>
+          ))}
+        </Fragment>
+      ))}
+    </ul>
+  );
+}
+
 function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
   const names = schoolNames(snapshot);
   const focused = filters.family;
@@ -550,20 +625,7 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
               </summary>
               <div className="category-body">
                 <p className="category-description">{family.description}</p>
-                <ul className="rows">
-                  {rows.map(({ prompt, schoolLabel: label }) => (
-                    <li key={prompt.id}>
-                      <PromptRow
-                        snapshot={snapshot}
-                        prompt={prompt}
-                        schoolName={label}
-                        editing={filters.edit === prompt.id}
-                        editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
-                        cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
-                      />
-                    </li>
-                  ))}
-                </ul>
+                <CategoryPromptRows snapshot={snapshot} rows={rows} filters={filters} />
               </div>
             </details>
           );
@@ -581,20 +643,7 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
               <ProgressRing progress={summarizeWorkloadFor(snapshot, unclassified)} label="Unclassified" />
             </summary>
             <div className="category-body">
-              <ul className="rows">
-                {unclassifiedRows.map(({ prompt, schoolLabel: label }) => (
-                  <li key={prompt.id}>
-                    <PromptRow
-                      snapshot={snapshot}
-                      prompt={prompt}
-                      schoolName={label}
-                      editing={filters.edit === prompt.id}
-                      editHref={`${withFilters("/families", filters, { edit: prompt.id })}#prompt-${prompt.id}`}
-                      cancelHref={`${withFilters("/families", filters)}#prompt-${prompt.id}`}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <CategoryPromptRows snapshot={snapshot} rows={unclassifiedRows} filters={filters} />
             </div>
           </details>
         ) : null}
@@ -612,215 +661,247 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
 
 /* -------------------------------------------------------------------- essays */
 
-type WorkspaceEssay = WorkspaceSnapshot["essays"][number];
-
-const ESSAY_STATUSES = ["idea", "outline", "draft", "revising", "ready", "submitted"] as const;
-
-function EssayFields({ snapshot, essay, omitTitle }: { snapshot: WorkspaceSnapshot; essay?: WorkspaceEssay; omitTitle?: boolean }) {
-  return (
-    <div className="prompt-fields">
-      {omitTitle ? null : <label>Title<input name="title" required minLength={2} maxLength={160} defaultValue={essay?.title} placeholder="Why Computer Science" /></label>}
-      <label>Target words<input name="targetWordCount" type="number" min={0} step={1} defaultValue={essay?.targetWordCount ?? ""} /></label>
-      <label>Status<select name="status" defaultValue={essay?.status ?? "idea"}>
-        {ESSAY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-      </select></label>
-      <label>Designation<select name="designation" defaultValue={essay?.designation ?? "canonical"}>
-        <option value="canonical">Canonical (reusable original)</option>
-        <option value="school-adaptation">School-specific adaptation</option>
-      </select></label>
-      <label>Primary category<select name="primaryFamilyId" defaultValue={essay?.primaryFamily?.id ?? ""}><option value="">No primary category</option>{snapshot.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label>
-      <label className="field-wide">School-specific phrases <span>comma-separated, e.g. school names to flag</span>
-        <input name="schoolSpecificPhrases" defaultValue={essay?.schoolSpecificPhrases.join(", ") ?? ""} placeholder="Stanford, the Farm" />
-      </label>
-      <OriginPromptFields snapshot={snapshot} essay={essay} />
-      <label className="field-wide">Notes<input name="notes" maxLength={2000} defaultValue={essay?.notes ?? ""} placeholder="Context, ideas, or reminders" /></label>
-    </div>
-  );
-}
-
 /**
- * Which prompt this essay was originally written for.
+ * Add an essay, with nothing hidden.
  *
- * Two ways in, because both are common: pick one from the college list, or paste
- * the prompt for something not in it - a college not added yet, a scholarship, a
- * class assignment. Selecting a prompt wins over pasted text, so a student who
- * does both does not leave two answers behind.
+ * Opened by a link rather than a disclosure - the state lives in the URL, so it
+ * is linkable, the back button closes it, and a prompt can hand it everything it
+ * knows through ?promptId=. Every field a student cares about is visible at
+ * once; only designation and school-specific phrases, which are modelling
+ * fields with sensible defaults, sit behind Advanced settings.
  *
- * This is what tells the matcher what the essay *does*, which is otherwise
- * guessed from the finished essay. Leaving it blank is fine and is what every
- * essay written before this existed will carry: matching then treats the function
- * as unknown and scores it neutral rather than as a mismatch.
+ * Starting from a prompt row does not come through here at all: that path knows
+ * the school, prompt, word target and category already, so it creates the
+ * document and opens it.
  */
-function OriginPromptFields({ snapshot, essay }: { snapshot: WorkspaceSnapshot; essay?: WorkspaceEssay }) {
-  const schoolName = new Map(snapshot.schools.map((school) => [school.id, school.name]));
-  const bySchool = new Map<string, { id: string; title: string }[]>();
-  for (const prompt of snapshot.prompts) {
-    const name = schoolName.get(prompt.schoolId) ?? "Unknown college";
-    bySchool.set(name, [...(bySchool.get(name) ?? []), { id: prompt.id, title: prompt.title }]);
-  }
-  return (
-    <>
-      <label className="field-wide">Originally written for <span>the prompt this essay answers — used to judge reuse</span>
-        <select name="originPromptId" defaultValue={essay?.originPromptId ?? ""}>
-          <option value="">Not from a prompt in my list</option>
-          {[...bySchool].sort(([a], [b]) => a.localeCompare(b)).map(([school, prompts]) => (
-            <optgroup key={school} label={school}>
-              {prompts.map((prompt) => <option key={prompt.id} value={prompt.id}>{prompt.title}</option>)}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      <label>Or paste its title<input name="originPromptTitle" maxLength={200} defaultValue={essay?.originPromptTitle ?? ""} placeholder="Common App personal essay" /></label>
-      <label className="field-wide">Or paste the original prompt <span>for a college, scholarship, or class not in your list</span>
-        <textarea name="originPromptText" rows={2} maxLength={4000} defaultValue={essay?.originPromptText ?? ""} placeholder="Describe a topic, idea, or concept you find captivating…" />
-      </label>
-    </>
-  );
-}
-
-/**
- * What this essay was written for, for display above the editor.
- *
- * Mirrors the precedence the matcher already uses - a prompt chosen from the
- * college list wins over pasted text - so the editor shows the same origin the
- * score was derived from. Read-only: nothing here decides anything.
- */
-function essayOrigin(snapshot: WorkspaceSnapshot, essay: WorkspaceEssay) {
-  const linked = essay.originPromptId
-    ? snapshot.prompts.find((prompt) => prompt.id === essay.originPromptId)
+function AddEssayPanel({ snapshot, promptId, cancelHref }: { snapshot: WorkspaceSnapshot; promptId: string; cancelHref: string }) {
+  const prompt = promptId ? snapshot.prompts.find((candidate) => candidate.id === promptId) : undefined;
+  const school = prompt ? snapshot.schools.find((candidate) => candidate.id === prompt.schoolId) : undefined;
+  const defaults = prompt
+    ? {
+        title: `${school?.name ?? "Draft"} — ${prompt.title}`.slice(0, 160),
+        targetWordCount: prompt.maxWordCount,
+        originPromptId: prompt.id,
+        primaryFamilyId: prompt.primaryFamily?.id ?? undefined,
+      }
     : undefined;
-  if (linked) return { title: linked.title, text: linked.promptText };
-  if (essay.originPromptTitle || essay.originPromptText) {
-    return { title: essay.originPromptTitle || "Pasted prompt", text: essay.originPromptText };
-  }
-  return null;
-}
 
-function EssayVersionHistory({ essay }: { essay: WorkspaceEssay }) {
   return (
-    <div className="version-list">
-      {essay.versions.map((version, index) => {
-        const previous = essay.versions[index + 1];
-        const delta = previous ? version.wordCount - previous.wordCount : version.wordCount;
-        return (
-          <details className="version-row" key={version.id}>
-            <summary>
-              <span>Version {version.versionNumber}</span>
-              <span>{version.wordCount} words {previous ? `(${delta >= 0 ? "+" : ""}${delta})` : ""}</span>
-              <span>{version.reason ?? "No reason given"}</span>
-            </summary>
-            <p className="version-content">{version.content || "(empty)"}</p>
-            {index !== 0 ? (
-              <form action={restoreEssayVersionAction} className="inline-edit-form">
-                <input name="essayId" type="hidden" value={essay.id} />
-                <input name="versionId" type="hidden" value={version.id} />
-                <button type="submit">Restore this version (adds a new version, keeps history)</button>
-              </form>
-            ) : <span className="record-meta">Current version</span>}
-          </details>
-        );
-      })}
-    </div>
+    <section className="add-essay-panel" id="add-essay" aria-labelledby="add-essay-heading">
+      <div className="add-essay-head">
+        <h2 id="add-essay-heading">Add an essay</h2>
+        <Link className="text-link" href={cancelHref}>Cancel</Link>
+      </div>
+      {prompt ? (
+        <p className="detail-note">
+          Prefilled from {school?.name ?? "this college"} · {prompt.title} — {limitLabel(prompt)}.
+        </p>
+      ) : null}
+      <form action={createEssayAction} className="prompt-form">
+        <EssayFields snapshot={snapshot} defaults={defaults} advanced />
+        <label className="field-wide">Starting content <span>optional — paste a draft you already have</span>
+          <textarea name="content" maxLength={20000} placeholder="Draft the first version here, or leave it empty and write in the editor" />
+        </label>
+        <button type="submit">Add essay and open editor</button>
+      </form>
+    </section>
   );
 }
 
 /**
- * Where one essay can actually go.
+ * Which dashboard rows a filter leaves.
  *
- * This is the product's whole argument on one line - an essay is not a
- * one-shot answer, it is a piece of writing several colleges will take - so it
- * is the one place the design spends any boldness.
- *
- * The mark keeps each college's own colour and the reuse band is a ring around
- * it. Tinting the mark itself by band, as first drafted, would have thrown away
- * the college identity that makes the row readable at a glance; two channels
- * carry more than one recoloured channel. Neither is load-bearing on its own:
- * every entry is a link whose accessible name states the college and the band
- * in words.
+ * The toolbar's vocabulary is the essay's, not the prompt's, so a status filter
+ * asks about the document answering a prompt - a row with no document cannot
+ * match one. Search and category are asked of both, because either is a
+ * reasonable way to look for the same piece of work.
  */
-function ReuseRibbon({
-  essay,
-  matches,
-}: {
-  essay: WorkspaceEssay;
-  matches: readonly { schoolName: string; action: string; label: string }[];
-}) {
-  const seen = new Set<string>();
-  const entries: { schoolName: string; action: string; label: string }[] = [];
-  for (const entry of matches) {
-    if (seen.has(entry.schoolName)) continue;
-    seen.add(entry.schoolName);
-    entries.push(entry);
+function rowMatchesFilters(
+  row: { prompt: SnapshotPrompt; essay: WorkspaceEssay | null },
+  filters: Filters,
+  schoolName: string,
+): boolean {
+  if (filters.status && row.essay?.status !== filters.status) return false;
+  if (filters.family) {
+    const inPrompt = row.prompt.primaryFamily?.id === filters.family
+      || row.prompt.secondaryFamilies.some((family) => family.id === filters.family);
+    const inEssay = row.essay?.primaryFamily?.id === filters.family
+      || Boolean(row.essay?.secondaryFamilies.some((family) => family.id === filters.family));
+    if (!inPrompt && !inEssay) return false;
   }
-  if (entries.length === 0) return null;
+  const query = filters.q.trim().toLowerCase();
+  if (query) {
+    const haystack = `${row.prompt.title} ${row.prompt.promptText} ${schoolName} ${row.essay?.title ?? ""}`.toLowerCase();
+    if (!haystack.includes(query)) return false;
+  }
+  return true;
+}
 
-  const shown = entries.slice(0, 9);
-  const rest = entries.length - shown.length;
-
+function EssayStatusRows({ rows, state }: { rows: EssayRow<SnapshotPrompt, WorkspaceEssay>[]; state: RowState }) {
+  if (rows.length === 0) return null;
   return (
-    <div className="ribbon-block">
-      <p className="detail-label">Where this essay can go</p>
-      <ul className="ribbon">
-        {shown.map((entry) => (
-          <li key={entry.schoolName}>
-            <Link
-              className={`ribbon-mark ${entry.action}`}
-              href={entry.action === "assigned" ? `/essays#essay-${essay.id}` : "/reuse"}
-              aria-label={`${entry.schoolName} — ${entry.label}`}
-              title={`${entry.schoolName} — ${entry.label}`}
-            >
-              <SchoolMark name={entry.schoolName} small />
-            </Link>
+    <div className="status-group">
+      <p className="status-group-label">
+        <span className={`work-dot ${state}`} aria-hidden="true" />
+        {ROW_STATE_LABEL[state]} <span className="status-group-count">{rows.length}</span>
+      </p>
+      <ul className="rows">
+        {rows.map((row) => (
+          <li key={row.prompt.id}>
+            <div className="row essay-row">
+              <span className="row-main">
+                <span className="row-title">{row.prompt.title}</span>
+                <span className="row-sub">
+                  {limitLabel(row.prompt)}
+                  {row.prompt.requirement === "required" ? "" : ` · ${statusLabel(row.prompt.requirement)}`}
+                  {row.schools.length > 1 ? ` · shared with ${row.schools.length - 1} more` : ""}
+                </span>
+              </span>
+              <span className="row-side">
+                {row.essay ? (
+                  <Link className="document-link" href={`/editor/${row.essay.id}`}>
+                    {documentName(row.essay)}
+                    <span className="document-link-meta">
+                      {row.essay.wordCount}{row.essay.targetWordCount ? `/${row.essay.targetWordCount}` : ""} words
+                      {" · "}
+                      {/* When it was last written in, rather than a version
+                          number nobody counts. */}
+                      <LocalTime iso={row.essay.lastEditedAt.toISOString()} withDate />
+                    </span>
+                  </Link>
+                ) : (
+                  // Everything this document needs is already known, so there is
+                  // no form to fill in: create it and open it. The label follows
+                  // the row - "Start Writing" on a prompt marked complete with
+                  // no document attached would be describing the wrong thing.
+                  <form action={draftEssayForPromptAction}>
+                    <input name="promptId" type="hidden" value={row.prompt.id} />
+                    <PendingButton className="btn start-writing" pendingLabel="Opening…">
+                      {state === "not-started" ? "Start Writing" : "Add essay"}
+                    </PendingButton>
+                  </form>
+                )}
+              </span>
+            </div>
           </li>
         ))}
-        {rest > 0 ? <li className="ribbon-more">+{rest}</li> : null}
       </ul>
     </div>
   );
 }
 
-function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filters: Filters }) {
-  const groups = reuseOpportunities(snapshot.essays, snapshot.matches, snapshot.prompts);
-  const openByEssay = new Map(groups.map((group) => [group.essay.id, group.open.length]));
+function EssayLibraryCard({
+  essay,
+  openCount,
+  ribbon,
+}: {
+  essay: WorkspaceEssay;
+  openCount: number;
+  ribbon: readonly { schoolName: string; action: string; label: string }[];
+}) {
+  return (
+    <article className="card essay-card" id={`essay-${essay.id}`}>
+      <div className="card-head">
+        <div className="card-head-text">
+          <h3><Link href={`/editor/${essay.id}`}>{documentName(essay)}</Link></h3>
+          <p className="card-meta">
+            {essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""} words · v{essay.versionCount}
+            {" · "}
+            {essay.linkedPromptCount > 0
+              ? `answering ${essay.linkedPromptCount} ${essay.linkedPromptCount === 1 ? "prompt" : "prompts"}`
+              : "not assigned yet"}
+            {openCount ? <> · <Link className="text-link" href="/reuse">{openCount} more possible</Link></> : null}
+          </p>
+        </div>
+        <span className={`pill ${essay.status}`}>{statusLabel(essay.status)}</span>
+      </div>
 
-  // The ribbon's entries, in the order a student cares about: already
-  // answering, then ready to reuse, then reusable after adapting.
-  const ribbonByEssay = new Map(
-    groups.map((group) => [
-      group.essay.id,
-      [
-        ...group.inUse.map((match) => ({ schoolName: match.schoolName, action: "assigned", label: "already answering a prompt here" })),
-        ...group.open.map((match) => ({
-          schoolName: match.schoolName,
-          action: match.recommendedAction,
-          label: ACTION_LABELS[match.recommendedAction as RecommendedAction],
-        })),
-        ...group.withEdits.map((match) => ({
-          schoolName: match.schoolName,
-          action: match.recommendedAction,
-          label: `${ACTION_LABELS[match.recommendedAction as RecommendedAction]}, after adapting school-specific material`,
-        })),
-      ],
-    ]),
+      <div className="essay-card-body">
+        <div className="family-chips">
+          {essay.primaryFamily ? (
+            <span className="primary-chip">
+              <span className="swatch" style={{ backgroundColor: essay.primaryFamily.color }} aria-hidden="true" />
+              {essay.primaryFamily.name}
+            </span>
+          ) : <span>Unclassified</span>}
+          {essay.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+        </div>
+
+        <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
+
+        <ReuseRibbon essay={essay} matches={ribbon} />
+
+        {essay.schoolSpecificPhrases.length > 0 ? (
+          <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p>
+        ) : null}
+      </div>
+
+      <div className="record-actions">
+        <Link className="record-open" href={`/editor/${essay.id}`}>
+          Open in Essay Editor <span aria-hidden="true">→</span>
+        </Link>
+      </div>
+    </article>
   );
+}
 
-  const filteredEssays = snapshot.essays.filter((essay) => essayMatchesFilters(essay, filters));
+/**
+ * My Essays: how far each college's writing has got.
+ *
+ * It used to be a library - one card per essay, with the writing surface folded
+ * into it - which answered "what have I written" and never "what is left". The
+ * writing moved to the Essay Editor, so this page is free to answer the question
+ * a student actually opens it with: per school, what is finished, what is
+ * started, and what has not been begun.
+ *
+ * Counting stays where it belongs: essaySchoolGroups routes every number through
+ * workspaceWorkload, so these headers cannot drift from the Overview's.
+ */
+function EssaysView({
+  snapshot,
+  filters,
+  addOpen,
+  promptId,
+}: {
+  snapshot: WorkspaceSnapshot;
+  filters: Filters;
+  addOpen: boolean;
+  promptId: string;
+}) {
+  const { openByEssay, ribbonByEssay } = essayRibbonEntries(snapshot);
+  const filterActive = Boolean(filters.status || filters.family || filters.q);
+
+  const groups = essaySchoolGroups(snapshot)
+    .map((group) => {
+      const rows = group.rows.filter((row) => rowMatchesFilters(row, filters, group.school.name));
+      return {
+        ...group,
+        rows,
+        byState: {
+          "not-started": rows.filter((row) => row.state === "not-started"),
+          "in-progress": rows.filter((row) => row.state === "in-progress"),
+          complete: rows.filter((row) => row.state === "complete"),
+        },
+      };
+    })
+    // A college with nothing matching is only hidden when a filter is what
+    // emptied it; otherwise it stays, because "no supplemental essay" and "we
+    // never looked" are different facts and CatalogueStateNote says which.
+    .filter((group) => group.rows.length > 0 || !filterActive);
+
+  const library = unattachedEssays(snapshot).filter((essay) => essayMatchesFilters(essay, filters));
+  const addHref = withFilters("/essays", filters);
 
   return (
     <>
       <div className="add-panel-row">
-        <details className="add-panel">
-          <summary>Add an essay</summary>
-          <form action={createEssayAction} className="prompt-form">
-            <label className="field-wide">Title<input name="title" required minLength={2} maxLength={160} placeholder="Why Computer Science" /></label>
-            <label className="field-wide">Starting content<textarea name="content" maxLength={20000} placeholder="Draft the first version here, or paste one you already have" /></label>
-            <details className="field-group">
-              <summary>Details (optional)</summary>
-              <EssayFields snapshot={snapshot} omitTitle />
-            </details>
-            <button type="submit">Add essay</button>
-          </form>
-        </details>
+        {addOpen ? (
+          <AddEssayPanel snapshot={snapshot} promptId={promptId} cancelHref={addHref} />
+        ) : (
+          <Link className="btn add-essay-open" href={`${addHref}${addHref.includes("?") ? "&" : "?"}new=1#add-essay`}>
+            Add essay
+          </Link>
+        )}
       </div>
 
       <div className="filter-toolbar">
@@ -829,7 +910,7 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
             <span>Status</span>
             <select className="select" name="status" defaultValue={filters.status}>
               <option value="">Any status</option>
-              {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
+              {ESSAY_STATUSES.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}
             </select>
           </label>
           <label className="field-label">
@@ -848,94 +929,71 @@ function EssaysView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filter
         <FilterChips base="/essays" filters={filters} snapshot={snapshot} statusLabels={{}} />
       </div>
 
-      {snapshot.essays.length === 0 ? (
-        <EmptyWorkspace>No essays yet. Open a prompt and choose “Start a new essay for this prompt”, or add one here.</EmptyWorkspace>
-      ) : filteredEssays.length === 0 ? (
-        <p className="empty-note">No essays match this filter.</p>
+      {snapshot.schools.length === 0 && snapshot.essays.length === 0 ? (
+        <EmptyWorkspace>
+          No essays yet. Add a college and its prompts import — then “Start Writing” on any prompt creates the document
+          for you.
+        </EmptyWorkspace>
+      ) : groups.length === 0 && library.length === 0 ? (
+        <p className="empty-note">Nothing matches this filter.</p>
       ) : (
-        <div className="card-grid wide">
-          {filteredEssays.map((essay) => {
-            const origin = essayOrigin(snapshot, essay);
-            return (
-            <article className="card essay-card" id={`essay-${essay.id}`} key={essay.id}>
+        <div className="school-groups">
+          {groups.map((group) => (
+            <section className="card school-group" key={group.school.id}>
               <div className="card-head">
+                <SchoolMark name={group.school.name} />
                 <div className="card-head-text">
-                  <h2>{essay.title}</h2>
+                  <h2><Link href={`/schools?school=${group.school.id}`}>{group.school.name}</Link></h2>
                   <p className="card-meta">
-                    {essay.wordCount}{essay.targetWordCount ? ` / ${essay.targetWordCount}` : ""} words · v{essay.versionCount}
-                    {" · "}
-                    {essay.linkedPromptCount > 0
-                      ? `answering ${essay.linkedPromptCount} ${essay.linkedPromptCount === 1 ? "prompt" : "prompts"}`
-                      : "not assigned yet"}
-                    {openByEssay.get(essay.id) ? <> · <Link className="text-link" href="/reuse">{openByEssay.get(essay.id)} more possible</Link></> : null}
+                    {/* "answered" rather than "done": summarizeWorkload counts a
+                        prompt with an essay attached as answered, which is
+                        deliberately not the same claim as the Completed group
+                        below. Same numbers as everywhere else - the word is
+                        what stops the two readings looking contradictory. */}
+                    {group.progress.requiredTotal > 0
+                      ? `${group.progress.requiredTotal} required · ${group.progress.requiredComplete} answered · ${group.progress.requiredRemaining} to go`
+                      : "No required essays on file"}
                   </p>
+                  <CatalogueStateBadge school={group.school} />
                 </div>
-                <span className={`pill ${essay.status}`}>{essay.status}</span>
-              </div>
-
-              <div className="essay-card-body">
-                <div className="family-chips">
-                  {essay.primaryFamily ? (
-                    <span className="primary-chip">
-                      <span className="swatch" style={{ backgroundColor: essay.primaryFamily.color }} aria-hidden="true" />
-                      {essay.primaryFamily.name}
-                    </span>
-                  ) : <span>Unclassified</span>}
-                  {essay.secondaryFamilies.map((family) => <span key={family.id}>{family.name}</span>)}
+                <div className="school-group-actions">
+                  <ProgressRing progress={group.progress} label={group.school.name} />
                 </div>
-
-                <p className="essay-excerpt">{essay.currentContent || "No content yet."}</p>
-
-                <ReuseRibbon essay={essay} matches={ribbonByEssay.get(essay.id) ?? []} />
-
-                {essay.schoolSpecificPhrases.length > 0 ? (
-                  <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p>
-                ) : null}
               </div>
 
-              <div className="record-actions">
-                <details>
-                  <summary>Write</summary>
-                  <div className="essay-editor">
-                    {origin ? (
-                      <aside className="editor-prompt">
-                        <p className="detail-label">Written for</p>
-                        <p className="editor-prompt-title">{origin.title}</p>
-                        {origin.text ? <p className="editor-prompt-text">{origin.text}</p> : null}
-                      </aside>
-                    ) : null}
-                    <form action={saveEssayVersionAction} className="prompt-form editor-form">
-                      <input name="essayId" type="hidden" value={essay.id} />
-                      <label className="field-wide">Content <span>saving creates a new version; the essay is never edited in place</span>
-                        <textarea name="content" maxLength={20000} defaultValue={essay.currentContent} />
-                      </label>
-                      <p className="editor-count">
-                        {essay.wordCount} {essay.wordCount === 1 ? "word" : "words"} saved
-                        {essay.targetWordCount ? ` · target ${essay.targetWordCount}` : ""}
-                      </p>
-                      <label className="field-wide field-secondary">Reason for this version <span>optional</span><input name="reason" maxLength={200} placeholder="Tightened the opening paragraph" /></label>
-                      <button type="submit">Save as new version</button>
-                    </form>
-                  </div>
-                </details>
-                <details>
-                  <summary>Details &amp; history</summary>
-                  <form action={updateEssayMetadataAction} className="prompt-form">
-                    <input name="essayId" type="hidden" value={essay.id} />
-                    <EssayFields snapshot={snapshot} essay={essay} />
-                    <button type="submit">Save essay details</button>
-                  </form>
-                  <EssayVersionHistory essay={essay} />
-                  <form action={deleteEssayAction} className="delete-form">
-                    <input name="essayId" type="hidden" value={essay.id} />
-                    <span>Deleting removes every version and match for this essay.</span>
-                    <button type="submit">Delete essay</button>
-                  </form>
-                </details>
+              {group.rows.length === 0 ? (
+                <CatalogueStateNote school={group.school} />
+              ) : (
+                <div className="card-body status-groups">
+                  {ROW_STATES.map((state) => (
+                    <EssayStatusRows key={state} rows={group.byState[state]} state={state} />
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
+
+          {library.length > 0 ? (
+            <section className="library-section">
+              <div className="library-head">
+                <h2>Reusable library</h2>
+                <p className="detail-note">
+                  Documents that answer no prompt on your list yet — a Common App essay, a scholarship piece, anything
+                  written before its college was added.
+                </p>
               </div>
-            </article>
-            );
-          })}
+              <div className="card-grid wide">
+                {library.map((essay) => (
+                  <EssayLibraryCard
+                    key={essay.id}
+                    essay={essay}
+                    openCount={openByEssay.get(essay.id) ?? 0}
+                    ribbon={ribbonByEssay.get(essay.id) ?? []}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
     </>
@@ -973,40 +1031,19 @@ function canonicalMatches(snapshot: WorkspaceSnapshot, matches: readonly ReuseMa
   return rows;
 }
 
-/**
- * Turns a match into the concrete edits reusing it would take.
- *
- * "Needs minor adaptation" does not tell a student what to do; "248 words ->
- * cut to 150" and "mentions Stanford - replace school-specific language" do.
- * All of it is derived from numbers already in the snapshot, so nothing can go
- * stale against an edited essay.
- */
-function matchAdjustments(match: ReuseMatch): string[] {
-  const notes: string[] = [];
-  const max = match.promptMaxWordCount;
-  if (max !== null && match.essayWordCount > 0) {
-    if (match.essayWordCount > max) {
-      notes.push(`${match.essayWordCount} words → cut to ${max}`);
-    } else if (match.essayWordCount / max < 0.6) {
-      notes.push(`${match.essayWordCount} of ${max} words → needs substantial expansion`);
-    }
-  }
-  if (match.schoolSpecificityRisk === "high") notes.push("names another school → replace school-specific language");
-  else if (match.schoolSpecificityRisk === "medium") notes.push("check for another school's language before reusing");
-  for (const gap of match.missingRequirements) notes.push(gap);
-  return notes;
-}
-
 function MatchRow({
+  snapshot,
   match,
   schoolLabel: label,
   essayId,
 }: {
+  snapshot: WorkspaceSnapshot;
   match: ReuseMatch;
   schoolLabel: string;
   essayId: string;
 }) {
   const adjustments = matchAdjustments(match);
+  const displaced = displacedByReuse(snapshot, match.promptId, essayId);
   return (
     <li>
       <div className="row match-row">
@@ -1020,19 +1057,24 @@ function MatchRow({
             {ACTION_LABELS[match.recommendedAction as RecommendedAction]}
           </span>
           {match.schoolSpecificityRisk === "low" ? null : (
-            <span className={`pill risk-${match.schoolSpecificityRisk}`}>{match.schoolSpecificityRisk} risk</span>
+            <span className={`pill risk-${match.schoolSpecificityRisk}`}>{statusLabel(`${match.schoolSpecificityRisk} risk`)}</span>
           )}
-          <form action={assignEssayAction}>
-            <input name="promptId" type="hidden" value={match.promptId} />
-            <input name="essayId" type="hidden" value={essayId} />
-            <button className="text-link" type="submit">Use here</button>
-          </form>
+          {/* Copies the essay into a new document for this prompt rather than
+              attaching one essay to a second college's question. */}
+          <ReuseHereControl
+            promptId={match.promptId}
+            essayId={essayId}
+            assignedEssayId={displaced}
+            from="/reuse"
+            essayWordCount={match.essayWordCount}
+            promptMaxWordCount={match.promptMaxWordCount}
+          />
         </span>
       </div>
       {/* Named edits rather than a verdict: "248 words -> cut to 150" tells a
           student what to do in a way "needs minor adaptation" never did. */}
       <p className="match-adjustments">
-        {adjustments.length > 0 ? adjustments.join(" · ") : match.explanation}
+        {adjustments.length > 0 ? sentenceList(adjustments) : sentenceCase(match.explanation)}
       </p>
     </li>
   );
@@ -1079,8 +1121,8 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           <article className="card reuse-group" key={essay.id}>
             <div className="card-head">
               <div className="card-head-text">
-                <h2><Link href={`/essays#essay-${essay.id}`}>{essay.title}</Link></h2>
-                <p className="card-meta">{essay.wordCount} words · {essay.status}</p>
+                <h2><Link href={`/editor/${essay.id}`}>{essay.title}</Link></h2>
+                <p className="card-meta">{essay.wordCount} words · {statusLabel(essay.status)}</p>
               </div>
               <p className="reuse-tally">
                 <span><strong>{inUse.length}</strong> in use</span>
@@ -1091,7 +1133,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             {open.length > 0 ? (
               <ul className="rows reuse-rows card-body">
                 {open.map(({ match, schoolLabel: label }) => (
-                  <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
+                  <MatchRow key={match.id} snapshot={snapshot} match={match} schoolLabel={label} essayId={essay.id} />
                 ))}
               </ul>
             ) : possible.length === 0 ? (
@@ -1107,7 +1149,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                 <summary>{possible.length} weaker {possible.length === 1 ? "option" : "options"} — would need real rewriting</summary>
                 <ul className="rows reuse-rows">
                   {possible.map(({ match, schoolLabel: label }) => (
-                    <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
+                    <MatchRow key={match.id} snapshot={snapshot} match={match} schoolLabel={label} essayId={essay.id} />
                   ))}
                 </ul>
               </details>
@@ -1129,7 +1171,7 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                 <p className="detail-label">Reusable here, after adapting school-specific material</p>
                 <ul className="rows reuse-rows">
                   {withEdits.map(({ match, schoolLabel: label }) => (
-                    <MatchRow key={match.id} match={match} schoolLabel={label} essayId={essay.id} />
+                    <MatchRow key={match.id} snapshot={snapshot} match={match} schoolLabel={label} essayId={essay.id} />
                   ))}
                 </ul>
                 <p className="reuse-with-edits-why">
@@ -1154,7 +1196,17 @@ export default async function SectionPage({
   searchParams,
 }: {
   params: Promise<{ section: string }>;
-  searchParams: Promise<{ school?: string; status?: string; family?: string; q?: string; edit?: string; remove?: string }>;
+  searchParams: Promise<{
+    school?: string;
+    status?: string;
+    family?: string;
+    q?: string;
+    edit?: string;
+    remove?: string;
+    /** Add Essay's open state, and what it was launched from. Not filters. */
+    new?: string;
+    promptId?: string;
+  }>;
 }) {
   const { section } = await params;
   if (!(section in sections)) notFound();
@@ -1183,7 +1235,14 @@ export default async function SectionPage({
   const views = {
     schools: <PromptsView snapshot={snapshot} filters={filters} />,
     families: <CategoriesView snapshot={snapshot} filters={filters} />,
-    essays: <EssaysView snapshot={snapshot} filters={filters} />,
+    essays: (
+      <EssaysView
+        snapshot={snapshot}
+        filters={filters}
+        addOpen={Boolean(raw.new) || Boolean(raw.promptId)}
+        promptId={raw.promptId ?? ""}
+      />
+    ),
     reuse: <ReuseView snapshot={snapshot} />,
   };
 

@@ -31,7 +31,8 @@ import { ensurePersonalWorkspace } from "../users";
 import { getWorkspaceSnapshot } from "../workspaces";
 import { createSchool, deleteSchool, updateSchool } from "../schools";
 import { createPrompt, deletePrompt, setPromptStatus, updatePrompt } from "../prompts";
-import { createEssay, deleteEssay, restoreEssayVersion, saveEssayVersion, updateEssayMetadata } from "../essays";
+import { createEssay, deleteEssay, restoreEssayVersion, saveEssayDraft, saveEssayVersion, setEssayStatus, updateEssayMetadata } from "../essays";
+import { reuseEssayForPrompt } from "../reuse-essay";
 import { recomputeWorkspaceMatches } from "../reuse";
 import { importCollege } from "../college-import";
 import { assignEssayToPrompt, unassignPrompt } from "../assignments";
@@ -453,7 +454,7 @@ describe("local persistence foundation", () => {
     const links = await connection.db.select().from(essayFamilyLinks).where(eq(essayFamilyLinks.essayId, essayId));
     expect(essay?.title).toBe("Why Computer Science");
     expect(versions).toHaveLength(1);
-    expect(versions[0]).toMatchObject({ versionNumber: 1, reason: "Initial version" });
+    expect(versions[0]).toMatchObject({ versionNumber: 1, reason: "First saved draft" });
     expect(links.find((link) => link.isPrimary)?.familyId).toBe(families[5].id);
 
     // The essay form no longer offers a secondary-category picker, so a
@@ -524,6 +525,293 @@ describe("local persistence foundation", () => {
       title: "Draft essay", status: "ready", designation: "canonical",
     });
     expect(await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId))).toHaveLength(3);
+  });
+
+  it("refuses to save a version when expectedLastEditedAt no longer matches, and writes nothing", async () => {
+    // The guard Shorten's Accept uses: a proposal generated against an older
+    // lastEditedAt must not silently overwrite whatever landed since then.
+    const essayId = await createEssay(connection.db, PERSONAL, {
+      title: "Draft essay",
+      content: "First draft content.",
+      status: "draft",
+      designation: "canonical",
+    });
+    const rowFor = () => connection.db.select().from(essays).where(eq(essays.id, essayId)).then((rows) => rows[0]);
+    const versionsFor = () => connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId));
+
+    const staleExpectedAt = (await rowFor())!.lastEditedAt.getTime() - 1000;
+    const stale = await saveEssayVersion(connection.db, PERSONAL, essayId, {
+      content: "Should not be saved.",
+      expectedLastEditedAt: staleExpectedAt,
+    });
+    expect(stale.status).toBe("stale");
+    expect(await versionsFor()).toHaveLength(1);
+    expect((await rowFor())?.currentContent).toBe("First draft content.");
+
+    const correctExpectedAt = (await rowFor())!.lastEditedAt.getTime();
+    const saved = await saveEssayVersion(connection.db, PERSONAL, essayId, {
+      content: "Accepted revision.",
+      expectedLastEditedAt: correctExpectedAt,
+    });
+    expect(saved.status).toBe("saved");
+    expect(await versionsFor()).toHaveLength(2);
+    expect((await rowFor())?.currentContent).toBe("Accepted revision.");
+
+    // Omitting it entirely (every pre-Shorten caller) skips the check, as before.
+    const unchecked = await saveEssayVersion(connection.db, PERSONAL, essayId, { content: "No guard here." });
+    expect(unchecked.status).toBe("saved");
+    expect(await versionsFor()).toHaveLength(3);
+  });
+
+  it("autosaves the working draft in place, guarded against a stale write", async () => {
+    // Autosave is the one write that does not append a version: a version is a
+    // snapshot the student asked for, and one per keystroke burst would bury
+    // the few that mean something.
+    const essayId = await createEssay(connection.db, PERSONAL, {
+      title: "Northwestern Diversity",
+      content: "First draft content.",
+      status: "draft",
+      designation: "canonical",
+    });
+    const versionsFor = () => connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, essayId));
+    const rowFor = () => connection.db.select().from(essays).where(eq(essays.id, essayId)).then((rows) => rows[0]);
+
+    const before = await rowFor();
+    const first = await saveEssayDraft(connection.db, PERSONAL, essayId, {
+      content: "Draft as typed.",
+      expectedLastEditedAt: before?.lastEditedAt.getTime() ?? null,
+    });
+    expect(first.status).toBe("saved");
+    expect((await rowFor())?.currentContent).toBe("Draft as typed.");
+    expect(await versionsFor()).toHaveLength(1);
+
+    // A write holding the timestamp from before someone restored a version -
+    // or edited in another tab - must not land.
+    const stale = await saveEssayDraft(connection.db, PERSONAL, essayId, {
+      content: "Text from a request that was in flight too long.",
+      expectedLastEditedAt: before?.lastEditedAt.getTime() ?? null,
+    });
+    expect(stale.status).toBe("conflict");
+    expect((await rowFor())?.currentContent).toBe("Draft as typed.");
+
+    // Saving a version then snapshots whatever the draft has reached.
+    await saveEssayVersion(connection.db, PERSONAL, essayId, { content: "Draft as typed.", reason: "Snapshot" });
+    const versions = await versionsFor();
+    expect(versions).toHaveLength(2);
+    expect(versions.find((version) => version.versionNumber === 2)?.content).toBe("Draft as typed.");
+
+    // A rename is the same write path, and touches no content.
+    await saveEssayDraft(connection.db, PERSONAL, essayId, { title: "Northwestern Diversity — final" });
+    expect((await rowFor())?.title).toBe("Northwestern Diversity — final");
+    expect((await rowFor())?.currentContent).toBe("Draft as typed.");
+    expect(await versionsFor()).toHaveLength(2);
+
+    // Workspace scoping, and a deleted document reports missing rather than
+    // being recreated by an autosave that was already in flight.
+    expect(await saveEssayDraft(connection.db, DEMO_WORKSPACE_ID, essayId, { content: "x" })).toEqual({ status: "missing" });
+    await deleteEssay(connection.db, PERSONAL, essayId);
+    expect(await saveEssayDraft(connection.db, PERSONAL, essayId, { content: "x" })).toEqual({ status: "missing" });
+  });
+
+  it("reuses an essay by copying it into an independent document for the target prompt", async () => {
+    // The behaviour this replaces attached one essay to a second college's
+    // question, so editing for one school edited the other and the second
+    // school's row opened the first school's document.
+    const princeton = await createSchool(connection.db, PERSONAL, { name: "Princeton University" });
+    const northwestern = await createSchool(connection.db, PERSONAL, { name: "Northwestern University" });
+    if (!princeton || !northwestern) throw new Error("Expected both schools to be created.");
+
+    const sourcePromptId = await createPrompt(connection.db, PERSONAL, {
+      schoolId: princeton.id,
+      title: "Your Voice: lived experience",
+      promptText: "Tell us about a lived experience that shaped you.",
+      maxWordCount: 500,
+      requirement: "required",
+      status: "not-started",
+    });
+    const targetPromptId = await createPrompt(connection.db, PERSONAL, {
+      schoolId: northwestern.id,
+      title: "Diverse perspectives",
+      promptText: "How will you contribute perspectives to our community?",
+      maxWordCount: 199,
+      requirement: "required",
+      status: "not-started",
+    });
+
+    const sourceText = "The ledger on the kitchen table was the most honest document in our house.";
+    const sourceId = await createEssay(connection.db, PERSONAL, {
+      title: "The Kitchen Table Ledger",
+      content: sourceText,
+      status: "draft",
+      designation: "canonical",
+      originPromptId: sourcePromptId,
+      schoolSpecificPhrases: ["Princeton"],
+    });
+
+    const first = await reuseEssayForPrompt(connection.db, PERSONAL, targetPromptId, sourceId);
+    if (first.status !== "reused") throw new Error("Expected the reuse to go through.");
+    expect(first.created).toBe(true);
+    expect(first.essayId).not.toBe(sourceId);
+
+    const copy = await connection.db.select().from(essays).where(eq(essays.id, first.essayId)).then((rows) => rows[0]);
+    // Seeded with the source's text exactly, owned by the target prompt, and
+    // carrying its word limit rather than the source's.
+    expect(copy?.currentContent).toBe(sourceText);
+    expect(copy?.originPromptId).toBe(targetPromptId);
+    expect(copy?.adaptedFromEssayId).toBe(sourceId);
+    expect(copy?.targetWordCount).toBe(199);
+    expect(copy?.title).toBe("Northwestern University — Diverse perspectives — Reused from Princeton University Your Voice: lived experience");
+    expect(copy?.schoolSpecificPhrases).toEqual(["Princeton"]);
+    const copyVersions = await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, first.essayId));
+    expect(copyVersions).toHaveLength(1);
+    expect(copyVersions[0].content).toBe(sourceText);
+
+    // The target prompt now answers with the copy; the source is untouched.
+    const answeredBy = async (promptId: string) => connection.db.select().from(assignedEssayResponses)
+      .where(eq(assignedEssayResponses.promptId, promptId))
+      .then((rows) => rows[0]?.essayId ?? null);
+    expect(await answeredBy(targetPromptId)).toBe(first.essayId);
+    expect((await connection.db.select().from(essays).where(eq(essays.id, sourceId)).then((rows) => rows[0]))?.currentContent)
+      .toBe(sourceText);
+
+    // Clicking again lands in the same document rather than stacking copies.
+    const second = await reuseEssayForPrompt(connection.db, PERSONAL, targetPromptId, sourceId);
+    expect(second).toMatchObject({ status: "reused", essayId: first.essayId, created: false });
+    expect(await connection.db.select().from(essays).where(eq(essays.adaptedFromEssayId, sourceId))).toHaveLength(1);
+
+    // Editing the copy cannot reach back into the source.
+    await saveEssayVersion(connection.db, PERSONAL, first.essayId, { content: "Rewritten for Northwestern.", reason: "Adapted" });
+    expect((await connection.db.select().from(essays).where(eq(essays.id, sourceId)).then((rows) => rows[0]))?.currentContent)
+      .toBe(sourceText);
+    expect(await connection.db.select().from(essayVersions).where(eq(essayVersions.essayId, sourceId))).toHaveLength(1);
+
+    // Deleting either side leaves the other whole - adapted_from_essay_id is
+    // "on delete set null" precisely so this is true.
+    await deleteEssay(connection.db, PERSONAL, sourceId);
+    const survivor = await connection.db.select().from(essays).where(eq(essays.id, first.essayId)).then((rows) => rows[0]);
+    expect(survivor?.currentContent).toBe("Rewritten for Northwestern.");
+    expect(survivor?.adaptedFromEssayId).toBeNull();
+  });
+
+  it("reattaches an existing copy instead of copying again, and refuses to displace an unnamed answer", async () => {
+    const school = await createSchool(connection.db, PERSONAL, { name: "Northwestern University" });
+    if (!school) throw new Error("Expected the school to be created.");
+    const promptId = await createPrompt(connection.db, PERSONAL, {
+      schoolId: school.id,
+      title: "Diverse perspectives",
+      promptText: "How will you contribute perspectives to our community?",
+      maxWordCount: 199,
+      requirement: "required",
+      status: "not-started",
+    });
+    const sourceId = await createEssay(connection.db, PERSONAL, {
+      title: "The Kitchen Table Ledger", content: "Source text.", status: "draft", designation: "canonical",
+    });
+    const otherId = await createEssay(connection.db, PERSONAL, {
+      title: "Something Else", content: "Other text.", status: "draft", designation: "canonical",
+    });
+
+    const first = await reuseEssayForPrompt(connection.db, PERSONAL, promptId, sourceId);
+    if (first.status !== "reused") throw new Error("Expected the first reuse to go through.");
+
+    // Another essay takes the prompt over.
+    await assignEssayToPrompt(connection.db, PERSONAL, promptId, otherId);
+
+    // Reusing the same source again would displace it, and nobody said so.
+    const blocked = await reuseEssayForPrompt(connection.db, PERSONAL, promptId, sourceId);
+    expect(blocked).toMatchObject({ status: "needs-confirmation", assignedEssayId: otherId, existingCopyId: first.essayId });
+    const answeredBy = async () => connection.db.select().from(assignedEssayResponses)
+      .where(eq(assignedEssayResponses.promptId, promptId))
+      .then((rows) => rows[0]?.essayId ?? null);
+    expect(await answeredBy()).toBe(otherId);
+    expect(await connection.db.select().from(essays).where(eq(essays.adaptedFromEssayId, sourceId))).toHaveLength(1);
+
+    // A stale confirmation - naming an essay that is no longer attached - is
+    // refused for the same reason rather than overwriting what is there now.
+    const stale = await reuseEssayForPrompt(connection.db, PERSONAL, promptId, sourceId, {
+      expectedAssignedEssayId: "someone-elses-essay",
+    });
+    expect(stale.status).toBe("needs-confirmation");
+
+    // Confirmed against what is actually attached: the existing copy comes
+    // back as the answer, and no second copy is made.
+    const confirmed = await reuseEssayForPrompt(connection.db, PERSONAL, promptId, sourceId, {
+      expectedAssignedEssayId: otherId,
+    });
+    expect(confirmed).toMatchObject({ status: "reused", essayId: first.essayId, created: false });
+    expect(await answeredBy()).toBe(first.essayId);
+    expect(await connection.db.select().from(essays).where(eq(essays.adaptedFromEssayId, sourceId))).toHaveLength(1);
+    // The displaced essay is still in the library, just not answering this.
+    expect(await connection.db.select().from(essays).where(eq(essays.id, otherId))).toHaveLength(1);
+  });
+
+  it("leaves nothing behind when a reuse fails part-way", async () => {
+    // Creation and assignment are one transaction, so a failure cannot leave a
+    // copy that answers nothing.
+    const sourceId = await createEssay(connection.db, PERSONAL, {
+      title: "The Kitchen Table Ledger", content: "Source text.", status: "draft", designation: "canonical",
+    });
+    const before = await connection.db.select({ value: count() }).from(essays).then((rows) => rows[0].value);
+    await expect(reuseEssayForPrompt(connection.db, PERSONAL, "no-such-prompt", sourceId)).rejects.toThrow();
+    expect(await connection.db.select({ value: count() }).from(essays).then((rows) => rows[0].value)).toBe(before);
+  });
+
+  it("keeps an essay complete through every kind of edit, until it is reopened", async () => {
+    // Completion has to mean the same thing in the editor and in the Overview,
+    // so it moves both the essay and the prompts it answers - and nothing else
+    // may quietly move it back.
+    const school = await createSchool(connection.db, PERSONAL, { name: "Rice University" });
+    if (!school) throw new Error("Expected the school to be created.");
+    const promptId = await createPrompt(connection.db, PERSONAL, {
+      schoolId: school.id,
+      title: "The Rice experience",
+      promptText: "What draws you to Rice?",
+      maxWordCount: 150,
+      requirement: "required",
+      status: "not-started",
+    });
+    const essayId = await createEssay(connection.db, PERSONAL, {
+      title: "Why Rice", content: "First draft.", status: "draft", designation: "canonical", originPromptId: promptId,
+    });
+    await assignEssayToPrompt(connection.db, PERSONAL, promptId, essayId);
+
+    const statuses = async () => ({
+      essay: (await connection.db.select().from(essays).where(eq(essays.id, essayId)).then((rows) => rows[0]))?.status,
+      prompt: (await connection.db.select().from(prompts).where(eq(prompts.id, promptId)).then((rows) => rows[0]))?.status,
+    });
+    expect(await statuses()).toEqual({ essay: "draft", prompt: "in-progress" });
+
+    // What the editor's "Mark complete" does.
+    await setEssayStatus(connection.db, PERSONAL, essayId, "ready");
+    await setPromptStatus(connection.db, PERSONAL, promptId, "complete");
+    expect(await statuses()).toEqual({ essay: "ready", prompt: "complete" });
+
+    // Everything a student can do to a finished essay without saying "reopen".
+    await saveEssayDraft(connection.db, PERSONAL, essayId, { content: "Autosaved after finishing." });
+    await saveEssayDraft(connection.db, PERSONAL, essayId, { title: "Why Rice — final" });
+    await saveEssayVersion(connection.db, PERSONAL, essayId, { content: "A late tweak.", reason: "Polish" });
+    const oldest = await connection.db.select().from(essayVersions)
+      .where(and(eq(essayVersions.essayId, essayId), eq(essayVersions.versionNumber, 1)))
+      .then((rows) => rows[0]);
+    await restoreEssayVersion(connection.db, PERSONAL, essayId, oldest.id);
+    expect(await statuses()).toEqual({ essay: "ready", prompt: "complete" });
+
+    // Reusing it elsewhere must not reopen the prompt it already answers.
+    const otherPromptId = await createPrompt(connection.db, PERSONAL, {
+      schoolId: school.id,
+      title: "Residential College perspectives",
+      promptText: "Tell us about a perspective you would bring.",
+      maxWordCount: 500,
+      requirement: "required",
+      status: "not-started",
+    });
+    await reuseEssayForPrompt(connection.db, PERSONAL, otherPromptId, essayId);
+    expect(await statuses()).toEqual({ essay: "ready", prompt: "complete" });
+
+    // Only reopening moves it back.
+    await setEssayStatus(connection.db, PERSONAL, essayId, "revising");
+    await setPromptStatus(connection.db, PERSONAL, promptId, "in-progress");
+    expect(await statuses()).toEqual({ essay: "revising", prompt: "in-progress" });
   });
 
   it("deletes only the scoped essay and cascades its versions, family links, and matches", async () => {

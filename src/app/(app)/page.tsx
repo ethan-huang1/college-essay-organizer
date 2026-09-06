@@ -5,7 +5,7 @@ import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { reuseOpportunities } from "@/lib/progress";
 import { canonicalPromptGroups, workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
-import { assignEssayAction } from "../assignment-actions";
+import { displacedByReuse, ReuseHereControl } from "../essay-ui";
 import { availabilitySentence, schoolAvailability } from "@/lib/schools";
 import { CatalogueStateBadge } from "../catalogue-state";
 import { AddCollegeForm, ProgressRing } from "../prompt-ui";
@@ -299,11 +299,16 @@ export default async function Overview() {
                         <span className={`pill ${match.recommendedAction}`}>
                           {ACTION_LABELS[match.recommendedAction as RecommendedAction]}
                         </span>
-                        <form action={assignEssayAction}>
-                          <input name="promptId" type="hidden" value={match.promptId} />
-                          <input name="essayId" type="hidden" value={essay.id} />
-                          <button className="text-link" type="submit">Use here</button>
-                        </form>
+                        {/* Copies the essay into a new document for this
+                            prompt, like every other "Use here" in the app. */}
+                        <ReuseHereControl
+                          promptId={match.promptId}
+                          essayId={essay.id}
+                          assignedEssayId={displacedByReuse(snapshot, match.promptId, essay.id)}
+                          from="/"
+                          essayWordCount={match.essayWordCount}
+                          promptMaxWordCount={match.promptMaxWordCount}
+                        />
                       </span>
                     </div>
                   </li>

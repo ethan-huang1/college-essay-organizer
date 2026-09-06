@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { canonicalSiblingIds } from "./canonical";
 import type { AppDatabase } from "./db/client";
 import { assignedEssayResponses, essays, prompts } from "./db/schema";
+import type { EssayWriter } from "./essays";
 
 // One assignment per prompt (enforced by the schema's unique index on
 // promptId) - assigning a new essay replaces whatever was assigned before,
@@ -12,28 +13,42 @@ import { assignedEssayResponses, essays, prompts } from "./db/schema";
 // through one school is answered for all of them. Doing it here rather than in
 // the Server Action means every caller inherits it, including the demo seed.
 export async function assignEssayToPrompt(db: AppDatabase, workspaceId: string, promptId: string, essayId: string) {
-  const promptIds = await canonicalSiblingIds(db, workspaceId, promptId);
-  const essay = await db.select({ id: essays.id }).from(essays)
+  await db.transaction((tx) => assignEssayWithinTx(tx, workspaceId, promptId, essayId));
+}
+
+/**
+ * The assignment write itself, without a transaction of its own.
+ *
+ * Reuse creates a document and attaches it in a single atomic step, so it needs
+ * this half on its own; `assignEssayToPrompt` above is this in a transaction.
+ */
+export async function assignEssayWithinTx(
+  tx: EssayWriter,
+  workspaceId: string,
+  promptId: string,
+  essayId: string,
+) {
+  const promptIds = await canonicalSiblingIds(tx, workspaceId, promptId);
+  const essay = await tx.select({ id: essays.id }).from(essays)
     .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
     .then((rows) => rows[0]);
   if (!essay) throw new Error("Essay not found in the active workspace.");
 
-  await db.transaction(async (tx) => {
-    await tx.delete(assignedEssayResponses).where(inArray(assignedEssayResponses.promptId, promptIds));
-    await tx.insert(assignedEssayResponses).values(promptIds.map((id) => ({
-      id: crypto.randomUUID(),
-      workspaceId,
-      promptId: id,
-      essayId,
-      assignedAt: new Date(),
-    })));
-    // Assigning an essay is starting the work, so a prompt must not stay "Not
-    // started" afterwards - that mismatch is why progress never moved when a
-    // student assigned an essay. An already-complete prompt is left alone.
-    await tx.update(prompts)
-      .set({ status: "in-progress", updatedAt: new Date() })
-      .where(and(inArray(prompts.id, promptIds), eq(prompts.status, "not-started")));
-  });
+  await tx.delete(assignedEssayResponses).where(inArray(assignedEssayResponses.promptId, promptIds));
+  await tx.insert(assignedEssayResponses).values(promptIds.map((id) => ({
+    id: crypto.randomUUID(),
+    workspaceId,
+    promptId: id,
+    essayId,
+    assignedAt: new Date(),
+  })));
+  // Assigning an essay is starting the work, so a prompt must not stay "Not
+  // started" afterwards - that mismatch is why progress never moved when a
+  // student assigned an essay. An already-complete prompt is left alone, which
+  // is also what keeps a completed essay complete when it is reused elsewhere.
+  await tx.update(prompts)
+    .set({ status: "in-progress", updatedAt: new Date() })
+    .where(and(inArray(prompts.id, promptIds), eq(prompts.status, "not-started")));
 }
 
 export async function unassignPrompt(db: AppDatabase, workspaceId: string, promptId: string) {

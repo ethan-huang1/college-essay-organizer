@@ -26,11 +26,53 @@
   font-size: var(--text-meta);
 }
 
-.detail-grid {
+/* Prompt text takes most of the width; the metadata (status, categories,
+   source, word count) sits in a narrower column to its right, so the two read
+   as one row instead of scattering across separate full-width blocks. */
+.detail-top {
   display: grid;
   gap: var(--s6);
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
   align-items: start;
+  margin-bottom: var(--s6);
+}
+
+.detail-prompt {
+  min-width: 0;
+}
+
+.detail-prompt .prompt-full-text {
+  margin-bottom: 0;
+}
+
+.detail-prompt .conditional-note {
+  margin-top: var(--s4);
+  margin-bottom: 0;
+}
+
+.detail-meta-panel {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+  min-width: 0;
+}
+
+.detail-meta-item {
+  display: grid;
+  gap: var(--s1);
+}
+
+.detail-meta-value {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-meta);
+  font-weight: 550;
+}
+
+@media (max-width: 720px) {
+  .detail-top {
+    grid-template-columns: 1fr;
+  }
 }
 
 .detail-label {
@@ -64,6 +106,8 @@
 
 .response-block {
   min-width: 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
 }
 
 .assigned-essay-name {
@@ -82,14 +126,29 @@
   list-style: none;
 }
 
+/* One compact row per match: score, title, status text, and the action all
+   sit on a single line with plenty of room now that this block spans the
+   full width of the expanded prompt rather than a squeezed grid column. */
 .suggestion-list li {
   display: grid;
-  gap: var(--s3);
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(0, 200px) auto;
+  grid-template-areas: "score title action button";
+  column-gap: var(--s3);
+  row-gap: var(--s1);
   align-items: center;
+  padding: var(--s2) 0;
+}
+
+.suggestion-list li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+.suggestion-list .match-score {
+  grid-area: score;
 }
 
 .suggestion-name {
+  grid-area: title;
   overflow: hidden;
   font-size: var(--text-meta);
   font-weight: 550;
@@ -98,9 +157,33 @@
 }
 
 .suggestion-action {
-  grid-column: 2 / -1;
+  grid-area: action;
+  overflow: hidden;
   color: var(--ink-soft);
   font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Never allowed to wrap: this is what turned "Copy it here" into 3-4 lines
+   when the block was squeezed into a narrow grid column. */
+.suggestion-copy {
+  grid-area: button;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+@media (max-width: 640px) {
+  .suggestion-list li {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "score title button"
+      "score action button";
+  }
+
+  .suggestion-action {
+    white-space: normal;
+  }
 }
 
 /* ------------------------------------------------------------------ source */

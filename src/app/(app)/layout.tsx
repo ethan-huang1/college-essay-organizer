@@ -30,6 +30,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     ["Your Prompts", "/schools", overall.requiredTotal],
     ["Categories", "/families", snapshot.families.filter((family) => family.promptCount > 0).length],
     ["My Essays", "/essays", snapshot.essays.length],
+    ["Essay Editor", "/editor", null],
     ["Reuse", "/reuse", openReuse],
   ];
 

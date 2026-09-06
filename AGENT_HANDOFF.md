@@ -13,6 +13,16 @@ Approaches (rule 9) instead of silently retrying.
 See [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) for rules, [MVP_SPEC.md](MVP_SPEC.md)
 for the product spec.
 
+> **This file is stale for the three most recent sessions.** The workload bands,
+> availability states, published logos, the deploy through `5c0aed9`, and the
+> **Essay Editor / My Essays dashboard** are all recorded in
+> [HANDOFF.md](HANDOFF.md), which is authoritative for UI matters. The Essay
+> Editor - including the reuse-as-copy change, Mark complete, and the
+> sentence-case pass - sits in the working tree, uncommitted (HANDOFF.md §9
+> and §10). **Reuse now copies an essay into a new prompt-specific document
+> rather than attaching one essay to a second prompt**; `assignEssayAction`
+> was deleted because nothing called it any more.
+
 ## Current Status
 
 The core loop works end-to-end: **add a college (top-100 picker or manual) →
@@ -60,14 +70,19 @@ No school remains `unresearched`.
 `school-photos.ts` and its test.
 
 Navigation is a **horizontal top bar** (`src/app/(app)/layout.tsx`): the
-wordmark leads to Overview, then four tabs — **Your Prompts / Categories /
-My Essays / Reuse** — then a Plans link and an avatar button opening an account
+wordmark leads to Overview, then five tabs — **Your Prompts / Categories /
+My Essays / Essay Editor / Reuse** — then a Plans link and an avatar button opening an account
 menu built on the native `popover` attribute (workspace switch, photo credits,
 sign out). The 248px left sidebar is gone; its school list was a navigation
 shortcut duplicating the filter's school select, and the at-a-glance view of
 colleges now lives on Overview as cards.
 
-`src/app/nav-link.tsx` remains the app's only client component: it marks the
+`src/app/nav-link.tsx` is no longer the only client component: `pending-button.tsx`
+and, since the Essay Editor, `(app)/editor/[essayId]/document-surface.tsx` are
+the other two. The editor's surface exists for a live word count and an idle
+autosave, which a server component cannot do; the writing textarea is still the
+version form's real `content` field, so the page works with JavaScript off.
+`nav-link.tsx` marks the
 current section, and now also keeps a section current on its own sub-routes.
 
 Routes kept their paths; only their labels and presentation changed:
@@ -454,7 +469,12 @@ none of this fixture data was committed):
    still silently produces a school with zero prompts plus a note; worth a
    clearer UI affordance.
 1. **Exact next priority:** finish P0 Phase 4's deterministic editing-
-   suggestion workflow. Implement prompt-fit, clarity, concision, and
+   suggestion workflow. The Essay Editor is the surface it belongs on, and its
+   Shorten & adapt panel is the place to put it — length guidance is already
+   live there (`src/app/essay-guidance.ts`), the matcher's per-prompt notes are
+   labelled with the version they came from, and accept/reject would slot in
+   beside them. **No AI, no automated rewriting** without an explicit decision:
+   the panel deliberately only surfaces guidance today. Implement prompt-fit, clarity, concision, and
    word-limit suggestions with understandable before/after text; individual
    accept must create a new immutable version, while reject must leave essay
    content and version history unchanged. Add unit/integration coverage.
@@ -626,10 +646,10 @@ similarity dominate the formula.
 - Last agent: Claude
 ## Last Verified Commit
 
-`76013d4` — "feat: rebuild the interface around cards, rows, and the reuse
-ribbon". The full canonical gate (lint, strict typecheck, **377 Vitest tests**,
-production build, 103 orchestration assertions) passed immediately before this
-checkpoint. The working tree is clean.
+`5c0aed9` — "fix: keep the logo assets out of the auth middleware", which is
+also what production runs. The full canonical gate passed on the **uncommitted
+Essay Editor tree** on top of it: lint, strict typecheck, **762 Vitest tests in
+29 files**, production build, 103 orchestration assertions, `EXIT=0`.
 
-Production is still deployed from `09a9804` plus the reuse hotfixes through
-`2373f8f`. **Nothing in this run has been deployed, including the redesign.**
+**The Essay Editor work is not committed and therefore not deployed**
+(`git push origin main` deploys). Everything through `5c0aed9` is live.

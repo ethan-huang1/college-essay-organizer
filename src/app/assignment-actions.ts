@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { assignEssayToPrompt, unassignPrompt } from "@/lib/assignments";
 import { getAppDatabase } from "@/lib/db/server";
 import { createEssay } from "@/lib/essays";
+import { reuseEssayForPrompt } from "@/lib/reuse-essay";
 import { recomputeWorkspaceMatches } from "@/lib/reuse";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 
@@ -19,17 +21,7 @@ function revalidateAssignmentPaths() {
   revalidatePath("/families");
   revalidatePath("/essays");
   revalidatePath("/reuse");
-}
-
-// Assigning changes which prompts are still open, so the reuse suggestions have
-// to be rescored - these were the only mutations that skipped it, which is why
-// the reuse counts drifted out of step with the prompt list.
-export async function assignEssayAction(formData: FormData) {
-  const snapshot = await getActiveWorkspaceSnapshot();
-  const db = getAppDatabase().db;
-  await assignEssayToPrompt(db, snapshot.workspace.id, field(formData, "promptId"), field(formData, "essayId"));
-  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
-  revalidateAssignmentPaths();
+  revalidatePath("/editor");
 }
 
 export async function unassignEssayAction(formData: FormData) {
@@ -70,4 +62,45 @@ export async function draftEssayForPromptAction(formData: FormData) {
   await assignEssayToPrompt(db, snapshot.workspace.id, promptId, essayId);
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
   revalidateAssignmentPaths();
+  // Nothing left to configure - the school, the prompt, the word target and the
+  // category all came from the prompt - so the student lands in the document.
+  redirect(`/editor/${essayId}`);
+}
+
+/**
+ * "Use here" - reuse an essay for another school's prompt.
+ *
+ * This copies rather than links. Attaching one document to a second college's
+ * question made editing for one school edit the other, and made the second
+ * school's row open the first school's essay; a student who says "use this
+ * here" means "start this answer from that text". See src/lib/reuse-essay.ts.
+ *
+ * `expectedAssignedEssayId` is what the caller believed answered the prompt -
+ * empty from a button that was only rendered because nothing did, and the named
+ * essay when the caller is the confirmation page. The write re-checks it and
+ * refuses to displace anything it was not told about, so the confirmation is
+ * enforced by the write and not merely by which control was rendered.
+ */
+export async function reuseEssayForPromptAction(formData: FormData) {
+  const snapshot = await getActiveWorkspaceSnapshot();
+  const db = getAppDatabase().db;
+  const promptId = field(formData, "promptId");
+  const essayId = field(formData, "essayId");
+  const from = field(formData, "from");
+
+  const result = await reuseEssayForPrompt(db, snapshot.workspace.id, promptId, essayId, {
+    expectedAssignedEssayId: field(formData, "expectedAssignedEssayId") || null,
+  });
+
+  if (result.status === "needs-confirmation") {
+    // Nothing was written. Ask about the essay that is actually attached now,
+    // which may not be the one the confirmation page displayed.
+    const params = new URLSearchParams({ promptId, essayId, assigned: result.assignedEssayId });
+    if (from) params.set("from", from);
+    redirect(`/editor/reuse?${params.toString()}`);
+  }
+
+  await recomputeWorkspaceMatches(db, snapshot.workspace.id);
+  revalidateAssignmentPaths();
+  redirect(`/editor/${result.essayId}`);
 }

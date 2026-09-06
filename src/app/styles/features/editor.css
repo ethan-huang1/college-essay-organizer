@@ -1,0 +1,707 @@
+/* Essay Editor: the one page built for writing rather than scanning.
+
+   Two columns above 1200px - the document, and everything about the document -
+   collapsing to one below it. The measure and the reading face are the same
+   ones the old in-card editor established; what changed is how much room they
+   get. */
+
+.editor-frame {
+  display: grid;
+  gap: var(--s6);
+  /* minmax(0, 1fr) rather than the default auto: a long document name must
+     wrap or clamp, not widen the page out from under the layout. */
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s6) var(--s8);
+}
+
+.editor-head {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.editor-head-top {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editor-title-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: center;
+  min-width: 0;
+}
+
+/* The document name reads as a heading and edits as a field: no border until
+   you go near it, so the page does not look like a form. */
+/* A textarea styled as the page heading: sizes to its content so short names
+   keep "Rename" beside them, and wraps onto a second line rather than
+   scrolling out of sight when a reused document carries both schools and both
+   prompts in its name. */
+.editor-title {
+  field-sizing: content;
+  flex: 1 1 24ch;
+  min-width: 6ch;
+  max-width: 100%;
+  overflow: hidden;
+  padding: var(--s1) var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  resize: none;
+}
+
+/* Without field-sizing the field cannot follow its content, so it takes a
+   sensible fixed measure instead of collapsing to the browser default. */
+@supports not (field-sizing: content) {
+  .editor-title {
+    /* No content sizing: take the row and let it wrap. */
+    width: 100%;
+  }
+}
+
+.editor-title:hover {
+  border-color: var(--line);
+}
+
+.editor-title:focus {
+  border-color: var(--brand);
+  background: var(--surface);
+  outline: none;
+}
+
+.editor-context {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+}
+
+.field-error {
+  margin: 0;
+  color: var(--risk-ink);
+  font-size: var(--text-small);
+}
+
+.editor-body {
+  display: grid;
+  gap: var(--s6);
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1200px) {
+  .editor-body {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+
+  .editor-side {
+    position: sticky;
+    top: calc(var(--nav-h) + var(--s4));
+    max-height: calc(100vh - var(--nav-h) - var(--s6));
+    overflow-y: auto;
+  }
+}
+
+.editor-main {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------- prompt */
+
+.editor-prompt {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface-sunk);
+}
+
+.editor-prompt > summary {
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.editor-prompt .detail-label {
+  margin-bottom: 0;
+}
+
+.editor-prompt-title {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 650;
+}
+
+.editor-prompt-text {
+  max-width: var(--measure);
+  margin: var(--s3) 0 0;
+  color: var(--ink-soft);
+  font-family: var(--font-prose);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ----------------------------------------------------------------- document */
+
+.document-form {
+  display: grid;
+  gap: var(--s3);
+}
+
+.document-bar {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 var(--s2);
+}
+
+.document-count {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.document-count strong {
+  color: var(--ink);
+}
+
+.document-count.over strong {
+  color: var(--caution-ink);
+}
+
+/* Saving state is information, not decoration: it says which of the four
+   states the document is in, and screen readers get it announced. */
+.save-status {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.save-status.dirty,
+.save-status.saving {
+  color: var(--ink-soft);
+}
+
+.save-status.error,
+.save-status.stale {
+  color: var(--caution-ink);
+  font-weight: 600;
+}
+
+.document-alert {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--caution-ink);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  font-size: var(--text-small);
+}
+
+.document-guidance {
+  margin: 0;
+  padding: 0 var(--s2);
+  color: var(--caution-ink);
+  font-size: var(--text-small);
+}
+
+.document-field {
+  display: block;
+}
+
+.document-form textarea {
+  display: block;
+  width: 100%;
+  min-height: min(68vh, 720px);
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-family: var(--font-prose);
+  font-size: var(--text-lead);
+  line-height: 1.75;
+  resize: vertical;
+}
+
+.document-form textarea:focus {
+  border-color: var(--brand);
+  outline: none;
+}
+
+.document-actions {
+  display: flex;
+  gap: var(--s4);
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.document-reason {
+  display: grid;
+  gap: var(--s1);
+  flex: 1 1 320px;
+  font-size: var(--text-small);
+}
+
+/* -------------------------------------------------------------------- aside */
+
+.editor-side {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.editor-panel {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.editor-panel h2 {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.editor-panel .prompt-fields {
+  gap: var(--s3);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The shared row assumes page-width padding. In a 360px panel that padding is
+   most of the row, so it is dropped here and the adaptation note lines up under
+   the prompt title rather than under the score. */
+.editor-panel .row {
+  gap: var(--s3);
+  padding: var(--s2) 0;
+}
+
+.editor-panel .rows,
+.editor-panel .row-main {
+  min-width: 0;
+}
+
+.editor-panel .match-adjustments {
+  padding: 0 0 var(--s3) calc(34px + var(--s3));
+}
+
+.editor-panel .row-side form {
+  display: flex;
+}
+
+/* Three columns of version metadata do not fit a 360px panel: the reason ends
+   up 36px wide and reads as an ellipsis. It wraps to its own line instead. */
+.editor-panel .version-row > summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s2);
+}
+
+.editor-panel .version-row > summary > span:last-child {
+  grid-column: 1 / -1;
+}
+
+/* ------------------------------------------------------------------ documents
+   The editor's index: every document, grouped by school, most recently
+   written first within each group. */
+
+.document-groups {
+  display: grid;
+  gap: var(--s8);
+}
+
+.document-group-heading {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  margin: 0 0 var(--s3);
+  font-size: var(--text-section);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.document-list .row {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.document-row .cell-limit {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- completion
+   Mark complete sits next to the status it changes, so the two read as one
+   statement about the document rather than as a control and a label. */
+
+.editor-head-status {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+}
+
+/* The delete confirmation carries the panel's own padding already. */
+.editor-panel .remove-confirm {
+  margin: 0;
+}
+
+.editor-panel .delete-form {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* ------------------------------------------------------------- reuse confirm
+   Displacing an existing answer is a choice, not a destructive act, so this is
+   an ordinary card rather than the risk-tinted removal panel. */
+
+.confirm-panel {
+  display: grid;
+  gap: var(--s4);
+  max-width: 720px;
+  margin: var(--s8) auto;
+  padding: var(--s6);
+}
+
+.confirm-panel h1 {
+  margin: 0;
+  font-size: var(--text-section);
+}
+
+.confirm-lede {
+  max-width: var(--measure);
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+/* Three equal choices, not one button and two links - .btn/.btn-secondary
+   give every child its shape, this only spaces and wraps them. */
+.confirm-actions {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* A notice, not an error: same tint+ink pairing the status pills already use
+   for "caution", so it reads as worth a decision rather than something wrong. */
+.notice-caution {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-control);
+  background: var(--caution-tint);
+  color: var(--caution-ink);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+/* ----------------------------------------------------------------- shorten */
+
+.shorten-control {
+  display: grid;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.shorten-request {
+  display: grid;
+  gap: var(--s3);
+  align-items: start;
+  justify-items: start;
+}
+
+.shorten-request label {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--text-small);
+}
+
+.shorten-request input[type="number"] {
+  width: 7ch;
+}
+
+.shorten-preview textarea {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  font-family: var(--font-prose);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.shorten-actions {
+  display: flex;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.shorten-view-toggle {
+  display: flex;
+}
+
+.shorten-diff {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  font-family: var(--font-prose);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.diff-removed {
+  background: var(--risk-tint);
+  color: var(--risk-ink);
+  text-decoration: line-through;
+}
+
+.diff-added {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------- reference check */
+
+.reference-flags-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s3);
+}
+
+.reference-flags-list li {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line);
+}
+
+.reference-flag-phrase {
+  margin: 0 0 var(--s1);
+}
+
+.reference-flag-context,
+.reference-flag-note {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+
+.reference-flag-note {
+  margin-top: var(--s1);
+}
+
+.document-review-toggle {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reference-marked-text {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  font-family: var(--font-prose);
+  font-size: var(--text-lead);
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.flag-confirmed {
+  background: var(--risk-tint);
+  color: var(--risk-ink);
+}
+
+.flag-potential {
+  background: var(--caution-tint);
+  color: var(--caution-ink);
+}
+
+/* ------------------------------------------------------------- ai coaches
+   Every coach reads as the same kind of thing - a request control, then a
+   list of findings - so the chrome is one rule set. What differs per coach
+   (which fields a finding has, what the left-edge colour means, whether
+   there are per-item controls at all) stays in that coach's own component.
+   Shorten Coach shipped first under .shorten-coach-*; those selectors are
+   grouped in here rather than renamed, so its markup needs no churn. */
+
+.coach-control,
+.shorten-coach-control {
+  display: grid;
+  gap: var(--s3);
+}
+
+.coach-request,
+.shorten-coach-request {
+  display: grid;
+  gap: var(--s3);
+  align-items: start;
+  justify-items: start;
+}
+
+.coach-request label,
+.shorten-coach-request label {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--text-small);
+}
+
+.coach-request input[type="number"],
+.shorten-coach-request input[type="number"] {
+  width: 7ch;
+}
+
+.coach-rows,
+.shorten-coach-rows {
+  display: grid;
+  gap: var(--s3);
+}
+
+.coach-row,
+.shorten-coach-row {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+/* Left edge carries each coach's own verdict scale. */
+.shorten-coach-row.shorten-priority-shorten-first,
+.coach-row.prompt-fit-strong,
+.coach-row.lengthen-size-significant,
+.coach-row.review-rating-strong {
+  border-left-color: var(--ok-ink);
+}
+
+.shorten-coach-row.shorten-priority-optional,
+.coach-row.prompt-fit-partial,
+.coach-row.lengthen-size-moderate,
+.coach-row.review-rating-solid {
+  border-left-color: var(--caution-ink);
+}
+
+.shorten-coach-row.shorten-priority-last-resort,
+.coach-row.prompt-fit-missing,
+.coach-row.prompt-fit-off-topic,
+.coach-row.review-rating-needs-work {
+  border-left-color: var(--risk-ink);
+}
+
+.coach-row.lengthen-size-small,
+.coach-row.review-rating-not-applicable {
+  border-left-color: var(--line);
+}
+
+.coach-row-title {
+  margin: 0;
+  font-size: var(--text-meta);
+  font-weight: 650;
+}
+
+.coach-excerpt,
+.shorten-coach-excerpt {
+  margin: 0;
+  font-family: var(--font-prose);
+  font-size: var(--text-meta);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.coach-note,
+.coach-lead,
+.shorten-coach-reason,
+.shorten-coach-tradeoff {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.coach-lead {
+  color: var(--ink);
+}
+
+.coach-actions,
+.shorten-coach-actions {
+  display: flex;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+/* The tab bar and the selected coach are separate rows: without this the
+   tabs sit flush against the coach's own heading. Hidden tab panels are
+   display:none, so exactly one gap renders however many coaches exist. */
+.coach-panel {
+  display: grid;
+  gap: var(--s4);
+}
+
+.coach-panel > [hidden] {
+  display: none;
+}
+
+/* The tab bar only renders when there is more than one coach to switch
+   between, so it never appears as a pointless single-item control. */
+.coach-tabs {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.coach-tab {
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.coach-tab:hover {
+  color: var(--ink);
+}
+
+.coach-tab[aria-selected="true"] {
+  border-color: var(--brand);
+  background: var(--surface-sunk);
+  color: var(--ink);
+}

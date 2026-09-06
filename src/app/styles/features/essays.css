@@ -194,65 +194,119 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* ------------------------------------------------------------------ editor
-   The one surface built for writing rather than scanning: the reading face at
-   a real measure, and the prompt it answers kept in view above it. */
+/* --------------------------------------------------------------- dashboard
+   My Essays groups by school and, inside a school, by writing status. Rows,
+   because this is a page to scan; the one card left is the library card. */
 
-.essay-editor {
+.add-essay-open {
+  align-self: flex-start;
+}
+
+.add-essay-panel {
   display: grid;
   gap: var(--s4);
   padding: var(--s6);
-}
-
-.editor-prompt {
-  position: sticky;
-  top: calc(var(--nav-h) + var(--s2));
-  z-index: 1;
-  padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  background: var(--surface-sunk);
+  border-radius: var(--r-card);
+  background: var(--surface);
 }
 
-.editor-prompt .detail-label {
-  margin-bottom: var(--s1);
+.add-essay-head {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  justify-content: space-between;
 }
 
-.editor-prompt-title {
+.add-essay-head h2 {
   margin: 0;
-  font-size: var(--text-meta);
-  font-weight: 650;
+  font-size: var(--text-section);
 }
 
-.editor-prompt-text {
-  display: -webkit-box;
-  overflow: hidden;
-  max-width: var(--measure);
-  margin: var(--s2) 0 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.status-groups {
+  display: grid;
+  gap: var(--s4);
+  /* The first status label sat right against the school header's rule. */
+  padding-top: var(--s4);
+}
+
+/* Inset to match .row's own horizontal padding, so the dot, the label and the
+   count start on the same line as the prompt titles under them rather than
+   sitting against the edge of the card. */
+.status-group-label {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  margin: 0 0 var(--s2);
+  padding: 0 var(--s6);
   color: var(--ink-soft);
-  font-family: var(--font-prose);
+  font-size: var(--text-small);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.status-group-count {
+  padding: 0 var(--s2);
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  font-variant-numeric: tabular-nums;
+}
+
+.essay-row {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.essay-row .row-side {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--s3);
+  align-items: center;
+}
+
+/* The document, named. A row's whole job is to say which piece of writing
+   answers this prompt and how far along it is. */
+.document-link {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  color: var(--brand);
   font-size: var(--text-meta);
-  line-height: 1.55;
+  font-weight: 600;
+  text-align: right;
 }
 
-.editor-form {
-  padding: 0;
+.document-link:hover {
+  text-decoration: underline;
 }
 
-.editor-form textarea {
-  min-height: 420px;
-  max-width: var(--measure);
-  padding: var(--s6);
-  font-family: var(--font-prose);
-  font-size: var(--text-lead);
-  line-height: 1.7;
-}
-
-.editor-count {
-  margin: 0;
+.document-link-meta {
   color: var(--ink-soft);
   font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
+  font-weight: 400;
 }
+
+.library-section {
+  display: grid;
+  gap: var(--s4);
+}
+
+.library-head h2 {
+  margin: 0;
+  font-size: var(--text-section);
+}
+
+.record-open {
+  display: block;
+  padding: var(--s3) var(--s6);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------- moved to editor.css
+   The writing surface used to be folded into this card; it is a full page now.
+   See styles/features/editor.css. */

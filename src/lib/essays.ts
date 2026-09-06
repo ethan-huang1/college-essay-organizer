@@ -6,6 +6,20 @@ import { essayFamilyLinks, essays, essayVersions, promptFamilies, prompts } from
 export type EssayStatus = "idea" | "outline" | "draft" | "revising" | "ready" | "submitted";
 export type EssayDesignation = "canonical" | "school-adaptation";
 
+/**
+ * A client that can write, but cannot open a transaction of its own.
+ *
+ * Reusing an essay for another prompt has to create a document and attach it as
+ * that prompt's answer in one atomic step, so those writes are available as
+ * helpers taking an existing transaction. Omitting `transaction` from the type
+ * is the point: nothing inside such a helper can start a nested transaction, so
+ * none of this depends on savepoint behaviour in either driver.
+ *
+ * The narrower `Pick` precedent is already in this file (replaceFamilyAssignments)
+ * and in canonical.ts.
+ */
+export type EssayWriter = Pick<AppDatabase, "select" | "insert" | "update" | "delete">;
+
 export type EssayMetadataInput = {
   title: string;
   targetWordCount?: number | null;
@@ -27,6 +41,13 @@ export type EssayMetadataInput = {
   originPromptId?: string | null;
   originPromptTitle?: string | null;
   originPromptText?: string | null;
+  /**
+   * The essay this one was copied from, when it was created by reusing another
+   * essay for a different prompt. Two independent documents from then on: this
+   * records where the text came from, nothing more. `on delete set null`, so
+   * deleting either side leaves the other intact.
+   */
+  adaptedFromEssayId?: string | null;
 };
 
 /**
@@ -54,7 +75,7 @@ function cleanTitle(value: string) {
   return trimmed;
 }
 
-function cleanContent(value: string) {
+export function cleanContent(value: string) {
   if (value.length > 20000) throw new Error("Essay content must be 20,000 characters or fewer.");
   return value;
 }
@@ -75,7 +96,7 @@ function normalizeFamilies(input: { primaryFamilyId?: string | null; secondaryFa
   return { primaryFamilyId, secondaryFamilyIds };
 }
 
-async function validateFamilies(db: AppDatabase, workspaceId: string, primaryFamilyId: string | null, secondaryFamilyIds: string[] = []) {
+async function validateFamilies(db: Pick<AppDatabase, "select">, workspaceId: string, primaryFamilyId: string | null, secondaryFamilyIds: string[] = []) {
   const familyIds = [primaryFamilyId, ...secondaryFamilyIds].filter((id): id is string => Boolean(id));
   if (familyIds.length === 0) return;
   const valid = await db.select({ id: promptFamilies.id })
@@ -120,7 +141,7 @@ async function replaceFamilyAssignments(
   }
 }
 
-async function validateMetadata(db: AppDatabase, workspaceId: string, input: EssayMetadataInput) {
+async function validateMetadata(db: Pick<AppDatabase, "select">, workspaceId: string, input: EssayMetadataInput) {
   const targetWordCount = input.targetWordCount ?? null;
   if (targetWordCount !== null && (!Number.isInteger(targetWordCount) || targetWordCount < 0)) {
     throw new Error("Target word count must be a nonnegative integer.");
@@ -151,40 +172,54 @@ async function validateMetadata(db: AppDatabase, workspaceId: string, input: Ess
   };
 }
 
-export async function createEssay(db: AppDatabase, workspaceId: string, input: EssayMetadataInput & { content?: string }) {
-  const validated = await validateMetadata(db, workspaceId, input);
+/**
+ * Creating an essay, without opening a transaction.
+ *
+ * Split out so reuse can create a document and attach it to its prompt in one
+ * atomic write (see reuse-essay.ts). Callers that only create an essay use
+ * createEssay below, which is this in its own transaction.
+ */
+export async function insertEssay(
+  tx: EssayWriter,
+  workspaceId: string,
+  input: EssayMetadataInput & { content?: string },
+) {
+  const validated = await validateMetadata(tx, workspaceId, input);
   const content = cleanContent(input.content ?? "");
   const essayId = crypto.randomUUID();
 
-  await db.transaction(async (tx) => {
-    await tx.insert(essays).values({
-      id: essayId,
-      workspaceId,
-      title: validated.title,
-      currentContent: content,
-      targetWordCount: validated.targetWordCount,
-      status: input.status,
-      designation: input.designation,
-      notes: validated.notes,
-      schoolSpecificPhrases: validated.schoolSpecificPhrases,
-      originPromptId: validated.originPromptId,
-      originPromptTitle: validated.originPromptTitle,
-      originPromptText: validated.originPromptText,
-      lastEditedAt: new Date(),
-    });
-    await tx.insert(essayVersions).values({
-      id: crypto.randomUUID(),
-      workspaceId,
-      essayId,
-      versionNumber: 1,
-      content,
-      wordCount: wordCount(content),
-      reason: "Initial version",
-    });
-    await replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
+  await tx.insert(essays).values({
+    id: essayId,
+    workspaceId,
+    title: validated.title,
+    currentContent: content,
+    targetWordCount: validated.targetWordCount,
+    status: input.status,
+    designation: input.designation,
+    notes: validated.notes,
+    schoolSpecificPhrases: validated.schoolSpecificPhrases,
+    originPromptId: validated.originPromptId,
+    originPromptTitle: validated.originPromptTitle,
+    originPromptText: validated.originPromptText,
+    adaptedFromEssayId: input.adaptedFromEssayId ?? null,
+    lastEditedAt: new Date(),
   });
+  await tx.insert(essayVersions).values({
+    id: crypto.randomUUID(),
+    workspaceId,
+    essayId,
+    versionNumber: 1,
+    content,
+    wordCount: wordCount(content),
+    reason: "First saved draft",
+  });
+  await replaceFamilyAssignments(tx, workspaceId, essayId, validated.primaryFamilyId, validated.secondaryFamilyIds);
 
   return essayId;
+}
+
+export async function createEssay(db: AppDatabase, workspaceId: string, input: EssayMetadataInput & { content?: string }) {
+  return db.transaction((tx) => insertEssay(tx, workspaceId, input));
 }
 
 export async function updateEssayMetadata(db: AppDatabase, workspaceId: string, essayId: string, input: EssayMetadataInput) {
@@ -210,9 +245,90 @@ export async function updateEssayMetadata(db: AppDatabase, workspaceId: string, 
   });
 }
 
+export type DraftSaveResult =
+  | { status: "saved"; savedAt: number }
+  /** Someone else moved the document on: a restore, another tab, another device. */
+  | { status: "conflict"; savedAt: number }
+  | { status: "missing" };
+
+/**
+ * Autosave: the working draft, written in place.
+ *
+ * Deliberately creates no version row. A version is a snapshot the student
+ * asked for and can restore to; a version per keystroke burst would bury the
+ * three that mean something under three hundred that do not. Nothing is lost
+ * that ever existed - versions have only ever been created on an explicit save.
+ *
+ * `expectedLastEditedAt` is how a pending autosave is stopped from overwriting
+ * a restore, a delete, or another tab. The editor sends the timestamp it
+ * believes current; if the stored one has moved, this writes nothing and says
+ * so. A deleted essay reports `missing`, so an autosave in flight across a
+ * delete cannot resurrect the document.
+ */
+export async function saveEssayDraft(
+  db: AppDatabase,
+  workspaceId: string,
+  essayId: string,
+  input: { content?: string; title?: string; expectedLastEditedAt?: number | null },
+): Promise<DraftSaveResult> {
+  const existing = await db.select({ id: essays.id, lastEditedAt: essays.lastEditedAt }).from(essays)
+    .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
+    .then((rows) => rows[0]);
+  if (!existing) return { status: "missing" };
+
+  const storedAt = existing.lastEditedAt.getTime();
+  if (input.expectedLastEditedAt != null && input.expectedLastEditedAt !== storedAt) {
+    return { status: "conflict", savedAt: storedAt };
+  }
+
+  const savedAt = new Date();
+  await db.update(essays).set({
+    ...(input.content === undefined ? {} : { currentContent: cleanContent(input.content) }),
+    ...(input.title === undefined ? {} : { title: cleanTitle(input.title) }),
+    lastEditedAt: savedAt,
+  }).where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)));
+
+  return { status: "saved", savedAt: savedAt.getTime() };
+}
+
+/**
+ * The essay's own status, on its own.
+ *
+ * "Mark complete" moves two things - this and the work state of every prompt
+ * the essay answers - and it must not touch anything else about the document,
+ * so it does not go through updateEssayMetadata, which rewrites every field the
+ * details form owns.
+ */
+export async function setEssayStatus(db: AppDatabase, workspaceId: string, essayId: string, status: EssayStatus) {
+  const updated = await db.update(essays)
+    .set({ status })
+    .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
+    .returning({ id: essays.id });
+  if (updated.length !== 1) throw new Error("Essay not found in the active workspace.");
+}
+
+export type SaveVersionResult =
+  | { status: "saved" }
+  /** Someone else moved the document on since the caller last read it - a
+   * concurrent autosave, another tab, another device - and the caller asked
+   * to be told rather than overwrite it silently. Nothing was written. */
+  | { status: "stale"; currentLastEditedAt: number };
+
 // Content changes are never made in place - every save creates a new
 // immutable version and only then repoints the essay's currentContent.
-export async function saveEssayVersion(db: AppDatabase, workspaceId: string, essayId: string, input: { content: string; reason?: string }) {
+//
+// `expectedLastEditedAt` is optional and, when passed, is the same
+// optimistic-concurrency guard saveEssayDraft already uses for autosave: the
+// caller states the lastEditedAt it believes the row carries, and the check
+// runs inside this transaction so nothing can land between the read and the
+// write. Omitting it (every caller before Shorten) skips the check entirely -
+// existing behaviour is unchanged.
+export async function saveEssayVersion(
+  db: AppDatabase,
+  workspaceId: string,
+  essayId: string,
+  input: { content: string; reason?: string; expectedLastEditedAt?: number | null },
+): Promise<SaveVersionResult> {
   const existing = await db.select({ id: essays.id }).from(essays)
     .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
     .then((rows) => rows[0]);
@@ -220,7 +336,18 @@ export async function saveEssayVersion(db: AppDatabase, workspaceId: string, ess
   const content = cleanContent(input.content);
   const reason = input.reason?.trim() || null;
 
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
+    if (input.expectedLastEditedAt != null) {
+      const current = await tx.select({ lastEditedAt: essays.lastEditedAt }).from(essays)
+        .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)))
+        .for("update")
+        .then((rows) => rows[0]);
+      const currentLastEditedAt = current?.lastEditedAt.getTime() ?? null;
+      if (currentLastEditedAt !== input.expectedLastEditedAt) {
+        return { status: "stale", currentLastEditedAt: currentLastEditedAt ?? 0 };
+      }
+    }
+
     const last = await tx.select({ versionNumber: essayVersions.versionNumber }).from(essayVersions)
       .where(eq(essayVersions.essayId, essayId))
       .orderBy(desc(essayVersions.versionNumber))
@@ -238,6 +365,7 @@ export async function saveEssayVersion(db: AppDatabase, workspaceId: string, ess
     });
     await tx.update(essays).set({ currentContent: content, lastEditedAt: new Date() })
       .where(and(eq(essays.id, essayId), eq(essays.workspaceId, workspaceId)));
+    return { status: "saved" };
   });
 }
 
@@ -250,7 +378,10 @@ export async function restoreEssayVersion(db: AppDatabase, workspaceId: string, 
   if (!version) throw new Error("Version not found for this essay.");
   await saveEssayVersion(db, workspaceId, essayId, {
     content: version.content,
-    reason: `Restored from version ${version.versionNumber}`,
+    // History is labelled by save time rather than by number, so the reason
+    // cannot name "version 3" - and writing a timestamp into it would bake the
+    // server's timezone into the data.
+    reason: "Restored from an earlier save",
   });
 }
 
