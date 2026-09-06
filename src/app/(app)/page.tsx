@@ -5,7 +5,7 @@ import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { reuseOpportunities } from "@/lib/progress";
 import { canonicalPromptGroups, workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
-import { displacedByReuse, ReuseHereControl } from "../essay-ui";
+import { displacedByReuse, matchAdaptation, ReuseHereControl } from "../essay-ui";
 import { availabilitySentence, schoolAvailability } from "@/lib/schools";
 import { CatalogueStateBadge } from "../catalogue-state";
 import { AddCollegeForm, ProgressRing } from "../prompt-ui";
@@ -299,6 +299,9 @@ export default async function Overview() {
                         <span className={`pill ${match.recommendedAction}`}>
                           {ACTION_LABELS[match.recommendedAction as RecommendedAction]}
                         </span>
+                        {/* The length axis, separate from the band on purpose:
+                            substance and editing cost are different answers. */}
+                        <span className="muted">{matchAdaptation(match)}</span>
                         {/* Copies the essay into a new document for this
                             prompt, like every other "Use here" in the app. */}
                         <ReuseHereControl

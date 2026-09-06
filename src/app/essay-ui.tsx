@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
+import { ACTION_LABELS, ADAPTATION_LABELS, adaptationEffort, type RecommendedAction } from "@/lib/matching";
 import { reuseOpportunities, type ReuseMatch } from "@/lib/progress";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
 import { reuseEssayForPromptAction } from "./assignment-actions";
@@ -366,6 +366,23 @@ export function essayRibbonEntries(snapshot: WorkspaceSnapshot) {
       ]),
     ),
   };
+}
+
+/**
+ * How much editing the length difference implies, in one phrase.
+ *
+ * The band answers "how reusable is this" and this answers "how much work",
+ * which are separate questions the scoring now keeps separate: a 250-word
+ * Georgetown activity essay scores 76 against Stanford's 50-word version and
+ * still needs real cutting, and the score must not be dragged down to say so.
+ *
+ * Derived at render from three numbers already in the snapshot rather than
+ * stored, so it cannot go stale against an edited essay and needs no migration.
+ * It reads the same function the scorer uses for the band ceiling, so the label
+ * and the ceiling can never disagree.
+ */
+export function matchAdaptation(match: ReuseMatch): string {
+  return ADAPTATION_LABELS[adaptationEffort(match.essayWordCount, null, match.promptMaxWordCount)];
 }
 
 /**
