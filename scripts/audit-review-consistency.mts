@@ -97,12 +97,20 @@ for (let i = 0; i < withVectors.length; i += 1) {
     if (similarity <= THRESHOLD) continue;
     const primaryDiffers = a.primary !== b.primary;
     const fnDiffers = a.fn !== b.fn;
-    if (!primaryDiffers && !fnDiffers) continue;
+    // Secondaries too. The first version of this check compared only primary
+    // and function, and missed the case that matters most for near-identical
+    // prompts: Brown and Princeton both ask "what brings you joy", agree on
+    // primary and function, and one carried a `Values` secondary while the
+    // other carried none. With the category ladder reading secondaries, that
+    // difference decided whether the pair surfaced at all - and no assertion
+    // anywhere would have caught it.
+    const secondaryDiffers = [...a.secondaries].sort().join("|") !== [...b.secondaries].sort().join("|");
+    if (!primaryDiffers && !fnDiffers && !secondaryDiffers) continue;
     flagged += 1;
-    const what = [primaryDiffers ? "primary" : null, fnDiffers ? "function" : null].filter(Boolean).join(" + ");
+    const what = [primaryDiffers ? "primary" : null, fnDiffers ? "function" : null, secondaryDiffers ? "secondaries" : null].filter(Boolean).join(" + ");
     console.log(`  cos=${similarity.toFixed(3)}  differs on ${what}`);
-    console.log(`    #${a.id} ${a.primary} / ${a.fn}  [${a.school}] ${a.title}`);
-    console.log(`    #${b.id} ${b.primary} / ${b.fn}  [${b.school}] ${b.title}`);
+    console.log(`    #${a.id} ${a.primary} / ${a.fn} / ${a.secondaries.join("; ") || "-"}  [${a.school}] ${a.title}`);
+    console.log(`    #${b.id} ${b.primary} / ${b.fn} / ${b.secondaries.join("; ") || "-"}  [${b.school}] ${b.title}`);
   }
 }
 console.log(`\n  ${flagged} pair(s) flagged for re-reading. Not a failure: near-duplicate prompts may legitimately differ.`);

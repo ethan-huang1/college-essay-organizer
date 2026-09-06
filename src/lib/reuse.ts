@@ -130,6 +130,24 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
    */
   const scorablePrompts = workspacePrompts.filter((prompt) => prompt.supportingMaterial === null);
 
+  /**
+   * An empty document is not an essay, and cannot be reused for anything.
+   *
+   * The reuse and assign flows both create a placeholder document titled after
+   * its prompt, so a workspace accumulates them as soon as a student starts
+   * planning. Measured on live data, two such documents produced **137 match
+   * rows**, six of which escaped `new-response` and were offered as
+   * recommendations - one at 64 - because the category and function factors
+   * score metadata the student chose while the semantic factor was reading an
+   * empty string.
+   *
+   * Excluded here rather than penalised in matching.ts for the same reason
+   * supporting material is: it was never a scoring question. There is nothing
+   * to score. As soon as the student writes a sentence it starts being matched
+   * normally, and the length ceilings take over from there.
+   */
+  const scorableEssays = workspaceEssays.filter((essay) => wordCount(essay.currentContent) > 0);
+
   const slugById = new Map(workspaceFamilies.map((family) => [family.id, family.slug]));
   const schoolNames = workspaceSchools.map((school) => school.name);
 
@@ -226,8 +244,8 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
   // Semantic similarity, computed before the transaction because embedding is
   // the slow part and holding a transaction open across it would serialise
   // every other write in the workspace behind a model call.
-  const essayTexts = new Map(workspaceEssays.map((essay) => [essay.id, essayEmbeddingText(essay.title, essay.currentContent)]));
-  const vectors = workspaceEssays.length > 0 && vectorsUsableWithCurrentModel()
+  const essayTexts = new Map(scorableEssays.map((essay) => [essay.id, essayEmbeddingText(essay.title, essay.currentContent)]));
+  const vectors = scorableEssays.length > 0 && vectorsUsableWithCurrentModel()
     ? await essayVectors([...essayTexts.values()])
     : new Map<string, number[]>();
   const vectorFor = (prompt: { schoolId: string; externalRef: string | null }) => {
@@ -246,7 +264,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
    */
   const zScores = new Map<string, Map<string, number>>();
   if (vectors) {
-    for (const essay of workspaceEssays) {
+    for (const essay of scorableEssays) {
       const essayVector = vectors.get(essayTexts.get(essay.id)!);
       if (!essayVector) continue;
       // Only prompts with a committed vector take part; a prompt the student
@@ -263,7 +281,7 @@ export async function recomputeWorkspaceMatches(db: AppDatabase, workspaceId: st
   await db.transaction(async (tx) => {
     await tx.delete(essayPromptMatches).where(eq(essayPromptMatches.workspaceId, workspaceId));
 
-    const rows = workspaceEssays.flatMap((essay) => {
+    const rows = scorableEssays.flatMap((essay) => {
       const essayFamilySlugs = resolveFamilySlugs(essayLinks.filter((link) => link.essayId === essay.id), slugById);
       const essayContentWordCount = wordCount(essay.currentContent);
       // The manual field is an override, not the only source: an essay that

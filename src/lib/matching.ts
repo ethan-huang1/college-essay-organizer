@@ -244,6 +244,14 @@ const FORMAT_MISMATCH_CAP = 40;
  * The specification is the reflective-Community vs future-contribution-Community
  * case: same category, strongly overlapping themes, and still not top band.
  */
+/**
+ * The function class that carries the least information when shared.
+ *
+ * `describe` is to the eight functions what `Other` is to the eleven
+ * categories: where a prompt lands when nothing more specific fits.
+ */
+const LOOSEST_FUNCTION: PromptFunction = "describe";
+
 const FUNCTION_GROUPS: Record<PromptFunction, "retrospective" | "forward"> = {
   describe: "retrospective",
   reflect: "retrospective",
@@ -256,10 +264,32 @@ const FUNCTION_GROUPS: Record<PromptFunction, "retrospective" | "forward"> = {
 };
 
 /**
- * "Other" is a real category, but never evidence of a shared theme: two prompts
- * landing there have nothing in common except that nothing else fitted.
+ * Categories whose presence on both sides is not evidence of a shared theme.
+ *
+ * `other` because two prompts landing there have nothing in common except that
+ * nothing else fitted.
+ *
+ * `shorts` because **Short Answer is a length, not a subject.** "What is your
+ * favourite snack", "if your life had a theme song" and "describe yourself in
+ * three words" are all Short Answer and share no content whatever. This repo
+ * already knew it: taxonomy.ts says Reading List and Roommate were split out
+ * because "filing them under Short Answer made a 250-word roommate note look
+ * interchangeable with a 50-word favourite-song answer". The scorer had not
+ * caught up. Measured on live data before this rule, **27 of 32 same-Short-
+ * Answer pairs landed in the top band** - a hall-note essay was recommended at
+ * 88 for "what is your favorite snack" and 84 for "dream job".
+ *
+ * `roommate` and `reading-list` are deliberately *not* here, and that is the
+ * distinction: each names one recurring question, so two of them really are
+ * interchangeable. A roommate note is a good start on another roommate note.
+ * Short Answer names no question at all.
+ *
+ * Genuinely related short answers still surface, on their own merits rather
+ * than on a shared format: a joy essay against another school's joy prompt
+ * reaches the reuse floor through semantic similarity, which is what should be
+ * carrying it.
  */
-const NO_SHARED_THEME = new Set(["other"]);
+const NO_SHARED_THEME = new Set(["other", "shorts"]);
 
 /**
  * Why Us counts as a shared theme only for the institution the essay was
@@ -434,7 +464,20 @@ function functionPoints(
   sameGroupFraction: number,
 ) {
   if (!essayFn || !promptFn) return neutral(weight);
-  if (essayFn === promptFn) return weight;
+  // Two prompts both being `describe` is barely evidence of anything.
+  //
+  // It is the catch-all of the function vocabulary, and prompt-function.ts says
+  // so outright: "the largest true class and also the most loosely worded",
+  // large enough that patterns broad enough to catch it swallow the other
+  // seven. So agreeing on it is the function-side twin of two prompts both
+  // being filed `Other`, and it gets the same treatment - the weak rung, not
+  // the exact-match rung.
+  //
+  // Found on live data: "Just for fun" against "what is your favorite snack"
+  // scored 70 on 45 saturated semantic points plus 20 for both being
+  // `describe`, with the category ladder contributing its floor. Two throwaway
+  // short answers about unrelated things do not add up to a recommendation.
+  if (essayFn === promptFn) return essayFn === LOOSEST_FUNCTION ? weight * sameGroupFraction : weight;
   return FUNCTION_GROUPS[essayFn] === FUNCTION_GROUPS[promptFn] ? weight * sameGroupFraction : 0;
 }
 
@@ -646,4 +689,4 @@ export function scoreMatch(input: MatchInput, config: ScoringConfig = DEFAULT_CO
 }
 
 /** Exported for tests and for the evaluation harness. */
-export const SCORING = { WEIGHTS, SAME_GROUP_FRACTION, FUNCTION_GROUPS, FORMAT_CATEGORIES, FORMAT_MISMATCH_CAP, BAND_ORDER, PROMPT_FUNCTIONS } as const;
+export const SCORING = { WEIGHTS, SAME_GROUP_FRACTION, LOOSEST_FUNCTION, FUNCTION_GROUPS, FORMAT_CATEGORIES, FORMAT_MISMATCH_CAP, BAND_ORDER, PROMPT_FUNCTIONS } as const;

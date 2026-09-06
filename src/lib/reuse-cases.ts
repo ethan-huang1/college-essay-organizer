@@ -136,6 +136,17 @@ const inkstonePairs: PositiveCase[] = INKSTONE.flatMap((from) =>
 export const CALIBRATION_POSITIVES: PositiveCase[] = [
   ...inkstonePairs,
 
+  // A genuinely related pair of short answers, kept as a positive so the fix
+  // for the Short Answer format cannot be a blanket suppression: these two
+  // schools ask the same question, and the essay really does transfer. It has
+  // to surface on semantic evidence now that the shared format earns nothing.
+  {
+    from: ["Brown University", "core-joy"],
+    to: ["Princeton University", "more-about-you-joy"],
+    minScore: REUSABLE,
+    why: "two schools asking what brings you joy: the same answer, and the format is incidental",
+  },
+
   // The same family, beyond the four schools that motivated it. Included so the
   // calibration cannot be satisfied by fitting the Inkstone example alone - if
   // a change moves those twelve and none of these, it has learned the example
@@ -277,6 +288,33 @@ export const CALIBRATION_NEGATIVES: NegativeCase[] = [
     to: ["University of Pennsylvania", "mt-engineering-business"],
     maxScore: 59, maxBand: "reusable-significant-edits",
     why: "something you built is not the engineering-and-business perspectives essay beside it",
+  },
+
+  // Short Answer is a length, not a subject.
+  //
+  // **Found by spot-checking the live database after deploying**, which is why
+  // they are here: my eval set had a negative for two *different* formats (a
+  // roommate note against a list of five things) and none for two Short Answers
+  // about unrelated things. On live data 27 of 32 same-Short-Answer pairs were
+  // in the top band, including a hall-note essay recommended at 88 for
+  // "what is your favorite snack".
+  {
+    from: ["University of Southern California", "if-your-life-had-a-theme-song-what-would-it-be"],
+    to: ["University of Southern California", "what-is-your-favorite-snack"],
+    maxScore: 55, maxBand: "reusable-significant-edits",
+    why: "a theme song and a favourite snack are both Short Answer and share nothing else",
+  },
+  {
+    from: ["Princeton University", "more-about-you-song"],
+    to: ["University of Southern California", "dream-job"],
+    maxScore: 55, maxBand: "reusable-significant-edits",
+    why: "a soundtrack answer is not a dream-job answer, however short both are",
+  },
+  {
+    from: ["Massachusetts Institute of Technology", "short-answer-fun"],
+    to: ["University of Southern California", "what-is-your-favorite-snack"],
+    maxScore: 59, maxBand: "reusable-significant-edits",
+    why: "sharing the Short Answer format is not evidence of sharing a subject",
   },
 
   // Adjacent categories, genuinely different ask, same school and section.
