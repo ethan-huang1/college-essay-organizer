@@ -733,6 +733,60 @@ Confirmed:
 - One redundancy fixed: the framing paragraph added above the reference list
   said the same thing as `ReferenceReviewNotice` directly below it. Deleted.
 
+### 11g. HUMAN-REQUIRED: the three new Travila profiles do not exist yet
+
+Measured, not guessed. A controlled probe sent the same one-line instruction to
+three profile ids and compared `generationContext`:
+
+| `setActiveProfileId` | HTTP | `profileVersion` | `profileId` echo | model | promptTokens |
+|---|---|---|---|---|---|
+| `college_essay_shorten_coach` (pre-existing) | 200 | `1` | `"college_essay_shorten_coach"` | `google/gemini-3.7-flash` | 6,874 |
+| `college_essay_flow_coach` (added here) | 200 | `undefined` | `null` | `deepseek/deepseek-v4-flash-0731` | 11,647 |
+| `definitely_not_a_real_profile_zzz_<ts>` | 200 | `undefined` | `null` | `deepseek/deepseek-v4-flash-0731` | 11,647 |
+
+The new profile is **indistinguishable from a randomly generated nonexistent
+one** - same fallback model, same prompt-token count, and
+`generationContext` carrying only `turn, model, resolvedMcpServers` instead of
+the configured profile's `turn, profileId, model, promptSource, profileVersion,
+resolvedPromptHash`.
+
+**Travila answers HTTP 200 for an unknown `setActiveProfileId` and silently
+falls back to a default agent.** There is no error to catch, which is why the
+coaches appeared to work: Flow, Vivid and Proofread are running entirely on the
+instruction text in the request body, which is self-contained enough to produce
+good output (verified - see §Browser-verified). Nothing is broken for a student
+today.
+
+What is nonetheless wrong until someone creates the profiles in Travila:
+
+- **No per-coach model or reasoning config is applied.** Whatever was intended
+  by a Flow/Vivid/Proofread profile is not in effect.
+- **Billing moves.** The configured profile reports `isByok: true`; the fallback
+  does not, so those runs are on Travila's inference billing rather than the
+  project's own key.
+- **The fallback carries a bigger system prompt than the real profile** (11,647
+  vs 6,874 prompt tokens) and both attach `built-in:firecrawl` and
+  `built-in:tavily` on every call - web-scraping and search tools no coach asks
+  for or needs. Worth confirming with Travila that an unused MCP server cannot
+  be invoked with essay text in it; student essays are the payload here.
+
+Action: create `college_essay_flow_coach`, `college_essay_vivid_coach` and
+`college_essay_proofread_coach` in Travila, then re-probe and confirm
+`profileVersion` comes back defined. `[travila:debug]` in `travila.ts` already
+logs it in dev and now carries a comment saying why it is the tell.
+
+Related, and now partly answered: the `TEMPORARY` comment on
+`POLL_TIMEOUT_MS` asks whether `reasoning.maxTokens` is honored. Reasoning
+tokens *are* reported (`completionTokensDetails.reasoningTokens` came back
+4,546 / 177 / 3,097 across the three live coach runs), but with no profile
+resolving, any profile-level reasoning config cannot be in effect for these
+three. Re-test after the profiles exist.
+
+One small reporting inconsistency seen once, worth a note to Travila rather than
+action here: a Flow run returned `completionTokens: 3067` with
+`reasoningTokens: 3097` - reasoning exceeding the completion total it is
+normally a subset of. Every other observed run held the subset relationship.
+
 ### Tests
 
 `npm run typecheck`, `npm run lint`, `npm test` (966 passed, 8 skipped, 47

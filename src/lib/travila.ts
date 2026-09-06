@@ -140,7 +140,7 @@ async function pollForCompletion(
       // logs essay content, the API key, auth headers, or reasoning text.
       // Remove this block once it's no longer needed.
       if (process.env.NODE_ENV !== "production") {
-        console.log("[travila:debug] shorten run completed", {
+        console.log("[travila:debug] run completed", {
           runId,
           threadId,
           usage: {
@@ -152,6 +152,10 @@ async function pollForCompletion(
           },
           generationContext: {
             model: found.generationContext?.model,
+            // Travila answers HTTP 200 for an unknown setActiveProfileId and
+            // silently falls back to a default agent. An undefined
+            // profileVersion (and a missing profileId echo) is the only signal
+            // that the profile this coach asked for does not exist.
             profileVersion: found.generationContext?.profileVersion,
             resolvedMcpServers: found.generationContext?.resolvedMcpServers,
           },
