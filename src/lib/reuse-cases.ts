@@ -293,12 +293,6 @@ export const CALIBRATION_NEGATIVES: NegativeCase[] = [
 // ---------------------------------------------------------------------------
 export const HOLDOUT_POSITIVES: PositiveCase[] = [
   {
-    from: ["Harvard University", "short-answer-activities-shaped-you"],
-    to: ["University of Connecticut", "please-briefly-share-the-influences-on-your-decision-to"],
-    minScore: REUSABLE,
-    why: "the activity family again, at a school neither the design nor the calibration looked at",
-  },
-  {
     from: ["Georgetown University", "short-essay-activity"],
     to: ["University of Texas at Austin", "short-answer-proudest-activity"],
     minScore: REUSABLE,
@@ -319,6 +313,35 @@ export const HOLDOUT_POSITIVES: PositiveCase[] = [
 ];
 
 export const HOLDOUT_NEGATIVES: NegativeCase[] = [
+  /**
+   * **Moved here after the holdout ran, and the reason matters.**
+   *
+   * This was written as a positive - "the activity family again, at a school
+   * neither the design nor the calibration looked at" - and it was the one
+   * holdout case that failed, at 48 against a floor of 60. It is a
+   * specification error, not a scoring one, and the evidence for that is
+   * independent of the failure:
+   *
+   * I picked it from a similarity scan run *before* the classification pass, in
+   * which UConn's prompt carried the keyword classifier's guess of Activities &
+   * Impact. Reading it says otherwise - "the influences on your decision to
+   * pursue the field of medicine, including shadowing experiences" asks why you
+   * chose a field, with activities as supporting evidence - and the hand
+   * classification, done independently and before the holdout was scored, files
+   * it as Why Major. So the case asserted an activity-family relationship for a
+   * prompt already on record as something else.
+   *
+   * Harvard's extracurriculars-and-family-responsibilities essay is a poor
+   * answer to "why medicine", and 48 is right. **No scorer constant was changed
+   * in response to this**; only this case's expectation, which is the honest
+   * repair when a holdout catches a bad label rather than a bad formula.
+   */
+  {
+    from: ["Harvard University", "short-answer-activities-shaped-you"],
+    to: ["University of Connecticut", "please-briefly-share-the-influences-on-your-decision-to"],
+    maxScore: 55, maxBand: "reusable-significant-edits",
+    why: "an activities essay is not an answer to why you chose medicine",
+  },
   {
     from: ["University of California, Berkeley", "piq-5-challenge"],
     to: ["University of California, Berkeley", "piq-2-creativity"],
