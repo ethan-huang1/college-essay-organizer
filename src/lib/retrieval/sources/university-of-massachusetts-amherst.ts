@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const universityOfMassachusettsAmherst: SchoolSourceRecord = {
   schoolName: "University of Massachusetts Amherst",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://www.umass.edu/admissions/first-year-application-instructions",
   retrievedAt: "2026-08-31",

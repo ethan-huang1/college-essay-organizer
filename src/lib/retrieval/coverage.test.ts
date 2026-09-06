@@ -60,7 +60,7 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
       if (record.verificationStatus === "previous-cycle") {
         expect(record.cycleLabel, `${name} is previous-cycle but labeled current`).not.toBe(CURRENT_CYCLE_LABEL);
       }
-      if (record.verificationStatus === "officially-verified" || record.verificationStatus === "common-app-verified") {
+      if (record.verificationStatus === "officially-verified" || record.verificationStatus === "corroborated") {
         expect(record.cycleLabel, `${name} claims current-cycle verification but isn't labeled the current cycle`).toBe(CURRENT_CYCLE_LABEL);
       }
     }
@@ -76,11 +76,11 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
     }
   });
 
-  it("never relies solely on a secondary/consultant source for a current-cycle (officially- or Common-App-verified) claim", () => {
+  it("never relies solely on a secondary/consultant source for a current-cycle (officially-verified or corroborated) claim", () => {
     for (const name of TOP_UNIVERSITIES) {
       const record = lookupSchoolSource(name);
       if (!record) continue;
-      if (record.verificationStatus !== "officially-verified" && record.verificationStatus !== "common-app-verified") continue;
+      if (record.verificationStatus !== "officially-verified" && record.verificationStatus !== "corroborated") continue;
       const url = record.sourceUrl ?? "";
       const isSecondary = KNOWN_SECONDARY_SOURCE_DOMAINS.some((domain) => url.includes(domain));
       expect(isSecondary, `${name}: current-cycle claim's sourceUrl (${url}) looks like a secondary source, not official`).toBe(false);

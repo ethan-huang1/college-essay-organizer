@@ -309,8 +309,6 @@ export default async function Overview() {
                           essayId={essay.id}
                           assignedEssayId={displacedByReuse(snapshot, match.promptId, essay.id)}
                           from="/"
-                          essayWordCount={match.essayWordCount}
-                          promptMaxWordCount={match.promptMaxWordCount}
                         />
                       </span>
                     </div>

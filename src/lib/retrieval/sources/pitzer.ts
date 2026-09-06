@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const pitzer: SchoolSourceRecord = {
   schoolName: "Pitzer College",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://www.pitzer.edu/admission-aid/how-apply/first-year-applicants",
   retrievedAt: "2026-08-31",

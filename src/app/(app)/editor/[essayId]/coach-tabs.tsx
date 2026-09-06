@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 
+import { FlowCoachControl } from "./flow-coach-control";
 import { LengthenCoachControl } from "./lengthen-coach-control";
+import { ProofreadCoachControl } from "./proofread-coach-control";
 import { PromptFitCoachControl } from "./prompt-fit-coach-control";
 import { ReviewCoachControl } from "./review-coach-control";
 import { ShortenCoachControl } from "./shorten-coach-control";
+import { VividCoachControl } from "./vivid-coach-control";
 
 /**
  * The AI Coaches panel: one shell, one tab bar, every coach's own control.
@@ -21,7 +24,13 @@ import { ShortenCoachControl } from "./shorten-coach-control";
  * is the whole point of putting them side by side.
  *
  * The tab bar renders only when there is more than one coach - a one-item
- * switcher is noise.
+ * switcher is noise. At seven coaches it wraps into rows of equal-width cells
+ * (see .coach-tabs): every coach is a peer, so none of them gets a bigger
+ * target, a heading of its own, or a "more coaches" drawer to hide in.
+ *
+ * The order is roughly the order a student would use them - length, then
+ * substance, then mechanics - which is why Proofread comes last rather than
+ * first. It is not a ranking.
  */
 export function CoachTabs({
   essayId,
@@ -42,14 +51,29 @@ export function CoachTabs({
       render: () => <LengthenCoachControl essayId={essayId} defaultTargetWordCount={defaultTargetWordCount} />,
     },
     {
+      id: "flow",
+      label: "Flow",
+      render: () => <FlowCoachControl essayId={essayId} />,
+    },
+    {
+      id: "vivid",
+      label: "Vivid",
+      render: () => <VividCoachControl essayId={essayId} />,
+    },
+    {
       id: "prompt-fit",
-      label: "Prompt fit",
+      label: "Prompt Fit",
       render: () => <PromptFitCoachControl essayId={essayId} />,
     },
     {
       id: "review",
       label: "Review",
       render: () => <ReviewCoachControl essayId={essayId} />,
+    },
+    {
+      id: "proofread",
+      label: "Proofread",
+      render: () => <ProofreadCoachControl essayId={essayId} />,
     },
   ];
   const [activeId, setActiveId] = useState(coaches[0].id);

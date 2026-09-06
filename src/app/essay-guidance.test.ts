@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { effectiveLimit, needsShortenOffer, wordLimitNotes } from "./essay-guidance";
+import { effectiveLimit, wordLimitNotes } from "./essay-guidance";
 
 describe("wordLimitNotes", () => {
   it("says nothing when there is no limit to measure against", () => {
@@ -37,20 +37,5 @@ describe("wordLimitNotes", () => {
     expect(effectiveLimit({ target: 150, promptMax: 650 })).toBe(150);
     expect(effectiveLimit({ target: null, promptMax: 650 })).toBe(650);
     expect(effectiveLimit({})).toBeNull();
-  });
-});
-
-describe("needsShortenOffer", () => {
-  it("says no when the prompt has no maximum", () => {
-    expect(needsShortenOffer(900, null)).toBe(false);
-  });
-
-  it("says no when the essay is under or at the maximum", () => {
-    expect(needsShortenOffer(200, 250)).toBe(false);
-    expect(needsShortenOffer(250, 250)).toBe(false);
-  });
-
-  it("says yes when the essay is over the maximum", () => {
-    expect(needsShortenOffer(412, 250)).toBe(true);
   });
 });

@@ -37,8 +37,3 @@ export function wordLimitNotes(count: number, limits: WordLimits): string[] {
   if (min && count > 0 && count < min) notes.push(`under this prompt's ${min}-word minimum`);
   return notes;
 }
-
-/** Whether reusing an essay for a prompt should offer AI shortening first. */
-export function needsShortenOffer(essayWordCount: number, promptMaxWordCount: number | null): boolean {
-  return promptMaxWordCount != null && essayWordCount > promptMaxWordCount;
-}

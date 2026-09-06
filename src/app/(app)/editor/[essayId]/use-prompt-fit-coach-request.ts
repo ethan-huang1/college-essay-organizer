@@ -49,19 +49,28 @@ export function usePromptFitCoachRequest(essayId: string) {
 
   async function request(text: string) {
     setState({ phase: "loading" });
-    const result = await requestPromptFitCoachAction(essayId, text);
-    if (result.status === "ok") {
-      setState({
-        phase: "proposed",
-        overallFit: result.overallFit,
-        dimensions: result.dimensions,
-        offTopicPassages: result.offTopicPassages,
-        sourceText: text,
-      });
-    } else if (result.status === "no-prompt") {
-      setState({ phase: "no-prompt" });
-    } else {
-      setState({ phase: "error", message: humanize(result.reason, result.detail) });
+    try {
+      const result = await requestPromptFitCoachAction(essayId, text);
+      if (result.status === "ok") {
+        setState({
+          phase: "proposed",
+          overallFit: result.overallFit,
+          dimensions: result.dimensions,
+          offTopicPassages: result.offTopicPassages,
+          sourceText: text,
+        });
+      } else if (result.status === "no-prompt") {
+        setState({ phase: "no-prompt" });
+      } else {
+        setState({ phase: "error", message: humanize(result.reason, result.detail) });
+      }
+    } catch {
+      // A thrown action leaves no result to inspect: the platform killing a
+      // slow request at the route's maxDuration, or the connection dropping
+      // mid-flight. Without this the promise rejects into the control's
+      // `void request(...)`, the phase stays "loading", and the student is
+      // left with a spinner that never resolves and no way back.
+      setState({ phase: "error", message: "That took too long, or the connection dropped — try again." });
     }
   }
 

@@ -164,6 +164,16 @@ export function DocumentSurface({
 
       {state.note ? <p className="document-alert" role="alert">{state.note}</p> : null}
       {notes.length > 0 ? <p className="document-guidance">{notes.join(" · ")}</p> : null}
+      {/* Reuse copies an essay in full, so landing here over the limit is
+          normal and expected rather than an error. Says where the work of
+          adapting it happens - derived from the same count as the line above,
+          so the two can never disagree, and not gated on "was reused" because
+          an over-limit draft deserves the same pointer however it got here. */}
+      {limit && words > limit ? (
+        <p className="notice-caution">
+          Use the AI Coaches to help adapt this essay to fit this prompt and its requirements.
+        </p>
+      ) : null}
 
       <div className="document-field">
         <textarea

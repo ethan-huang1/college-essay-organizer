@@ -2,28 +2,28 @@
 
 import { useState } from "react";
 
-import type { ReviewCoachAxis } from "@/lib/coaches/review-coach";
+import type { VividCoachFinding } from "@/lib/coaches/vivid-coach";
 import type { TravilaErrorReason } from "@/lib/travila";
-import { requestReviewCoachAction } from "../../../review-coach-actions";
+import { requestVividCoachAction } from "../../../vivid-coach-actions";
 
 /**
- * The request/loading/proposed/error state for Review Coach.
+ * The request/loading/proposed/error state for Vivid Coach.
  *
  * Same convention as the other coaches (documented in
- * use-shorten-coach-request.ts). No extra precondition phase here: this
- * coach's only precondition is a non-empty essay, which is an error case
- * rather than a calm state, so there is nothing to add for symmetry's sake.
+ * use-shorten-coach-request.ts). No extra precondition phase: an essay that
+ * is already concrete returns zero findings in the "proposed" phase, which is
+ * a result rather than a state of its own.
  */
-export type ReviewCoachRequestState =
+export type VividCoachRequestState =
   | { phase: "idle" }
   | { phase: "loading" }
-  | { phase: "proposed"; axes: ReviewCoachAxis[]; overallImpression: string; sourceText: string }
+  | { phase: "proposed"; findings: VividCoachFinding[]; sourceText: string }
   | { phase: "error"; message: string };
 
 function humanize(reason: TravilaErrorReason, detail: string | undefined): string {
   switch (reason) {
     case "not-configured":
-      return "Review Coach isn't available right now.";
+      return "Vivid Coach isn't available right now.";
     case "invalid-input":
       return detail ?? "That request isn't valid.";
     case "timeout":
@@ -31,24 +31,19 @@ function humanize(reason: TravilaErrorReason, detail: string | undefined): strin
     case "malformed":
     case "http":
     default:
-      return "Something went wrong reviewing this essay.";
+      return "Something went wrong analyzing this essay.";
   }
 }
 
-export function useReviewCoachRequest(essayId: string) {
-  const [state, setState] = useState<ReviewCoachRequestState>({ phase: "idle" });
+export function useVividCoachRequest(essayId: string) {
+  const [state, setState] = useState<VividCoachRequestState>({ phase: "idle" });
 
   async function request(text: string) {
     setState({ phase: "loading" });
     try {
-      const result = await requestReviewCoachAction(essayId, text);
+      const result = await requestVividCoachAction(essayId, text);
       if (result.status === "ok") {
-        setState({
-          phase: "proposed",
-          axes: result.axes,
-          overallImpression: result.overallImpression,
-          sourceText: text,
-        });
+        setState({ phase: "proposed", findings: result.findings, sourceText: text });
       } else {
         setState({ phase: "error", message: humanize(result.reason, result.detail) });
       }

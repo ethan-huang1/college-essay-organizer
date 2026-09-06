@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const universityOfSouthernCalifornia: SchoolSourceRecord = {
   schoolName: "University of Southern California",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://admission.usc.edu/prospective-students/how-to-apply/",
   retrievedAt: "2026-08-31",

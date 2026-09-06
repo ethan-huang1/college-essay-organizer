@@ -394,8 +394,8 @@
   line-height: 1.6;
 }
 
-/* Three equal choices, not one button and two links - .btn/.btn-secondary
-   give every child its shape, this only spaces and wraps them. */
+/* Equal choices, not one button and one link - .btn/.btn-secondary give every
+   child its shape, this only spaces and wraps them. */
 .confirm-actions {
   display: flex;
   gap: var(--s3);
@@ -415,83 +415,23 @@
   line-height: 1.5;
 }
 
-/* ----------------------------------------------------------------- shorten */
-
-.shorten-control {
-  display: grid;
-  gap: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
-}
-
-.shorten-request {
-  display: grid;
-  gap: var(--s3);
-  align-items: start;
-  justify-items: start;
-}
-
-.shorten-request label {
-  display: grid;
-  gap: var(--s1);
-  font-size: var(--text-small);
-}
-
-.shorten-request input[type="number"] {
-  width: 7ch;
-}
-
-.shorten-preview textarea {
-  display: block;
-  width: 100%;
-  min-height: 160px;
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  background: var(--surface);
-  font-family: var(--font-prose);
-  font-size: var(--text-meta);
-  line-height: 1.6;
-  resize: vertical;
-}
-
-.shorten-actions {
-  display: flex;
-  gap: var(--s3);
-  flex-wrap: wrap;
-}
-
-.shorten-view-toggle {
-  display: flex;
-}
-
-.shorten-diff {
-  display: block;
-  width: 100%;
-  min-height: 160px;
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  background: var(--surface);
-  font-family: var(--font-prose);
-  font-size: var(--text-meta);
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.diff-removed {
-  background: var(--risk-tint);
-  color: var(--risk-ink);
-  text-decoration: line-through;
-}
-
-.diff-added {
-  background: var(--ok-tint);
-  color: var(--ok-ink);
-  text-decoration: none;
-}
-
 /* ------------------------------------------------------- reference check */
+
+/* The count lives in the summary, so the collapsed row is still informative. */
+.reference-check {
+  display: grid;
+  gap: var(--s3);
+}
+
+.reference-check > summary {
+  cursor: pointer;
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+
+.reference-check[open] > summary {
+  margin-bottom: var(--s1);
+}
 
 .reference-flags-list {
   list-style: none;
@@ -624,6 +564,14 @@
   border-left-color: var(--risk-ink);
 }
 
+/* Flow, Vivid and Proofread report findings with no severity scale to rank,
+   so the edge marks "worth a look" and nothing finer. */
+.coach-row.flow-row,
+.coach-row.vivid-row,
+.coach-row.proofread-row {
+  border-left-color: var(--caution-ink);
+}
+
 .coach-row.lengthen-size-small,
 .coach-row.review-rating-not-applicable {
   border-left-color: var(--line);
@@ -679,14 +627,19 @@
 
 /* The tab bar only renders when there is more than one coach to switch
    between, so it never appears as a pointless single-item control. */
+/* Seven peers, so a grid rather than a flex row: auto-fit wraps into tidy
+   rows of equal-width cells at sidebar width and collapses to fewer rows when
+   there is room, instead of the ragged last line flex-wrap leaves. Equal
+   widths are the point - nothing here should read as the primary coach. */
 .coach-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
   gap: var(--s2);
-  flex-wrap: wrap;
 }
 
 .coach-tab {
   padding: var(--s1) var(--s3);
+  text-align: center;
   border: 1px solid var(--line);
   border-radius: var(--r-control);
   background: var(--surface);

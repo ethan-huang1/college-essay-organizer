@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const stanford: SchoolSourceRecord = {
   schoolName: "Stanford University",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://admission.stanford.edu/apply/first-year/",
   retrievedAt: "2026-08-31",

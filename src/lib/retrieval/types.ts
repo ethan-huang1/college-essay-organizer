@@ -4,7 +4,7 @@
 // ../college-import.ts) can process any school identically instead of
 // special-casing each one.
 
-export type VerificationStatus = "officially-verified" | "common-app-verified" | "previous-cycle" | "no-supplement-confirmed" | "needs-review" | "manual";
+export type VerificationStatus = "officially-verified" | "corroborated" | "previous-cycle" | "no-supplement-confirmed" | "needs-review" | "manual";
 export type ApplicationPlatform = "common-app" | "coalition-app" | "school-specific" | "questbridge" | "unknown";
 export type RequirementType = "required" | "optional" | "conditional";
 

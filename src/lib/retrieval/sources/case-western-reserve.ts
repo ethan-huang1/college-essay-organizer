@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const caseWesternReserve: SchoolSourceRecord = {
   schoolName: "Case Western Reserve University",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://case.edu/admission/apply/first-year-applicants",
   retrievedAt: "2026-08-31",

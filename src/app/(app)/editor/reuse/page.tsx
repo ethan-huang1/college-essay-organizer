@@ -81,7 +81,7 @@ export default async function ReuseConfirmationPage({
         {overWords > 0 ? (
           <p className="notice-caution" role="alert">
             This essay is {wordCount(essay.currentContent)} words, but this prompt has a {prompt.maxWordCount}-word
-            limit.
+            limit. It is copied in full — use the AI Coaches in the editor to adapt it to this prompt.
           </p>
         ) : null}
 
@@ -95,19 +95,6 @@ export default async function ReuseConfirmationPage({
               {existingCopy ? "Reattach that document" : "Copy it here"}
             </button>
           </form>
-          {overWords > 0 ? (
-            <Link
-              className="btn"
-              href={`/editor/reuse/shorten?${new URLSearchParams({
-                promptId: prompt.id,
-                essayId: essay.id,
-                expectedAssignedEssayId: assigned?.id ?? "",
-                from: cancelHref,
-              }).toString()}`}
-            >
-              Shorten automatically
-            </Link>
-          ) : null}
           <Link className="btn" href={cancelHref}>Leave it as it is</Link>
         </div>
       </div>

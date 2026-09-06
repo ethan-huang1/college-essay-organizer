@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const bucknell: SchoolSourceRecord = {
   schoolName: "Bucknell University",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://coursecatalog.bucknell.edu/admissions/applyingforadmission/",
   retrievedAt: "2026-08-31",

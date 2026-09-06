@@ -890,7 +890,7 @@ describe("local persistence foundation", () => {
   it("imports and auto-classifies a verified school's prompts, idempotently", async () => {
     // Princeton rather than Stanford: for 2026-27 Stanford's prompts are
     // corroborated across current-cycle sources rather than read off its own
-    // page, so its record is common-app-verified. Princeton publishes them
+    // page, so its record is corroborated. Princeton publishes them
     // itself, which is what this test is about.
     const first = await importCollege(connection.db, PERSONAL, "Princeton University");
     expect(first.verificationStatus).toBe("officially-verified");
@@ -923,10 +923,10 @@ describe("local persistence foundation", () => {
     // their prompts, 12 are corroborated across current-cycle sources. A
     // student sees which, so the two must not collapse into one badge.
     const corroborated = await importCollege(connection.db, PERSONAL, "Stanford University");
-    expect(corroborated.verificationStatus).toBe("common-app-verified");
+    expect(corroborated.verificationStatus).toBe("corroborated");
     expect(corroborated.counts.created).toBeGreaterThan(0);
     const imported = await connection.db.select().from(prompts).where(eq(prompts.schoolId, corroborated.schoolId));
-    expect(imported.every((prompt) => prompt.verificationStatus === "common-app-verified")).toBe(true);
+    expect(imported.every((prompt) => prompt.verificationStatus === "corroborated")).toBe(true);
   });
 
   it("adds a school with no verified prompts as 'not yet verified' rather than guessing", async () => {
@@ -1086,7 +1086,7 @@ describe("local persistence foundation", () => {
     expect(new Set(canonicalKeys).size).toBe(9);
   });
 
-  it("flags a changed prompt as needs-review and records the prior wording, without duplicating it", async () => {
+  it("records a changed prompt's prior wording and restores the catalogue's verification status, without duplicating it", async () => {
     const first = await importCollege(connection.db, PERSONAL, "Massachusetts Institute of Technology");
     const target = await connection.db.select().from(prompts)
       .where(and(eq(prompts.schoolId, first.schoolId), eq(prompts.externalRef, "short-answer-fun")))
@@ -1103,8 +1103,13 @@ describe("local persistence foundation", () => {
     expect(second.counts.flagged).toBe(1);
 
     const updated = await connection.db.select().from(prompts).where(eq(prompts.id, target.id)).then((rows) => rows[0]);
-    expect(updated?.verificationStatus).toBe("needs-review");
     expect(updated?.promptText).toBe("What do you do just for fun?");
+    // The status follows the catalogue record rather than being forced to
+    // needs-review. Re-importing officially verified wording makes a prompt
+    // more verified, not less; that it moved is what the change log records.
+    // This assertion used to expect "needs-review", which is how 136 live
+    // rows ended up telling students their verified prompts were unverified.
+    expect(updated?.verificationStatus).toBe("officially-verified");
 
     const changeLog = await connection.db.select().from(promptChangeLog).where(eq(promptChangeLog.promptId, target.id));
     expect(changeLog).toHaveLength(1);
@@ -1112,6 +1117,42 @@ describe("local persistence foundation", () => {
 
     // No duplicate prompt was created for the same externalRef.
     expect(await connection.db.select().from(prompts).where(and(eq(prompts.schoolId, first.schoolId), eq(prompts.externalRef, "short-answer-fun")))).toHaveLength(1);
+  });
+
+  it("reconciles a stale cycle and verification status without logging a content change", async () => {
+    const first = await importCollege(connection.db, PERSONAL, "Massachusetts Institute of Technology");
+    const target = await connection.db.select().from(prompts)
+      .where(and(eq(prompts.schoolId, first.schoolId), eq(prompts.externalRef, "short-answer-fun")))
+      .then((rows) => rows[0]);
+    if (!target) throw new Error("Expected the seeded MIT prompt to exist.");
+
+    // Exactly the shape the live database was in: prompt text byte-identical
+    // to the catalogue, but filed under last cycle with a stale status. The
+    // old import counted this "unchanged" and wrote nothing, so the school
+    // read "Current prompts not yet verified" forever.
+    const staleCycle = crypto.randomUUID();
+    await connection.db.insert(applicationCycles)
+      .values({ id: staleCycle, workspaceId: PERSONAL, label: "2025-26", startYear: 2025, endYear: 2026 });
+    await connection.db.update(prompts)
+      .set({ cycleId: staleCycle, verificationStatus: "previous-cycle" })
+      .where(eq(prompts.id, target.id));
+
+    const second = await importCollege(connection.db, PERSONAL, "Massachusetts Institute of Technology");
+    expect(second.counts.reconciled).toBe(1);
+    // Metadata-only: not an update, and nothing for a human to review.
+    expect(second.counts.updated).toBe(0);
+    expect(second.counts.flagged).toBe(0);
+
+    const updated = await connection.db.select().from(prompts).where(eq(prompts.id, target.id)).then((rows) => rows[0]);
+    expect(updated?.verificationStatus).toBe("officially-verified");
+    expect(updated?.cycleId).not.toBe(staleCycle);
+    // The text a student reads never moved, so there is nothing to log.
+    expect(await connection.db.select().from(promptChangeLog).where(eq(promptChangeLog.promptId, target.id))).toHaveLength(0);
+
+    // And a third pass is a true no-op again.
+    const third = await importCollege(connection.db, PERSONAL, "Massachusetts Institute of Technology");
+    expect(third.counts.reconciled).toBe(0);
+    expect(third.counts.unchanged).toBe(second.counts.unchanged + 1);
   });
 
   it("assigns exactly one essay response per prompt, replacing a prior assignment, and can unassign", async () => {

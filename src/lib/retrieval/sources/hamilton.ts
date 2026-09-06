@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const hamilton: SchoolSourceRecord = {
   schoolName: "Hamilton College",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://www.hamilton.edu/admission/apply/first-year",
   retrievedAt: "2026-08-31",

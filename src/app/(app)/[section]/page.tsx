@@ -1098,8 +1098,6 @@ function MatchRow({
             essayId={essayId}
             assignedEssayId={displaced}
             from="/reuse"
-            essayWordCount={match.essayWordCount}
-            promptMaxWordCount={match.promptMaxWordCount}
           />
         </span>
       </div>

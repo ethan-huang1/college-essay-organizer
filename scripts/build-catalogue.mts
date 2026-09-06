@@ -386,7 +386,7 @@ function buildSchool(school: MasterSchool): SchoolSourceRecord {
 
   const verificationStatus: SchoolSourceRecord["verificationStatus"] = prompts.length === 0
     ? "no-supplement-confirmed"
-    : school.verification_status === "VERIFIED" ? "officially-verified" : "common-app-verified";
+    : school.verification_status === "VERIFIED" ? "officially-verified" : "corroborated";
 
   report.schools += 1;
   return {

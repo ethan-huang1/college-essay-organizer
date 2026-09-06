@@ -117,8 +117,9 @@ export function schoolAvailability(input: AvailabilityInput): SchoolAvailability
     default:
       // catalogueState "current" with nothing countable means the catalogue
       // claimed prompts and none survived import. That is a failed import, not
-      // a school with no work.
-      return input.promptCount > 0 ? { kind: "unverified" } : { kind: "unverified" };
+      // a school with no work - and either way the honest thing to tell a
+      // student is that the prompt information is not verified.
+      return { kind: "unverified" };
   }
 }
 

@@ -17,7 +17,7 @@ export function validateRecord(record: SchoolSourceRecord): string[] {
   if (!record.note.trim()) errors.push("note is required (shown to the user - explain the verification status).");
 
   const requiresPrompts = record.verificationStatus === "officially-verified"
-    || record.verificationStatus === "common-app-verified"
+    || record.verificationStatus === "corroborated"
     || record.verificationStatus === "previous-cycle";
   const forbidsPrompts = record.verificationStatus === "no-supplement-confirmed" || record.verificationStatus === "needs-review";
 

@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const carleton: SchoolSourceRecord = {
   schoolName: "Carleton College",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://www.admissions.carleton.edu/register/supplement",
   retrievedAt: "2026-08-31",

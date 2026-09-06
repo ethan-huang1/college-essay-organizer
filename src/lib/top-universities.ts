@@ -40,6 +40,26 @@ export const TOP_UNIVERSITIES: readonly string[] = [
 
 const LOOKUP_BY_LOWERCASE = new Map(TOP_UNIVERSITIES.map((name) => [name.toLowerCase(), name]));
 
+// Short forms of the three canonical names a student is most likely to type
+// without their campus suffix. Add College is a free-text input, so a name that
+// resolves to nothing silently becomes a manual school with no catalogue record
+// and no prompts - which is exactly how one workspace ended up holding a
+// "University of Maryland" that read "No verified prompts on file" while the
+// catalogue had all six of its questions under the full name.
+//
+// Written out rather than derived from the comma/"at" split in TOP_UNIVERSITIES:
+// that rule yields only these same three entries once ambiguous prefixes are
+// discarded, so the generator would be more code than the data it produces.
+//
+// "University of California" is deliberately absent: seven campuses claim it,
+// so there is no single right answer and passing it through unchanged (a manual
+// school the student can correct) beats silently picking Berkeley.
+const ALIASES_BY_LOWERCASE = new Map([
+  ["university of maryland", "University of Maryland, College Park"],
+  ["university of north carolina", "University of North Carolina at Chapel Hill"],
+  ["university of texas", "University of Texas at Austin"],
+]);
+
 // A typed name that case-insensitively matches a top-100 entry resolves to
 // that entry's exact canonical spelling/casing, so "stanford university" and
 // "Stanford  University" both dedupe to the same school record and both hit
@@ -48,5 +68,6 @@ const LOOKUP_BY_LOWERCASE = new Map(TOP_UNIVERSITIES.map((name) => [name.toLower
 // manual entry.
 export function canonicalizeUniversityName(name: string): string {
   const cleaned = name.trim().replace(/\s+/g, " ");
-  return LOOKUP_BY_LOWERCASE.get(cleaned.toLowerCase()) ?? cleaned;
+  const key = cleaned.toLowerCase();
+  return LOOKUP_BY_LOWERCASE.get(key) ?? ALIASES_BY_LOWERCASE.get(key) ?? cleaned;
 }

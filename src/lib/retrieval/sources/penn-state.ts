@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const pennState: SchoolSourceRecord = {
   schoolName: "Pennsylvania State University",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://www.psu.edu/resources/first-year-students/steps-to-apply",
   retrievedAt: "2026-08-31",

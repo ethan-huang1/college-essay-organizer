@@ -1,0 +1,15 @@
+-- Renames the verification status "common-app-verified" to "corroborated".
+--
+-- The old name asserted a provenance these prompts never had. The catalogue
+-- generator maps the master record's verification_status of CORROBORATED to it,
+-- meaning "not read off the school's own page, but agreed on by several
+-- independent current-cycle sources" - which for Stanford, Northwestern and USC
+-- was four essay-consultant sites, not the Common App. The UI rendered that as
+-- a "Common App" badge, telling a student something false, and it collided with
+-- the separate (and correct) application_platform = 'common-app' column.
+--
+-- Data-only: verification_status is a plain text column with no CHECK
+-- constraint and no Postgres enum - the enum in schema.ts is TypeScript-only -
+-- so there is no type to alter and nothing to rebuild. Reversible by swapping
+-- the two values in this statement.
+UPDATE "prompts" SET "verification_status" = 'corroborated' WHERE "verification_status" = 'common-app-verified';

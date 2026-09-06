@@ -43,6 +43,13 @@
       "when": 1788700106154,
       "tag": "0005_supporting_material",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788703706154,
+      "tag": "0006_corroborated_status",
+      "breakpoints": true
     }
   ]
 }

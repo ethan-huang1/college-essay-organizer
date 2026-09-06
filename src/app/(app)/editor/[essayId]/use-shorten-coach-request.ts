@@ -49,21 +49,30 @@ export function useShortenCoachRequest(essayId: string) {
 
   async function request(text: string, targetWordCount: number) {
     setState({ phase: "loading" });
-    const result = await requestShortenCoachAction(essayId, text, targetWordCount);
-    if (result.status === "ok") {
-      setState({
-        phase: "proposed",
-        currentWordCount: result.currentWordCount,
-        targetWordCount: result.targetWordCount,
-        wordsToShorten: result.wordsToShorten,
-        recommendations: result.recommendations,
-        sourceText: text,
-        marked: result.recommendations.map(() => false),
-      });
-    } else if (result.status === "under-target") {
-      setState({ phase: "under-target", currentWordCount: result.currentWordCount, targetWordCount: result.targetWordCount });
-    } else {
-      setState({ phase: "error", message: humanize(result.reason, result.detail) });
+    try {
+      const result = await requestShortenCoachAction(essayId, text, targetWordCount);
+      if (result.status === "ok") {
+        setState({
+          phase: "proposed",
+          currentWordCount: result.currentWordCount,
+          targetWordCount: result.targetWordCount,
+          wordsToShorten: result.wordsToShorten,
+          recommendations: result.recommendations,
+          sourceText: text,
+          marked: result.recommendations.map(() => false),
+        });
+      } else if (result.status === "under-target") {
+        setState({ phase: "under-target", currentWordCount: result.currentWordCount, targetWordCount: result.targetWordCount });
+      } else {
+        setState({ phase: "error", message: humanize(result.reason, result.detail) });
+      }
+    } catch {
+      // A thrown action leaves no result to inspect: the platform killing a
+      // slow request at the route's maxDuration, or the connection dropping
+      // mid-flight. Without this the promise rejects into the control's
+      // `void request(...)`, the phase stays "loading", and the student is
+      // left with a spinner that never resolves and no way back.
+      setState({ phase: "error", message: "That took too long, or the connection dropped — try again." });
     }
   }
 

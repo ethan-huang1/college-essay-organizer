@@ -165,7 +165,7 @@ async function loadTagIds(db: Pick<AppDatabase, "select">, workspaceId: string) 
   return new Map(rows.map((row) => [row.name, row.id]));
 }
 
-type ImportCounts = { created: number; updated: number; unchanged: number; flagged: number; retired: number; removed: number };
+type ImportCounts = { created: number; updated: number; unchanged: number; reconciled: number; flagged: number; retired: number; removed: number };
 
 /**
  * Copies existing canonical siblings' response state onto rows about to be
@@ -230,8 +230,25 @@ async function inheritCanonicalState(
 //
 // The semantics are unchanged and still covered by the persistence tests: an
 // identical re-import is a true no-op, and a prompt whose official wording
-// changed is updated, recorded in promptChangeLog, and flipped to
-// needs-review so a human notices.
+// changed is updated and recorded in promptChangeLog so a human can see what
+// moved.
+//
+// There are four outcomes per prompt, not three. "Reconciled" exists because
+// promptContentChanged compares only what a student reads - text, title,
+// limits, requirement, group, program - and deliberately not the cycle or the
+// verification status. When a catalogue record is promoted without a single
+// character of its prompt text changing (Harvard, 2025-26 -> 2026-27,
+// previous-cycle -> officially-verified), every row counted as "unchanged" and
+// nothing converged: the school then rendered "Current prompts not yet
+// verified" forever, because schoolCatalogueState lets prompt rows outrank
+// schools.catalogueStatus. Reconciling writes those two columns and nothing
+// else - no change-log row, no flag - because nothing the student wrote or
+// reads has changed.
+//
+// verificationStatus follows the catalogue record rather than being forced to
+// needs-review on any edit. needs-review means "the catalogue is unsure", and
+// a reworded officially-verified prompt is more verified, not less; the fact
+// that it moved is what promptChangeLog and counts.flagged are for.
 async function upsertPrompts(
   db: AppDatabase,
   workspaceId: string,
@@ -250,7 +267,7 @@ async function upsertPrompts(
   familyIds: Map<string, string>,
   tagIds: Map<string, string>,
 ) {
-  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, flagged: 0, retired: 0, removed: 0 };
+  const counts: ImportCounts = { created: 0, updated: 0, unchanged: 0, reconciled: 0, flagged: 0, retired: 0, removed: 0 };
   const externalRefs = rawPrompts.map((raw) => raw.externalRef);
   const existingRows = externalRefs.length
     ? await db.select().from(prompts)
@@ -268,6 +285,12 @@ async function upsertPrompts(
   const newLinks: (typeof promptFamilyLinks.$inferInsert)[] = [];
   const newTagLinks: (typeof promptTagLinks.$inferInsert)[] = [];
   const changed: { existing: (typeof existingRows)[number]; raw: RawPromptRecord }[] = [];
+  const reconciled: { id: string; verificationStatus: VerificationStatus }[] = [];
+
+  // The status the catalogue record claims for this prompt, per-prompt override
+  // first and the record's own default second - the same expression the insert
+  // path uses, so create and converge cannot disagree.
+  const statusOf = (raw: RawPromptRecord) => raw.verificationStatus ?? recordDefaults.status;
 
   for (const raw of rawPrompts) {
     const existing = existingByRef.get(raw.externalRef);
@@ -307,7 +330,7 @@ async function upsertPrompts(
         // and there was no way to tell a confident classification from a
         // guess. This is what the needs-review surface reads.
         classificationConfidence: classification.confidence,
-        verificationStatus: raw.verificationStatus ?? recordDefaults.status,
+        verificationStatus: statusOf(raw),
         applicationPlatform: recordDefaults.platform,
         sourceUrl: recordDefaults.sourceUrl,
         retrievedAt: recordDefaults.retrievedAt,
@@ -324,7 +347,16 @@ async function upsertPrompts(
     }
 
     if (!promptContentChanged(existing, raw, group?.requiredCount ?? null)) {
-      counts.unchanged += 1;
+      // Nothing a student reads moved, but the row may still be filed under a
+      // stale cycle or carry a stale verification status - converge those two
+      // columns quietly rather than counting this as settled.
+      const status = statusOf(raw);
+      if (existing.cycleId !== cycleId || existing.verificationStatus !== status) {
+        reconciled.push({ id: existing.id, verificationStatus: status });
+        counts.reconciled += 1;
+      } else {
+        counts.unchanged += 1;
+      }
       continue;
     }
 
@@ -339,7 +371,7 @@ async function upsertPrompts(
   // as answered immediately rather than reopening settled work.
   const inherited = await inheritCanonicalState(db, workspaceId, newPrompts);
 
-  if (newPrompts.length === 0 && changed.length === 0) return counts;
+  if (newPrompts.length === 0 && changed.length === 0 && reconciled.length === 0) return counts;
 
   await db.transaction(async (tx) => {
     if (newPrompts.length > 0) await tx.insert(prompts).values(newPrompts);
@@ -379,12 +411,28 @@ async function upsertPrompts(
           groupRequiredCount: group?.requiredCount ?? null,
           programKey: raw.programKey ?? null,
           programLabel: raw.programLabel ?? null,
-          verificationStatus: "needs-review",
+          // The cycle is part of what a re-import has to converge: a record
+          // promoted to a new cycle keeps its externalRef, so without this the
+          // row stays filed under last cycle and the school reads as unverified.
+          cycleId,
+          verificationStatus: statusOf(raw),
           sourceUrl: recordDefaults.sourceUrl,
           retrievedAt: recordDefaults.retrievedAt,
           updatedAt: new Date(),
         }).where(eq(prompts.id, existing.id));
       }
+    }
+
+    // Metadata-only convergence: two columns, no change-log row, because the
+    // prompt a student reads is byte-identical to what it was before.
+    for (const row of reconciled) {
+      await tx.update(prompts).set({
+        cycleId,
+        verificationStatus: row.verificationStatus,
+        sourceUrl: recordDefaults.sourceUrl,
+        retrievedAt: recordDefaults.retrievedAt,
+        updatedAt: new Date(),
+      }).where(eq(prompts.id, row.id));
     }
   });
 
@@ -515,7 +563,7 @@ export async function importCollege(db: AppDatabase, workspaceId: string, school
       verificationStatus: source?.verificationStatus ?? "manual",
       sourceUrl: source?.sourceUrl ?? null,
       note,
-      counts: { created: 0, updated: 0, unchanged: 0, flagged: 0, ...pruned },
+      counts: { created: 0, updated: 0, unchanged: 0, reconciled: 0, flagged: 0, ...pruned },
     };
   }
 

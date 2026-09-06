@@ -61,7 +61,7 @@ export function limitLabel(prompt: WorkspacePrompt) {
 // explanation and the source link live in the expanded detail instead.
 const VERIFICATION_LABEL = {
   "officially-verified": "Official",
-  "common-app-verified": "Common App",
+  corroborated: "Corroborated",
   "previous-cycle": "Previous cycle",
   "no-supplement-confirmed": "No supplement",
   "needs-review": "Needs review",
@@ -69,7 +69,7 @@ const VERIFICATION_LABEL = {
 } as const;
 
 function verificationTone(status: WorkspacePrompt["verificationStatus"]) {
-  if (status === "officially-verified" || status === "common-app-verified") return "verified";
+  if (status === "officially-verified" || status === "corroborated") return "verified";
   if (status === "manual" || status === "no-supplement-confirmed") return "manual";
   return status === "previous-cycle" ? "previous-cycle" : "unverified";
 }
@@ -225,8 +225,8 @@ function ResponseBlock({ prompt }: { prompt: WorkspacePrompt }) {
         // name/value is what gets submitted, so this stays a single form
         // instead of one per suggestion on every row of a 100-prompt list.
         //
-        // Reuse copies rather than links, so "Use this" ends in a new document
-        // for *this* prompt seeded with that essay's text. This block only
+        // Reuse copies rather than links, so "Use here" ends in a new document
+        // for *this* prompt seeded with that essay's text, unchanged. This block only
         // renders when the prompt has no answer yet, so there is nothing to
         // displace and nothing to confirm; the write checks that again anyway.
         <form action={reuseEssayForPromptAction}>
@@ -239,7 +239,7 @@ function ResponseBlock({ prompt }: { prompt: WorkspacePrompt }) {
                 <span className="match-score">{match.score}</span>
                 <span className="suggestion-name">{match.essayTitle}</span>
                 <span className="suggestion-action">{ACTION_LABELS[match.recommendedAction as RecommendedAction]}</span>
-                <button className="text-link suggestion-copy" type="submit" name="essayId" value={match.essayId}>Copy it here</button>
+                <button className="text-link suggestion-copy" type="submit" name="essayId" value={match.essayId}>Use here</button>
               </li>
             ))}
           </ul>

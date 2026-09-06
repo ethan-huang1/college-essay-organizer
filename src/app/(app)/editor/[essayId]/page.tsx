@@ -27,7 +27,6 @@ import { CoachTabs } from "./coach-tabs";
 import { DocumentSurfaceWithReview } from "./document-surface-with-review";
 import { LiveContentProvider } from "./live-content-context";
 import { ReferenceCheckPanel } from "./reference-check-panel";
-import { ShortenControl } from "./shorten-control";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -50,10 +49,10 @@ export default async function EditorDocumentPage({
   searchParams,
 }: {
   params: Promise<{ essayId: string }>;
-  searchParams: Promise<{ titleError?: string; delete?: string; shortenSaveError?: string }>;
+  searchParams: Promise<{ titleError?: string; delete?: string }>;
 }) {
   const { essayId } = await params;
-  const { titleError, delete: confirmingDelete, shortenSaveError } = await searchParams;
+  const { titleError, delete: confirmingDelete } = await searchParams;
   const snapshot = await getActiveWorkspaceSnapshot();
   // The workspace boundary: an id from another workspace is not found here,
   // and every action re-checks it server-side regardless.
@@ -139,13 +138,6 @@ export default async function EditorDocumentPage({
         </p>
       </header>
 
-      {shortenSaveError ? (
-        <p className="document-alert" role="alert">
-          This essay was reused, but the AI-shortened version couldn&apos;t be saved. The full-length copy is safe —
-          you can try Shorten again below.
-        </p>
-      ) : null}
-
       <LiveContentProvider initialContent={essay.currentContent} initialSavedAt={essay.lastEditedAt.getTime()}>
       <div className="editor-body">
         <div className="editor-main">
@@ -182,29 +174,36 @@ export default async function EditorDocumentPage({
         </div>
 
         <aside className="editor-side">
-          <ReferenceCheckPanel
-            currentSchoolName={origin?.schoolName ?? null}
-            otherSchoolNames={otherSchoolNames}
-            schoolSpecificPhrases={essay.schoolSpecificPhrases}
-            isReusedEssay={isReusedEssay}
-          />
-
           <section className="editor-panel">
-            <h2>Shorten &amp; adapt</h2>
+            <h2>AI Coaches</h2>
             <p className="detail-note">
-              Based on your last saved version. Length is checked as you type; the notes below are re-analysed when you
-              save a version.
+              Editorial feedback on the draft in the box — what to consider changing and why. These coaches never
+              rewrite the essay for you.
             </p>
-            {essay.schoolSpecificPhrases.length > 0 ? (
-              <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p>
-            ) : null}
-            <ShortenControl
+            <CoachTabs
               essayId={essay.id}
               defaultTargetWordCount={effectiveLimit({
                 target: essay.targetWordCount,
                 promptMax: origin?.prompt?.maxWordCount ?? null,
               })}
             />
+          </section>
+
+          <ReferenceCheckPanel
+            currentSchoolName={origin?.schoolName ?? null}
+            otherSchoolNames={otherSchoolNames}
+            schoolSpecificPhrases={essay.schoolSpecificPhrases}
+          />
+
+          <section className="editor-panel">
+            <h2>Adapt &amp; reuse</h2>
+            <p className="detail-note">
+              Where else this essay could go. Based on your last saved version — these notes are re-analysed when you
+              save a version.
+            </p>
+            {essay.schoolSpecificPhrases.length > 0 ? (
+              <p className="risk-note">School-specific: {essay.schoolSpecificPhrases.join(", ")}</p>
+            ) : null}
             {adaptable.length === 0 ? (
               <p className="detail-note">No other prompt in your list is close enough to adapt this for yet.</p>
             ) : (
@@ -228,8 +227,6 @@ export default async function EditorDocumentPage({
                             essayId={essay.id}
                             assignedEssayId={displaced}
                             from={`/editor/${essay.id}`}
-                            essayWordCount={match.essayWordCount}
-                            promptMaxWordCount={match.promptMaxWordCount}
                           />
                         </span>
                       </div>
@@ -242,21 +239,6 @@ export default async function EditorDocumentPage({
               </ul>
             )}
             <ReuseRibbon essay={essay} matches={ribbonByEssay.get(essay.id) ?? []} />
-          </section>
-
-          <section className="editor-panel">
-            <h2>AI Coaches</h2>
-            <p className="detail-note">
-              Editorial feedback on the draft in the box — what to consider changing and why. These coaches never
-              rewrite the essay for you.
-            </p>
-            <CoachTabs
-              essayId={essay.id}
-              defaultTargetWordCount={effectiveLimit({
-                target: essay.targetWordCount,
-                promptMax: origin?.prompt?.maxWordCount ?? null,
-              })}
-            />
           </section>
 
           <section className="editor-panel">

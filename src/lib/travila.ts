@@ -1,36 +1,26 @@
-import { cleanContent, wordCount } from "./essays";
-
 /**
- * The one place this app talks to Travila.
+ * The one place this app talks to Travila, and nothing more than that.
  *
- * Both the Editor's manual Shorten and the Reuse flow's automatic-shorten
- * offer call this single function, so the request/response shape (and the
- * async create-thread -> send-message -> poll contract Travila actually
- * exposes) exists exactly once. Nothing here is thrown - a failed AI call is
- * an expected state the UI has to render, not an exception path, mirroring
- * DraftSaveResult in essays.ts.
+ * This file owns the transport only: the async create-thread -> send-message
+ * -> poll contract Travila actually exposes, expressed once as runTravilaTurn.
+ * It holds no profile id, no instruction text, and no feature logic - every
+ * caller is a coach in src/lib/coaches/*.ts, and each of those owns its own
+ * profile id, instruction, result types and parsing.
  *
- * The AI Coach family (src/lib/coaches/*.ts) shares only runTravilaTurn from
- * this file - each coach's own profile id, instruction, types, and parsing
- * live in its own module, imported from there.
+ * Nothing here is thrown. A failed AI call is an expected state the UI has to
+ * render, not an exception path, mirroring DraftSaveResult in essays.ts.
  */
 
 const BASE_URL = "https://api.travila.ai";
-const PROFILE_ID = "college_essay_editor";
 const POLL_INTERVAL_MS = 1500;
 // TEMPORARY: raised from 45s to let a V6 reasoning-config run finish so we can
 // see whether reasoning.maxTokens is actually honored. Revert once confirmed.
 const POLL_TIMEOUT_MS = 75_000;
-const MAX_TARGET_WORD_COUNT = 10_000;
 
 export type TravilaErrorReason = "not-configured" | "invalid-input" | "timeout" | "malformed" | "http";
 
 /** Shared error shape, assignable into any coach's own result union. */
 type TravilaError = { status: "error"; reason: TravilaErrorReason; detail?: string };
-
-export type ShortenResult =
-  | { status: "ok"; shortenedContent: string }
-  | { status: "error"; reason: TravilaErrorReason; detail?: string };
 
 type TravilaContentPart = { type: string; content: string };
 type TravilaUsage = {
@@ -187,9 +177,8 @@ function extractText(message: TravilaMessage): { text: string } | { error: Travi
 }
 
 /** The create-thread -> send-message -> poll -> extract-text sequence, shared
- * by every Travila-backed feature (shortenEssay here, and every coach in
- * src/lib/coaches/*.ts). Each caller supplies its own profile id and
- * instruction text; this never inspects or shapes the returned text. */
+ * by every coach in src/lib/coaches/*.ts. Each caller supplies its own profile
+ * id and instruction text; this never inspects or shapes the returned text. */
 export async function runTravilaTurn(
   apiKey: string,
   userId: string,
@@ -206,48 +195,4 @@ export async function runTravilaTurn(
   if ("error" in completed) return completed;
 
   return extractText(completed.message);
-}
-
-function validateInput(content: string, targetWordCount: number): ShortenResult | null {
-  if (content.trim().length === 0) {
-    return { status: "error", reason: "invalid-input", detail: "Essay is empty." };
-  }
-  try {
-    cleanContent(content);
-  } catch {
-    return { status: "error", reason: "invalid-input", detail: "Essay content must be 20,000 characters or fewer." };
-  }
-  if (!Number.isInteger(targetWordCount) || targetWordCount < 1) {
-    return { status: "error", reason: "invalid-input", detail: "Target word count must be a positive whole number." };
-  }
-  if (targetWordCount > MAX_TARGET_WORD_COUNT) {
-    return { status: "error", reason: "invalid-input", detail: `Target word count must be ${MAX_TARGET_WORD_COUNT} or fewer.` };
-  }
-  const currentWordCount = wordCount(content);
-  if (targetWordCount >= currentWordCount) {
-    return {
-      status: "error",
-      reason: "invalid-input",
-      detail: `Target must be below the essay's current word count (${currentWordCount}).`,
-    };
-  }
-  return null;
-}
-
-export async function shortenEssay(input: { content: string; targetWordCount: number; userId: string }): Promise<ShortenResult> {
-  const apiKey = process.env.TRAVILA_API_KEY;
-  if (!apiKey) return { status: "error", reason: "not-configured" };
-
-  const validationError = validateInput(input.content, input.targetWordCount);
-  if (validationError) return validationError;
-
-  const instruction =
-    `Shorten this complete essay to no more than ${input.targetWordCount} words. Use as much of the available word ` +
-    `count as useful, preserve the essay's overall structure and major ideas, and prefer compressing language ` +
-    `over deleting substantive content:\n\n${input.content}`;
-
-  const turn = await runTravilaTurn(apiKey, input.userId, PROFILE_ID, instruction);
-  if ("error" in turn) return turn.error;
-
-  return { status: "ok", shortenedContent: turn.text };
 }

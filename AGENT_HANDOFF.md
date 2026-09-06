@@ -13,7 +13,16 @@ Approaches (rule 9) instead of silently retrying.
 See [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md) for rules, [MVP_SPEC.md](MVP_SPEC.md)
 for the product spec.
 
-> **This file is stale for the three most recent sessions.** The workload bands,
+> **This file is stale for the four most recent sessions.** The coaches-led
+> editor, the removal of AI shortening from reuse, the collapsible Reference
+> Check, and the catalogue-convergence fix are all recorded in
+> [HANDOFF.md](HANDOFF.md) §11, which is authoritative for them. Note that
+> §11d's database repair **and** §11e's `common-app-verified` → `corroborated`
+> rename (migration `0006`) are both **applied to Neon**; the code and the data
+> agree. The work is committed but not deployed, so `git push origin main` is
+> the second half of a change whose first half is already live.
+>
+> **This file is also stale for the three sessions before that.** The workload bands,
 > availability states, published logos, the deploy through `5c0aed9`, and the
 > **Essay Editor / My Essays dashboard** are all recorded in
 > [HANDOFF.md](HANDOFF.md), which is authoritative for UI matters. The Essay

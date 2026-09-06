@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const vassarCollege: SchoolSourceRecord = {
   schoolName: "Vassar College",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://www.vassar.edu/admission/apply/requirements/",
   retrievedAt: "2026-08-31",

@@ -203,13 +203,18 @@ export function displacedByReuse(snapshot: WorkspaceSnapshot, promptId: string, 
 }
 
 /**
- * "Use here" - one control, three surfaces.
+ * "Use here" - one control, every surface.
  *
  * Reuse copies rather than links, so this always ends in a new (or
- * already-copied) document for the target prompt. When that prompt already has
- * an answer the control becomes a link to the shared confirmation page instead
- * of a submit, because displacing an answer should ask first - and the write
- * refuses to displace an unnamed one regardless of which control was rendered.
+ * already-copied) document for the target prompt, carrying the student's
+ * complete essay unchanged. Length is deliberately not consulted: a prompt
+ * with a shorter limit is not a reason to transform someone's writing, and
+ * adapting it afterwards is the AI Coaches' job in the editor.
+ *
+ * The one thing worth asking about first is displacement. When the target
+ * prompt already has a different answer the control becomes a link to the
+ * shared confirmation page instead of a submit - and the write refuses to
+ * displace an unnamed answer regardless of which control was rendered.
  */
 export function ReuseHereControl({
   promptId,
@@ -217,22 +222,14 @@ export function ReuseHereControl({
   assignedEssayId,
   from,
   label = "Use here",
-  essayWordCount,
-  promptMaxWordCount,
 }: {
   promptId: string;
   essayId: string;
   assignedEssayId: string | null;
   from: string;
   label?: string;
-  /** When the essay is over this prompt's word limit, "Use here" detours
-   * through the confirmation page so shortening can be offered there instead
-   * of silently copying text the student will have to cut anyway. */
-  essayWordCount?: number;
-  promptMaxWordCount?: number | null;
 }) {
-  const overLimit = promptMaxWordCount != null && essayWordCount != null && essayWordCount > promptMaxWordCount;
-  if ((assignedEssayId && assignedEssayId !== essayId) || overLimit) {
+  if (assignedEssayId && assignedEssayId !== essayId) {
     const params = new URLSearchParams({ promptId, essayId, from });
     return <Link className="text-link" href={`/editor/reuse?${params.toString()}`}>{label}…</Link>;
   }

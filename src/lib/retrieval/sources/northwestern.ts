@@ -8,7 +8,7 @@ import type { SchoolSourceRecord } from "../types";
 export const northwestern: SchoolSourceRecord = {
   schoolName: "Northwestern University",
   cycleLabel: "2026–27",
-  verificationStatus: "common-app-verified",
+  verificationStatus: "corroborated",
   applicationPlatform: "common-app",
   sourceUrl: "https://admissions.northwestern.edu/faqs/writing-supplements/",
   retrievedAt: "2026-08-31",

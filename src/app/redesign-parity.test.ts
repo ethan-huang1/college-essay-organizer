@@ -243,6 +243,57 @@ describe("naming is consistent across the interface", () => {
     expect(readFileSync(ESSAY_UI, "utf8")).toContain("action={reuseEssayForPromptAction}");
   });
 
+  it("never offers to shorten an essay as part of reusing it", () => {
+    // Reuse transfers the student's work; coaches help them revise it. The
+    // removed route offered an AI rewrite the moment a destination prompt had
+    // a lower limit, which is the one thing reuse must never do. These are
+    // source-text guards because .tsx cannot be unit-tested here (vitest
+    // includes only src/**/*.test.ts), so nothing else would catch a
+    // regression on these surfaces.
+    expect(markup).not.toContain("/editor/reuse/shorten");
+    expect(markup).not.toContain("Shorten automatically");
+    // ReuseHereControl must not regain a length-based detour: the only reason
+    // to divert to the confirmation page is displacing another answer. Scoped
+    // to the control's own body, because matchAdjustments below it reads the
+    // same word counts legitimately, to describe the work rather than to act.
+    const essayUi = readFileSync(ESSAY_UI, "utf8");
+    const controlStart = essayUi.indexOf("export function ReuseHereControl");
+    expect(controlStart).toBeGreaterThan(-1);
+    const control = essayUi.slice(controlStart, essayUi.indexOf("\nexport ", controlStart + 1));
+    expect(control).not.toContain("WordCount");
+    expect(control).not.toContain("overLimit");
+  });
+
+  it("points an over-limit draft at the coaches instead of shortening it", () => {
+    // The other half of the same contract: the full essay is copied, so the
+    // editor has to say plainly that adapting it is the student's move.
+    expect(readFileSync(DOCUMENT, "utf8")).toContain("Use the AI Coaches");
+  });
+
+  it("shows all seven coaches as equal peers", () => {
+    // The lineup is deliberate and its order is meaningful (mechanics last),
+    // and no coach may be demoted into a collapsed "more" section.
+    const tabs = readFileSync("src/app/(app)/editor/[essayId]/coach-tabs.tsx", "utf8");
+    const order = ["Shorten", "Lengthen", "Flow", "Vivid", "Prompt Fit", "Review", "Proofread"];
+    expect(order.map((label) => tabs.indexOf(`label: "${label}"`))).toEqual(
+      order.map((label) => tabs.indexOf(`label: "${label}"`)).slice().sort((a, b) => a - b),
+    );
+    for (const label of order) {
+      expect(tabs, `${label} is missing from the coach lineup`).toContain(`label: "${label}"`);
+    }
+  });
+
+  it("leads the editor sidebar with the AI Coaches", () => {
+    // Coaches are now the primary way a student adapts a reused essay, so they
+    // come before the review sections rather than after them.
+    const editor = readFileSync(EDITOR, "utf8");
+    const aside = editor.indexOf('<aside className="editor-side">');
+    expect(aside).toBeGreaterThan(-1);
+    const sidebar = editor.slice(aside);
+    expect(sidebar.indexOf("<h2>AI Coaches</h2>")).toBeGreaterThan(-1);
+    expect(sidebar.indexOf("<h2>AI Coaches</h2>")).toBeLessThan(sidebar.indexOf("<ReferenceCheckPanel"));
+  });
+
   it("opens essays in the editor rather than the old library anchor", () => {
     // Every "open this essay" link used to be /essays#essay-<id>, which now
     // points at a dashboard row instead of a writing surface.
