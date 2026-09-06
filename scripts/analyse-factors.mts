@@ -18,25 +18,50 @@ import { type MatchInput, SCORING, scoreMatch } from "../src/lib/matching.ts";
 import { PROMPT_FUNCTIONS, categoryReview } from "../src/lib/retrieval/category-review.ts";
 import { PROMPT_VECTORS } from "../src/lib/retrieval/prompt-vectors.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
+import { classifyUnreviewedPrompt } from "../src/lib/classification.ts";
+import { inferPromptFunction } from "../src/lib/prompt-function.ts";
 
 const vectorByKey = new Map(PROMPT_VECTORS.map(([s, r, e]) => [`${s}|${r}`, decodeVector(e)]));
-type P = { school: string; ref: string; title: string; primary: string; families: string[]; tags: string[]; fn: string; min: number | null; max: number | null; vector?: number[] };
-const prompts: P[] = [];
+// `key`, not `ref`: nine externalRefs are shared across schools (the eight UC
+// Personal Insight Questions across seven campuses, plus `academic-interest` at
+// two), so a map keyed on ref merges 58 records into 9.
+type P = { school: string; ref: string; key: string; title: string; text: string; primary: string; families: string[]; tags: string[]; fn: string | null; min: number | null; max: number | null; vector?: number[] };
+const records: P[] = [];
 for (const school of listCoveredSchoolNames()) {
   for (const p of lookupSchoolSource(school)?.prompts ?? []) {
-    const r = categoryReview(school, p.externalRef)!;
-    prompts.push({
-      school, ref: p.externalRef, title: p.title, primary: r[2], families: r[3], tags: r[4], fn: r[5],
+    // Reviewed rows win; the rest fall through to the keyword classifier and
+    // the function inference, exactly as college-import.ts does. 303 of 553
+    // records have no review yet, and a non-null assertion here used to crash
+    // on the first of them.
+    const r = categoryReview(school, p.externalRef);
+    const guess = r ? null : classifyUnreviewedPrompt(`${p.title} ${p.promptText}`);
+    records.push({
+      school, ref: p.externalRef, key: `${school}|${p.externalRef}`, title: p.title, text: p.promptText,
+      primary: r ? r[2] : guess!.primarySlug ?? "other",
+      families: r ? r[3] : guess!.secondarySlugs,
+      tags: r ? r[4] : guess!.tags,
+      fn: r ? r[5] : inferPromptFunction(p.title, p.promptText),
       min: p.minWordCount ?? null, max: p.maxWordCount ?? null,
       vector: vectorByKey.get(`${school}|${p.externalRef}`),
     });
   }
 }
+
+// Statistics run on unique prompt texts, not on records: 11 texts appear on
+// more than one record (62 records for 11 questions), and left in they weight
+// every distribution toward whatever the UCs happen to ask.
+const uniqueByText = new Map<string, P>();
+for (const record of records) {
+  const signature = `${record.title}||${record.text}`.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!uniqueByText.has(signature)) uniqueByText.set(signature, record);
+}
+const prompts: P[] = [...uniqueByText.values()];
+
 const withVectors = prompts.filter((p) => p.vector);
 const zBy = new Map<string, Map<string, number>>();
 for (const p of withVectors) {
   const cal = calibrate(withVectors.map((t) => cosine(p.vector!, t.vector!)));
-  zBy.set(p.ref, new Map(withVectors.map((t, i) => [t.ref, cal[i]])));
+  zBy.set(p.key, new Map(withVectors.map((t, i) => [t.key, cal[i]])));
 }
 
 const out: string[] = [];
@@ -131,7 +156,7 @@ const meanBetween = (a: string, b: string) => {
   const right = withVectors.filter((p) => p.fn === b);
   let sum = 0, n = 0;
   for (const l of left) for (const r of right) {
-    if (l.ref === r.ref || l.title === r.title) continue;
+    if (l.key === r.key || l.title === r.title) continue;
     sum += cosine(l.vector!, r.vector!); n += 1;
   }
   return n ? sum / n : 0;
@@ -189,18 +214,23 @@ function sweep(weight: number, graded: boolean, redistribute: "semantic" | "prim
   const primaryWeight = SCORING.WEIGHTS.normal.primary + (redistribute === "primary" ? 20 - weight : 0);
   for (const essay of withVectors) {
     for (const prompt of withVectors) {
-      if (essay.ref === prompt.ref || essay.title === prompt.title) continue;
+      if (essay.key === prompt.key || essay.title === prompt.title) continue;
       bands.total += 1;
-      const z = zBy.get(essay.ref)!.get(prompt.ref)!;
+      const z = zBy.get(essay.key)!.get(prompt.key)!;
       const semantic = Math.max(0, Math.min(semanticWeight, Math.round((semanticWeight * (z + 1)) / 3)));
       const primary = essay.primary === prompt.primary && essay.primary !== "other" ? primaryWeight : 0;
       const essaySignals = new Set([...essay.families, ...essay.tags].filter((s) => s !== "other"));
       const promptSignals = new Set([...prompt.families, ...prompt.tags].filter((s) => s !== "other"));
       const shared = [...essaySignals].filter((s) => promptSignals.has(s)).length;
       const secondary = Math.min(SCORING.WEIGHTS.normal.secondary, shared * 7);
-      let fn = 0;
-      if (essay.fn === prompt.fn) fn = weight;
+      // Unknown on either side is neutral, never a match: 224 of 553 records
+      // have no function, and `null === null` would have handed every one of
+      // those pairs full credit for agreeing about nothing.
+      let fn: number;
+      if (!essay.fn || !prompt.fn) fn = weight / 2;
+      else if (essay.fn === prompt.fn) fn = weight;
       else if (graded && isAdjacent(essay.fn, prompt.fn)) fn = Math.round(weight / 2);
+      else fn = 0;
       const score = Math.max(0, Math.min(100, primary + semantic + secondary + fn));
       if (score >= 50) { bands.a50 += 1; if (essay.primary !== prompt.primary) bands.cross += 1; }
       if (score >= 60) bands.a60 += 1;

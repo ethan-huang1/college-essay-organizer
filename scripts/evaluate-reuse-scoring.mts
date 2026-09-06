@@ -5,7 +5,7 @@
  * registry and the catalogue review - so it needs no database, no network and no
  * credentials, and two runs on the same commit produce the same report.
  *
- * Part 1 is the 65,025-pair catalogue cross-product. It is a STRUCTURAL test: it
+ * Part 1 is the catalogue cross-product over unique prompts. It is a STRUCTURAL test: it
  * shows the formula is well-behaved across every pair and proves nothing about
  * whether the advice is useful, because both sides are catalogue prompts rather
  * than real essays. Part 2 asks the question that matters - can a small
@@ -18,6 +18,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 
 import { calibrate, cosine, decodeVector } from "../src/lib/embedding.ts";
 import { categoryReview } from "../src/lib/retrieval/category-review.ts";
+import { classifyUnreviewedPrompt } from "../src/lib/classification.ts";
+import { inferPromptFunction } from "../src/lib/prompt-function.ts";
 import { PROMPT_VECTORS } from "../src/lib/retrieval/prompt-vectors.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
 import { type MatchInput, type RecommendedAction, SCORING, scoreMatch } from "../src/lib/matching.ts";
@@ -25,7 +27,16 @@ import { type MatchInput, type RecommendedAction, SCORING, scoreMatch } from "..
 type Item = {
   school: string;
   ref: string;
+  /**
+   * Identity. `ref` alone is not unique: nine externalRefs are shared across
+   * schools (the eight UC Personal Insight Questions across seven campuses,
+   * plus `academic-interest` at two schools), so keying anything on `ref`
+   * silently merged 58 records into 9 and made every z-score involving them
+   * whichever school happened to be written last.
+   */
+  key: string;
   title: string;
+  text: string;
   primary: string;
   secondaryFamilies: string[];
   tags: string[];
@@ -37,20 +48,68 @@ type Item = {
 
 const vectorByKey = new Map(PROMPT_VECTORS.map(([school, ref, encoded]) => [`${school}|${ref}`, decodeVector(encoded)]));
 
-const items: Item[] = [];
+/**
+ * Every catalogue record, classified exactly as the running app classifies it.
+ *
+ * Reviewed rows win; anything unreviewed falls through to the keyword
+ * classifier and the function inference, which is what `college-import.ts`
+ * does. This used to throw on an unreviewed prompt, which was right when the
+ * review covered all 255 records and wrong now: the catalogue rebuild took the
+ * corpus to 553 and 303 of those have no review yet, so throwing would measure
+ * nothing at all. Reporting the shortfall is more useful than refusing to run,
+ * and `unreviewedCount` is printed in the report so a baseline taken before the
+ * classification pass cannot be mistaken for one taken after it.
+ */
+const records: Item[] = [];
+let unreviewedCount = 0;
 for (const school of listCoveredSchoolNames()) {
   const record = lookupSchoolSource(school);
   for (const prompt of record?.prompts ?? []) {
     const reviewed = categoryReview(school, prompt.externalRef);
-    if (!reviewed) throw new Error(`unreviewed prompt: ${school} / ${prompt.externalRef}`);
-    items.push({
-      school, ref: prompt.externalRef, title: prompt.title,
-      primary: reviewed[2], secondaryFamilies: reviewed[3], tags: reviewed[4], fn: reviewed[5],
+    let primary: string, secondaryFamilies: string[], tags: string[], fn: Item["fn"];
+    if (reviewed) {
+      [, , primary, secondaryFamilies, tags, fn] = reviewed;
+    } else {
+      unreviewedCount += 1;
+      const guess = classifyUnreviewedPrompt(`${prompt.title} ${prompt.promptText}`);
+      primary = guess.primarySlug ?? "other";
+      secondaryFamilies = guess.secondarySlugs;
+      tags = guess.tags;
+      fn = inferPromptFunction(prompt.title, prompt.promptText);
+    }
+    records.push({
+      school, ref: prompt.externalRef, key: `${school}|${prompt.externalRef}`, title: prompt.title,
+      text: prompt.promptText,
+      primary, secondaryFamilies, tags, fn,
       min: prompt.minWordCount ?? null, max: prompt.maxWordCount ?? null,
       vector: vectorByKey.get(`${school}|${prompt.externalRef}`),
     });
   }
 }
+
+/**
+ * Statistics run on unique prompts, not on records.
+ *
+ * Eleven prompt texts appear on more than one record - the eight UC Personal
+ * Insight Questions across seven campuses, and three more shared through
+ * choose-N sets - which is 62 records for 11 questions. Left in, the
+ * cross-product counts the same pair of questions up to 49 times and a
+ * distribution reads as whatever the UCs happen to ask. Deduping by normalised
+ * title-plus-text and keeping one representative answers the question the
+ * report is actually asking: how do the prompts a student could face relate to
+ * each other.
+ *
+ * Records still matter elsewhere - catalogue integrity, review coverage, and
+ * the per-school portfolio walk in Part 2 - so this narrows the statistics
+ * only.
+ */
+const normalise = (item: Item) => `${item.title}||${item.text}`.toLowerCase().replace(/\s+/g, " ").trim();
+const uniqueByText = new Map<string, Item>();
+for (const record of records) {
+  const signature = normalise(record);
+  if (!uniqueByText.has(signature)) uniqueByText.set(signature, record);
+}
+const items: Item[] = [...uniqueByText.values()];
 
 /**
  * One prompt scored as if another prompt's ideal answer were the essay.
@@ -81,7 +140,7 @@ function pair(essay: Item, prompt: Item, semanticZScore: number | null): MatchIn
 /**
  * Real calibrated similarity for every pair, from the committed vectors.
  *
- * Calibrated per stand-in essay across all 255 prompts, exactly as reuse.ts does
+ * Calibrated per stand-in essay across every unique prompt, exactly as reuse.ts does
  * it at runtime, so the numbers below are the ones the app would produce rather
  * than a bound.
  */
@@ -90,15 +149,27 @@ for (const essay of items) {
   if (!essay.vector) continue;
   const targets = items.filter((prompt) => prompt.vector);
   const calibrated = calibrate(targets.map((prompt) => cosine(essay.vector!, prompt.vector!)));
-  zByEssay.set(essay.ref, new Map(targets.map((prompt, index) => [prompt.ref, calibrated[index]])));
+  zByEssay.set(essay.key, new Map(targets.map((prompt, index) => [prompt.key, calibrated[index]])));
 }
-const realZ = (essay: Item, prompt: Item) => zByEssay.get(essay.ref)?.get(prompt.ref) ?? null;
+const realZ = (essay: Item, prompt: Item) => zByEssay.get(essay.key)?.get(prompt.key) ?? null;
 
 const BANDS: RecommendedAction[] = ["reusable-slight-edits", "reusable-edits", "reusable-significant-edits", "new-response"];
 /** The band a score alone would give, ignoring every ceiling. */
 const bandOf = (score: number): RecommendedAction =>
   score >= 70 ? "reusable-slight-edits" : score >= 60 ? "reusable-edits" : score >= 50 ? "reusable-significant-edits" : "new-response";
 const pct = (n: number, total: number) => `${((n / total) * 100).toFixed(1)}%`;
+
+/**
+ * Max and min by reduction, never by spread.
+ *
+ * `Math.max(...xs)` passes every element as an argument, and the cross-product
+ * is now 251,502 pairs, so the spread overflows the call stack outright -
+ * `RangeError: Maximum call stack size exceeded` from a line that reads like
+ * arithmetic. It worked at 65,025 and stopped working at 251,502, which is the
+ * worst kind of limit: invisible until the corpus grows.
+ */
+const maxOf = (values: number[]) => values.reduce((best, value) => (value > best ? value : best), -Infinity);
+const minOf = (values: number[]) => values.reduce((best, value) => (value < best ? value : best), Infinity);
 
 function distribution(z: number | null | "real") {
   const counts = new Map<RecommendedAction, number>(BANDS.map((b) => [b, 0]));
@@ -150,7 +221,7 @@ w();
 w("Part 1 is a **structural** test. Every pair is two catalogue prompts, with one");
 w("standing in as an ideal answer to the other, word counts put in range and no");
 w("school-specific material. It shows the formula is well-behaved across all");
-w("65,025 pairs. It says nothing about whether the advice is useful on real");
+w("every pair of unique catalogue prompts. It says nothing about whether the advice is useful on real");
 w("essays, and it must not be read as validation.");
 w();
 w("Part 2 asks the question the product exists to answer - can a small portfolio");
@@ -162,12 +233,23 @@ w();
 const semantic = distribution("real");
 const shipped = distribution(null);
 const total = shipped.scored.length;
-w(`## Part 1 — structural (${total.toLocaleString()} pairs, ${items.length} prompts)`);
+w(`## Part 1 — structural (${total.toLocaleString()} pairs, ${items.length} unique prompts)`);
+w();
+w(`Drawn from ${records.length} catalogue records deduped to ${items.length} unique prompt texts, so a`);
+w("question the seven UC campuses all ask counts once rather than seven times.");
+if (unreviewedCount > 0) {
+  w();
+  w(`> **${unreviewedCount} of ${records.length} records have no hand review** and are classified here by`);
+  w("> the keyword classifier, exactly as the running app classifies them. Every");
+  w("> number below is a measurement of that state, not of a fully reviewed");
+  w("> catalogue. Do not compare it against a run taken after the classification");
+  w("> pass without saying so.");
+}
 w();
 w("### 1. Band distribution");
 w();
 w("Semantic similarity is real here: all-MiniLM-L6-v2 embeddings, calibrated per");
-w("stand-in essay across all 255 prompts, exactly as reuse.ts does at runtime. The");
+w(`stand-in essay across all ${items.length} unique prompts, exactly as reuse.ts does at runtime. The`);
 w("second column is the same corpus with no provider, kept because it is a");
 w("supported configuration and the difference between the two is the factor's");
 w("contribution.");
@@ -182,7 +264,7 @@ w();
 w("### 2. `Other` distribution against the rest");
 w();
 const nonOtherTotal = total - semantic.otherTotal;
-w(`\`Other\` is involved in **${semantic.otherTotal.toLocaleString()}** of ${total.toLocaleString()} pairs (${pct(semantic.otherTotal, total)}), because it is 94 of the ${items.length} prompts.`);
+w(`\`Other\` is involved in **${semantic.otherTotal.toLocaleString()}** of ${total.toLocaleString()} pairs (${pct(semantic.otherTotal, total)}), because it is ${items.filter((i) => i.primary === "other").length} of the ${items.length} unique prompts.`);
 w();
 w("| Band | Pairs involving `Other` | All other pairs |");
 w("|---|---|---|");
@@ -254,7 +336,7 @@ w();
 w("| Factor | At floor | In between | At ceiling |");
 w("|---|---|---|---|");
 for (const key of ["primary", "semantic", "secondary", "function"] as const) {
-  const max = Math.max(...semantic.scored.map((r) => r.factors[key]));
+  const max = maxOf(semantic.scored.map((r) => r.factors[key]));
   let floor = 0, mid = 0, ceil = 0;
   for (const row of semantic.scored) {
     const value = row.factors[key];
@@ -292,7 +374,7 @@ w("### 3d. Does the 45-point cross-category ceiling still exist?");
 w();
 {
   const crossPairs = semantic.scored.filter((r) => r.essay.primary !== r.prompt.primary);
-  const best = Math.max(...crossPairs.map((r) => r.score));
+  const best = maxOf(crossPairs.map((r) => r.score));
   const above50 = crossPairs.filter((r) => r.score >= 50).length;
   w(`Across ${crossPairs.length.toLocaleString()} pairs whose primary categories differ, the highest score is`);
   w(`**${best}** and **${above50.toLocaleString()}** (${pct(above50, crossPairs.length)}) reach the reuse floor.`);
@@ -325,7 +407,7 @@ for (const boundary of [70, 60, 50]) {
   w("| Score | Band | Essay (stand-in) → Prompt |");
   w("|---|---|---|");
   const near = upper.scored
-    .filter((r) => Math.abs(r.score - boundary) <= 1 && r.essay.ref !== r.prompt.ref)
+    .filter((r) => Math.abs(r.score - boundary) <= 1 && r.essay.key !== r.prompt.key)
     .sort((a, b) => b.score - a.score);
   const sample = [...near.filter((r) => r.score >= boundary).slice(0, 2), ...near.filter((r) => r.score < boundary).slice(0, 2)];
   for (const r of sample) {
@@ -397,8 +479,8 @@ let overlapSum = 0;
 let firstKept = 0;
 for (const prompt of items) {
   const ranked = (score: (e: Item) => number) =>
-    items.filter((e) => e.ref !== prompt.ref).map((e) => ({ e, s: score(e) }))
-      .sort((a, b) => b.s - a.s || a.e.ref.localeCompare(b.e.ref)).slice(0, 10).map((r) => r.e.ref);
+    items.filter((e) => e.key !== prompt.key).map((e) => ({ e, s: score(e) }))
+      .sort((a, b) => b.s - a.s || a.e.key.localeCompare(b.e.key)).slice(0, 10).map((r) => r.e.key);
   const before = ranked((e) => legacyScore(e, prompt));
   const after = ranked((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score);
   const kept = after.filter((ref) => before.includes(ref)).length;
@@ -507,8 +589,8 @@ for (const school of LIST) {
   if (prompts.length === 0) { w(`| ${school} | _not in catalogue_ | | | | | | |`); continue; }
   const row = { s50: 0, s60: 0, s70: 0, m50: 0, m60: 0, m70: 0 };
   for (const prompt of prompts) {
-    const bestShipped = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, null)).score));
-    const bestSemantic = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
+    const bestShipped = maxOf(portfolio.map((e) => scoreMatch(pair(e, prompt, null)).score));
+    const bestSemantic = maxOf(portfolio.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
     if (bestShipped >= 50) row.s50 += 1;
     if (bestShipped >= 60) row.s60 += 1;
     if (bestShipped >= 70) row.s70 += 1;
@@ -539,7 +621,7 @@ const listPrompts = LIST.flatMap((school) => items.filter((i) => i.school === sc
 const byCategory = new Map<string, { total: number; a50: number; a60: number; a70: number }>();
 for (const prompt of listPrompts) {
   const row = byCategory.get(prompt.primary) ?? { total: 0, a50: 0, a60: 0, a70: 0 };
-  const best = Math.max(...portfolio.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
+  const best = maxOf(portfolio.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
   row.total += 1;
   if (best >= 50) row.a50 += 1;
   if (best >= 60) row.a60 += 1;
@@ -575,7 +657,7 @@ for (const [index, candidate] of portfolios.entries()) {
   for (const prompt of listPrompts) {
     if (NOT_REUSABLE.has(prompt.primary)) continue;
     t += 1;
-    const best = Math.max(...candidate.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
+    const best = maxOf(candidate.map((e) => scoreMatch(pair(e, prompt, realZ(e, prompt))).score));
     if (best >= 50) c50 += 1;
     if (best >= 60) c60 += 1;
     if (best >= 70) c70 += 1;
@@ -584,8 +666,8 @@ for (const [index, candidate] of portfolios.entries()) {
   w(`| ${index + 1} (${["first", "middle", "last"][index]} of each category) | ${pct(c50, t)} | ${pct(c60, t)} | ${pct(c70, t)} |`);
 }
 w();
-w(`Range ${pct(Math.min(...spread) * listTotal, listTotal)} to ${pct(Math.max(...spread) * listTotal, listTotal)}, a spread of`);
-w(`${((Math.max(...spread) - Math.min(...spread)) * 100).toFixed(1)} points. ${(Math.max(...spread) - Math.min(...spread)) > 0.2 ? "Wide enough that the aggregate is sample-dependent and should not be quoted as a single figure." : "Narrow enough to treat the figure as a property of the scoring rather than of the sample."}`);
+w(`Range ${pct(minOf(spread) * listTotal, listTotal)} to ${pct(maxOf(spread) * listTotal, listTotal)}, a spread of`);
+w(`${((maxOf(spread) - minOf(spread)) * 100).toFixed(1)} points. ${(maxOf(spread) - minOf(spread)) > 0.2 ? "Wide enough that the aggregate is sample-dependent and should not be quoted as a single figure." : "Narrow enough to treat the figure as a property of the scoring rather than of the sample."}`);
 w();
 const notReusableTotal = listTotal - reusableTotal;
 w(`The remaining ${notReusableTotal} prompts (${pct(notReusableTotal, listTotal)} of the list) are Why Us, Short`);
@@ -601,11 +683,11 @@ w();
 // function both disagree. These are the cases semantic similarity gets wrong on
 // its own, and the reason it is one factor of four rather than the whole score.
 const falseFriends = semantic.scored
-  .filter((r) => (zByEssay.get(r.essay.ref)?.get(r.prompt.ref) ?? -9) > 2
+  .filter((r) => (zByEssay.get(r.essay.key)?.get(r.prompt.key) ?? -9) > 2
     && r.essay.primary !== r.prompt.primary
     && r.essay.fn !== r.prompt.fn
-    && r.essay.ref !== r.prompt.ref)
-  .sort((a, b) => (zByEssay.get(b.essay.ref)!.get(b.prompt.ref)! - zByEssay.get(a.essay.ref)!.get(a.prompt.ref)!));
+    && r.essay.key !== r.prompt.key)
+  .sort((a, b) => (zByEssay.get(b.essay.key)!.get(b.prompt.key)! - zByEssay.get(a.essay.key)!.get(a.prompt.key)!));
 
 const findings: string[] = [];
 findings.push("## Findings");
@@ -636,7 +718,7 @@ findings.push("the model says they are not similar. Fewer, better recommendation
 findings.push("");
 findings.push("### What each factor is doing");
 findings.push("");
-findings.push("Full table in §3b. In one line each, across all 65,025 pairs:");
+findings.push(`Full table in §3b. In one line each, across all ${total.toLocaleString()} pairs:`);
 findings.push("");
 findings.push(`- **Semantic (35)** earns ${(allPairs.share.semantic * 100).toFixed(0)}% of all points awarded and sits strictly`);
 findings.push(`  between its floor and ceiling on ${(85.7).toFixed(0)}% of pairs. It is the factor doing the`);
@@ -662,7 +744,7 @@ const otherRow = byCategory.get("other");
 if (otherRow) {
   findings.push(`\`Other\` covers **${pct(otherRow.a50, otherRow.total)}** of its prompts at ≥50 and ${pct(otherRow.a70, otherRow.total)} at ≥70, the`);
   findings.push("worst of any category where reuse is expected - and it is the largest category");
-  findings.push("in the catalogue at 94 of 255 prompts.");
+  findings.push(`in the catalogue at ${items.filter((i) => i.primary === "other").length} of ${items.length} unique prompts.`);
 }
 findings.push("");
 findings.push("This is structural, not arithmetic. `Other` earns no primary points by design,");
