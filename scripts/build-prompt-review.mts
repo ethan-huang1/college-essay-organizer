@@ -42,29 +42,10 @@ import { inferPromptFunction } from "../src/lib/prompt-function.ts";
 import { categoryReview } from "../src/lib/retrieval/category-review.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
 import { parseCsv } from "./parse-csv.mts";
-import { SLUG_TO_PRIMARY, SLUG_TO_SECONDARY, joinSecondaries, signatureOf } from "./review-vocabulary.mts";
+import { COLUMNS, SLUG_TO_PRIMARY, SLUG_TO_SECONDARY, joinSecondaries, signatureOf } from "./review-vocabulary.mts";
 
 const WORKSHEET = "docs/evaluation/prompt-review.csv";
 const SEP = " | ";
-
-export const COLUMNS = [
-  "ID",
-  "School",
-  "External ref",
-  "Prompt title",
-  "Review status",
-  "Proposed primary",
-  "Proposed secondaries",
-  "Proposed function",
-  "Final primary",
-  "Final secondaries",
-  "Final function",
-  "Why",
-  "Word limit",
-  "Requirement",
-  "Shared with",
-  "Full written prompt",
-] as const;
 
 type Record_ = {
   school: string; ref: string; title: string; text: string;

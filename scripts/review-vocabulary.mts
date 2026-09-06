@@ -97,3 +97,23 @@ export const splitSecondaries = (cell: string) =>
  */
 export const signatureOf = (title: string, text: string) =>
   `${title}||${text}`.toLowerCase().replace(/\s+/g, " ").trim();
+
+/** The worksheet's columns, in order. */
+export const COLUMNS = [
+  "ID",
+  "School",
+  "External ref",
+  "Prompt title",
+  "Review status",
+  "Proposed primary",
+  "Proposed secondaries",
+  "Proposed function",
+  "Final primary",
+  "Final secondaries",
+  "Final function",
+  "Why",
+  "Word limit",
+  "Requirement",
+  "Shared with",
+  "Full written prompt",
+] as const;

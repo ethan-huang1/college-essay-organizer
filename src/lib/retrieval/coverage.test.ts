@@ -201,19 +201,21 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
 
     it("takes its category from the review wherever a review exists", () => {
       const reviewed = classified.filter((row) => row.reviewed);
-      expect(reviewed).toHaveLength(250);
+      expect(reviewed).toHaveLength(553);
       for (const row of reviewed) expect(effective(row), `${row.school}: ${row.prompt.title}`).toBe(row.reviewed![2]);
     });
 
-    it("classifies the rest by rule, and keeps that population pinned", () => {
-      // The 2026-27 rebuild tripled the catalogue; these are the prompts the
-      // owner has not reviewed yet (docs/evaluation/prompt-review.csv).
-      // They import at the classifier's own confidence, which is what the
-      // needs-review surface is for - but the number must move deliberately.
+    it("leaves no catalogue prompt to the keyword rules", () => {
+      // The classification pass closed this gap. It was 303 of 553 after the
+      // 2026-27 rebuild, and those prompts imported at the classifier's own
+      // confidence - 153 of them with no primary at all, so they resolved to
+      // `other`, which earns no category credit in matching.ts.
+      //
+      // The rules are not dead: they still classify prompts a student types in
+      // themselves, which is the tier they were written for. They simply no
+      // longer decide any part of the catalogue.
       const fromRules = classified.filter((row) => !row.reviewed);
-      expect(fromRules).toHaveLength(303);
-      const asOther = fromRules.filter((row) => effective(row) === "other").length;
-      console.log(`Unreviewed: ${fromRules.length}, of which ${asOther} import as Other.`);
+      expect(fromRules).toEqual([]);
     });
 
     it("still classifies Why Us prompts by keyword rather than leaving the category empty", () => {
@@ -262,10 +264,27 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
     });
 
     it("reserves Personal Statement for genuinely open-topic prompts", () => {
+      // Listed rather than counted, so growth has to be argued for one prompt
+      // at a time. Every one of these is literally an open box - "share more
+      // about yourself that is not captured elsewhere", "anything missing", "an
+      // essay on any topic of your choice". A prompt that names a subject,
+      // however broad, belongs to the category of that subject; letting this
+      // list absorb them is what once made any two of 106 prompts read as a
+      // strong match.
       const open = classified.filter((row) => effective(row) === "personal-statement");
       expect(open.map((row) => `${row.school}: ${row.prompt.title}`).sort()).toEqual([
+        "Amherst College: If you would like to share more about yourself that is not captured",
+        "Carleton College: Anything missing",
         "Dartmouth College: Introduce yourself",
         "Georgetown University: Personal or creative essay",
+        "Pennsylvania State University: Please use this space to share information you would like us to",
+        "Pennsylvania State University: This is your opportunity to share something about yourself that is not",
+        "University of California, Santa Barbara: If there is anything else that you feel is relevant for your",
+        "University of Chicago: And, as always\u2026 the classic choose your own adventure option",
+        "University of Florida: Is there any additional information or extenuating circumstances the",
+        "University of Pittsburgh: Share information not included elsewhere in your University of",
+        "University of Texas at Austin: Share an essay on any topic of your choice",
+        "Vassar College: Your Space is your opportunity to allow the Committee on Admission to",
       ]);
     });
   });

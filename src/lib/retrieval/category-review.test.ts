@@ -27,13 +27,16 @@ describe("category review coverage", () => {
     return (record?.prompts ?? []).map((prompt) => ({ schoolName, prompt }));
   });
 
-  it("covers the reviewed part of the catalogue, and says how much is left", () => {
+  it("covers every prompt in the catalogue, with nothing left unreviewed", () => {
     const unreviewed = catalogue.filter(({ schoolName, prompt }) => !categoryReview(schoolName, prompt.externalRef));
     expect(catalogue).toHaveLength(553);
-    expect(catalogue.length - unreviewed.length).toBe(250);
-    // Pinned, not open-ended: a rebuild that adds prompts must move this number
-    // deliberately, and reviewing the worksheet must bring it down.
-    expect(unreviewed).toHaveLength(303);
+    // Zero, and it must stay zero. An unreviewed prompt falls through to the
+    // keyword classifier, and 153 of the 303 the rebuild added got no primary
+    // at all from it - so they resolved to `other`, which earns no category
+    // credit. That is invisible in the data: it looks like a classification
+    // rather than the absence of one. A catalogue rebuild that adds prompts
+    // fails here until docs/evaluation/prompt-review.csv covers them.
+    expect(unreviewed).toEqual([]);
   });
 
   it("never lets an unreviewed prompt be classified Personal Statement", () => {
@@ -56,7 +59,7 @@ describe("category review coverage", () => {
   it("has exactly one row per prompt", () => {
     const keys = CATEGORY_REVIEW.map(([school, ref]) => `${school}|${ref}`);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(250);
+    expect(keys).toHaveLength(553);
   });
 
   it("uses only declared primaries, functions, and secondaries", () => {
@@ -85,28 +88,43 @@ describe("category review coverage", () => {
     // Not a style preference: a catch-all Personal Statement is what made any
     // two of 106 prompts read as a 60-point match. If this count grows, the
     // reuse scoring in matching.ts degrades with it.
+    //
+    // Twelve of 553, and every one is literally an open box - "share more about
+    // yourself that is not captured elsewhere", "anything missing", "an essay on
+    // any topic of your choice", UChicago's choose-your-own-adventure. Those are
+    // the category's definition rather than an erosion of it: a prompt that
+    // names a subject, however broad, belongs to the category of that subject.
     const personalStatements = CATEGORY_REVIEW.filter(([, , primary]) => primary === "personal-statement");
-    expect(personalStatements).toHaveLength(2);
+    expect(personalStatements).toHaveLength(12);
   });
 
   it("records the distribution the scoring weights were chosen against", () => {
-    // Five rows retired with the 2026-27 rebuild (two Oberlin BA+BFA prompts,
-    // two UT Austin ones, one Yale) because their prompts no longer exist -
-    // hence 250 rather than 255, with why-major and other down by the same.
+    // The distribution after the full classification pass. Two numbers carry
+    // the argument for that pass:
+    //
+    // `other` is 136 of 553 (24.6%), against an effective 232 (42%) when 303
+    // prompts were falling through to the keyword classifier. `other` earns the
+    // neutral rung on the category ladder rather than a match, so every prompt
+    // parked there is one that cannot surface a reuse opportunity on category
+    // evidence - which made it the largest single cause of missed reuse.
+    //
+    // `community` is 33, against 7. Seven community prompts in a corpus of
+    // American supplemental essays was never a description of the corpus; it
+    // was prompts about service and civic engagement being filed `other`.
     const counts = new Map<string, number>();
     for (const [, , primary] of CATEGORY_REVIEW) counts.set(primary, (counts.get(primary) ?? 0) + 1);
     expect(Object.fromEntries([...counts].sort())).toEqual({
-      "activities-impact": 14,
-      "challenge-growth": 23,
-      community: 7,
-      diversity: 30,
-      other: 79,
-      "personal-statement": 2,
-      "reading-list": 1,
-      roommate: 2,
-      shorts: 13,
-      "why-major": 57,
-      "why-us": 22,
+      "activities-impact": 42,
+      "challenge-growth": 31,
+      "community": 33,
+      "diversity": 50,
+      "other": 136,
+      "personal-statement": 12,
+      "reading-list": 2,
+      "roommate": 2,
+      "shorts": 38,
+      "why-major": 145,
+      "why-us": 62,
     });
   });
 });
