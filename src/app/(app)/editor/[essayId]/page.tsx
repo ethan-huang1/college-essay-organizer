@@ -72,7 +72,14 @@ export default async function EditorDocumentPage({
   const isReusedEssay = essay.designation === "school-adaptation" || Boolean(essay.adaptedFromEssayId);
   const { groups, ribbonByEssay } = essayRibbonEntries(snapshot);
   const group = groups.find((candidate) => candidate.essay.id === essay.id);
-  const adaptable = [...(group?.open ?? []), ...(group?.withEdits ?? [])];
+  // Sorted by score, because this panel renders one flat list with no group
+  // headings. reuseOpportunities sorts within each group, so concatenating
+  // them put a 79 from `open` above an 81 from `withEdits` and read as a
+  // broken sort - the Categories view gets away with the same grouping only
+  // because it labels each group. The adaptation caveat is not lost: every row
+  // already carries "check for another school's language before reusing".
+  const adaptable = [...(group?.open ?? []), ...(group?.withEdits ?? [])]
+    .sort((a, b) => b.score - a.score);
   // "Ready" is what Mark complete sets; "submitted" is further along the same
   // road, so both read as done. The prompts it answers carry the same state -
   // that is what the Overview counts.

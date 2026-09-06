@@ -570,6 +570,11 @@ function missingRequirements(promptPrimarySlug: string | null, promptSecondarySl
   return [promptPrimarySlug, ...promptSecondarySlugs]
     .filter((slug): slug is string => Boolean(slug))
     .filter((slug) => !essayFamilies.has(slug))
+    // A category that names no theme cannot name a missing one. "May not
+    // address Other themes" is meaningless to a student - `Other` means no
+    // category fits this prompt - and "may not address Short Answer themes" is
+    // worse, because Short Answer is a length. Both were being shown.
+    .filter((slug) => !NO_SHARED_THEME.has(slug))
     .slice(0, 2)
     .map((slug) => `may not address ${FAMILY_NAME_BY_SLUG.get(slug) ?? slug} themes`);
 }

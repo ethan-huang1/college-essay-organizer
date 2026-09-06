@@ -366,6 +366,36 @@ describe("explainability", () => {
     }
   });
 
+  it("never reports a missing theme for a category that names no theme", () => {
+    // "May not address Other themes" is meaningless - `Other` means no category
+    // fits this prompt - and "may not address Short Answer themes" is worse,
+    // because Short Answer is a length. Both were reaching the student.
+    const other = scoreMatch({
+      ...base,
+      essayPrimaryFamilySlug: "community",
+      promptPrimaryFamilySlug: "other",
+      promptSecondaryFamilySlugs: [],
+    });
+    expect(other.missingRequirements).toEqual([]);
+
+    const shortAnswer = scoreMatch({
+      ...base,
+      essayPrimaryFamilySlug: "community",
+      promptPrimaryFamilySlug: "shorts",
+      promptSecondaryFamilySlugs: [],
+    });
+    expect(shortAnswer.missingRequirements).toEqual([]);
+
+    // A real category the essay does not carry is still reported.
+    const real = scoreMatch({
+      ...base,
+      essayPrimaryFamilySlug: "community",
+      promptPrimaryFamilySlug: "why-major",
+      promptSecondaryFamilySlugs: [],
+    });
+    expect(real.missingRequirements).toEqual(["may not address Why Major themes"]);
+  });
+
   it("names the shared themes and every binding ceiling", () => {
     const result = scoreMatch({
       ...base,

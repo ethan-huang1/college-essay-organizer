@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { essaySchoolGroups, unattachedEssays, type DashboardEssay, type DashboardPrompt } from "./essay-dashboard";
@@ -137,5 +139,19 @@ describe("unattachedEssays", () => {
     // Its college is gone from the list; the writing is not.
     const orphan = essay({ id: "e-orphan", originPromptId: "p-gone" });
     expect(unattachedEssays({ prompts: [prompt()], essays: [orphan] })).toEqual([orphan]);
+  });
+});
+
+describe("the editor's adaptation panel", () => {
+  it("orders its flat list by score", () => {
+    // A regression guard for a real report: the panel concatenated
+    // reuseOpportunities' `open` and `withEdits` groups, each sorted
+    // internally, and rendered them as one list with no headings - so a 79
+    // sat above an 81 and read as a broken sort.
+    const source = readFileSync("src/app/(app)/editor/[essayId]/page.tsx", "utf8");
+    const declaration = source.slice(source.indexOf("const adaptable ="), source.indexOf("const adaptable =") + 300);
+    expect(declaration).toContain("group?.open");
+    expect(declaration).toContain("group?.withEdits");
+    expect(declaration).toMatch(/\.sort\(\(a, b\) => b\.score - a\.score\)/);
   });
 });
