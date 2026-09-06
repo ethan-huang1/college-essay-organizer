@@ -1,152 +1,146 @@
 /**
- * Regenerates src/lib/retrieval/category-review.ts from the owner's review CSV.
+ * Regenerates src/lib/retrieval/category-review.ts from
+ * docs/evaluation/prompt-review.csv.
  *
- * Provenance: docs/evaluation/source-review.csv is a byte copy of
- * Essay_Prompt_Category_Review_Claude.csv. Categories come from there, so the
- * committed data is reproducible from a file in the repo rather than from a hand
- * transcription. Prompt functions are not in that file - they were assigned
- * separately - so they are carried across from the existing generated module by
- * (school, externalRef).
+ * The worksheet is the source of truth and this is the only thing that writes
+ * the generated module, so a classification is changed by editing the
+ * spreadsheet and re-running this - never by hand-editing the module.
  *
- * The CSV's `Your primary override` / `Final primary` columns are read in
- * preference to `Proposed primary` where they are filled, so editing the
- * spreadsheet and re-running this is the way to change a classification.
+ * Three things changed when the worksheet was unified, and each removed a way
+ * for the pipeline to lie:
+ *
+ * 1. **It reads one file.** `source-review.csv` covered 207 prompts and
+ *    `new-prompt-review.csv` the other 303, in a different column vocabulary,
+ *    with a precedence rule between them. Now there is one file and no
+ *    precedence.
+ *
+ * 2. **Secondaries are uncapped.** Both old files had exactly three secondary
+ *    slots, which is an arbitrary limit on a field whose entire purpose is
+ *    capturing overlap. One semicolon-separated cell has no ceiling.
+ *
+ * 3. **The owner's two activities-promotion lists are gone.** They were arrays
+ *    of CSV row *indices* living in this script, so the worksheet was not
+ *    actually the whole truth and renumbering a row would have silently
+ *    reassigned someone else's category. Their effect is baked into the
+ *    worksheet's `Final *` columns instead.
+ *
+ * Prompt functions come from the worksheet too. They used to be read back out
+ * of the module this script overwrites, which meant the function column could
+ * never be corrected through the pipeline - only by editing generated code.
+ *
+ * One worksheet row fans out to every catalogue record sharing its prompt text,
+ * so the eight UC Personal Insight Questions are one decision applied to seven
+ * campuses rather than 56 rows to keep consistent by hand.
  *
  *   node --experimental-strip-types --import ./scripts/ts-resolve.mjs \
  *     scripts/regenerate-category-review.mts
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { categoryReview } from "../src/lib/retrieval/category-review.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
+import { parseCsv } from "./parse-csv.mts";
+import {
+  FUNCTION_NAMES, PRIMARY_TO_SLUG, SECONDARY_FAMILY, SECONDARY_TAG, signatureOf, splitSecondaries,
+} from "./review-vocabulary.mts";
 
-const PRIMARY_TO_SLUG: Record<string, string> = {
-  "Community": "community", "Background & Identity": "diversity", "Why Us": "why-us",
-  "Why Major": "why-major", "Challenge & Growth": "challenge-growth",
-  "Activities & Impact": "activities-impact",
-  "Personal Statement": "personal-statement", "Short Answer": "shorts",
-  "Other": "other", "Reading List": "reading-list", "Roommate": "roommate",
-};
-/** Secondaries that are themselves categories, stored as non-primary family links. */
-const SECONDARY_FAMILY: Record<string, string> = {
-  "Background & Identity": "diversity", "Challenge & Growth": "challenge-growth",
-  "Community": "community", "Why Major": "why-major", "Why Us": "why-us",
-  "Activities & Impact": "activities-impact",
-};
-/** Secondaries stored as prompt tags. */
-const SECONDARY_TAG: Record<string, string> = {
-  "Academic Context": "academic context", "Collaboration": "collaboration",
-  "Contribution": "contribution", "Course": "course", "Creativity": "creativity",
-  "Disagreement": "disagreement", "Goals & Future": "goals & future",
-  "Intellectual Curiosity": "intellectual curiosity", "Leadership": "leadership",
-  "Service": "service", "Values": "values & meaning",
-};
+const WORKSHEET = "docs/evaluation/prompt-review.csv";
+const MODULE = "src/lib/retrieval/category-review.ts";
 
-/**
- * Owner decisions applied on top of the CSV.
- *
- * Activities & Impact is a primary only where the prompt centrally requires an
- * activity, role, job, responsibility or project. Impact, contribution, service,
- * talent or making something does not qualify on its own - which is why the
- * second list keeps `Other` and carries Activities & Impact as a secondary.
- */
-const PROMOTE_TO_ACTIVITIES: number[] = [32, 35, 66, 79, 80, 86, 179, 202];
-const KEEP_OTHER_WITH_ACTIVITIES_SECONDARY: number[] = [4, 7, 27, 33, 39, 44, 129, 159, 182];
+const rows = parseCsv(readFileSync(WORKSHEET, "utf8"));
 
-type CsvRow = Record<string, string>;
-function parseCsv(text: string): CsvRow[] {
-  const rows: string[][] = [];
-  let row: string[] = [], field = "", quoted = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') { field += '"'; i += 1; }
-      else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ",") { row.push(field); field = ""; }
-    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (ch !== "\r") field += ch;
-  }
-  if (field || row.length) { row.push(field); rows.push(row); }
-  const header = rows.shift()!.map((h) => h.replace(/^﻿/, "").trim());
-  return rows.filter((r) => r.some((c) => c.trim())).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()])));
-}
-
-const csv = parseCsv(readFileSync("docs/evaluation/source-review.csv", "utf8"));
-const UC_LABEL = "University of California (systemwide)";
-const UC = listCoveredSchoolNames().filter((s) => s.startsWith("University of California,")).sort();
-
-// (school, title) -> externalRef, from the registry.
-const refByKey = new Map<string, string>();
-const titlesBySchool = new Map<string, string[]>();
+// Every catalogue record, grouped by the prompt text a worksheet row decides.
+const recordsBySignature = new Map<string, { school: string; ref: string }[]>();
 for (const school of listCoveredSchoolNames()) {
-  const titles: string[] = [];
   for (const prompt of lookupSchoolSource(school)?.prompts ?? []) {
-    refByKey.set(`${school}|${prompt.title}`, prompt.externalRef);
-    titles.push(prompt.title);
+    const signature = signatureOf(prompt.title, prompt.promptText);
+    if (!recordsBySignature.has(signature)) recordsBySignature.set(signature, []);
+    recordsBySignature.get(signature)!.push({ school, ref: prompt.externalRef });
   }
-  titlesBySchool.set(school, titles);
 }
 
 type Out = { school: string; ref: string; primary: string; families: string[]; tags: string[]; fn: string };
 const out: Out[] = [];
-const changes: string[] = [];
+const problems: string[] = [];
+const claimed = new Set<string>();
 
-for (const row of csv) {
-  const id = Number(row.ID);
-  const rawPrimary = row["Your primary override"] || row["Final primary"] || row["Proposed primary"];
-  const rawSecondaries = [1, 2, 3]
-    .map((n) => row[`Your secondary ${n}`] || row[`Final secondary ${n}`] || row[`Secondary ${n}`])
-    .filter(Boolean);
+for (const row of rows) {
+  const id = row.ID || row["External ref"];
+  const where = `#${id} ${row.School} / ${row["External ref"]}`;
 
-  let primaryName = rawPrimary;
-  let secondaryNames = [...rawSecondaries];
-
-  if (PROMOTE_TO_ACTIVITIES.includes(id)) {
-    primaryName = "Activities & Impact";
-    // A primary is never repeated among its own secondaries.
-    secondaryNames = secondaryNames.filter((s) => s !== "Activities & Impact");
-    changes.push(`#${id} ${row["Prompt title"]}: ${rawPrimary} -> Activities & Impact (secondaries kept: ${secondaryNames.join(", ") || "none"})`);
-  } else if (KEEP_OTHER_WITH_ACTIVITIES_SECONDARY.includes(id)) {
-    if (!secondaryNames.includes("Activities & Impact")) {
-      secondaryNames.push("Activities & Impact");
-      changes.push(`#${id} ${row["Prompt title"]}: kept ${primaryName}, added Activities & Impact secondary`);
-    }
+  const primaryName = row["Final primary"];
+  const fn = row["Final function"];
+  // Blank means nobody has decided, which is a different failure from deciding
+  // wrongly and has to be reported as such rather than defaulting to `other`.
+  // Defaulting is how 42% of the catalogue ended up in a category that earns no
+  // points, and it looked like data rather than like a gap.
+  if (!primaryName) { problems.push(`${where}: no Final primary`); continue; }
+  if (!fn) { problems.push(`${where}: no Final function`); continue; }
+  if (!FUNCTION_NAMES.includes(fn as (typeof FUNCTION_NAMES)[number])) {
+    problems.push(`${where}: unknown function "${fn}"`); continue;
   }
 
   const primary = PRIMARY_TO_SLUG[primaryName];
-  if (!primary) throw new Error(`#${id}: unknown primary "${primaryName}"`);
-  const families = secondaryNames.map((s) => SECONDARY_FAMILY[s]).filter(Boolean);
-  const tags = secondaryNames.map((s) => SECONDARY_TAG[s]).filter(Boolean);
-  const unmapped = secondaryNames.filter((s) => !SECONDARY_FAMILY[s] && !SECONDARY_TAG[s]);
-  if (unmapped.length) throw new Error(`#${id}: unmapped secondaries ${unmapped.join(", ")}`);
-  if (families.includes(primary)) throw new Error(`#${id}: primary ${primary} duplicated in secondaries`);
+  if (!primary) { problems.push(`${where}: unknown primary "${primaryName}"`); continue; }
 
-  for (const school of row.School === UC_LABEL ? UC : [row.School]) {
-    const ref = refByKey.get(`${school}|${row["Prompt title"]}`);
-    if (!ref) throw new Error(`#${id}: no catalogue prompt "${row["Prompt title"]}" at ${school}`);
-    const fn = categoryReview(school, ref)?.[5];
-    if (!fn) throw new Error(`#${id}: no prompt function recorded for ${school} / ${ref}`);
-    out.push({ school, ref, primary, families, tags, fn });
+  const secondaryNames = splitSecondaries(row["Final secondaries"] ?? "");
+  const unmapped = secondaryNames.filter((name) => !SECONDARY_FAMILY[name] && !SECONDARY_TAG[name]);
+  if (unmapped.length) { problems.push(`${where}: unmapped secondaries ${unmapped.join(", ")}`); continue; }
+
+  const families = [...new Set(secondaryNames.map((name) => SECONDARY_FAMILY[name]).filter(Boolean))];
+  const tags = [...new Set(secondaryNames.map((name) => SECONDARY_TAG[name]).filter(Boolean))];
+  // A primary is never also its own secondary: matching would count the same
+  // fact twice, once as a shared category and again as a shared theme.
+  if (families.includes(primary)) { problems.push(`${where}: primary ${primary} repeated in secondaries`); continue; }
+
+  const signature = signatureOf(row["Prompt title"], row["Full written prompt"]);
+  const targets = recordsBySignature.get(signature);
+  if (!targets) { problems.push(`${where}: no catalogue record matches this prompt text`); continue; }
+
+  for (const target of targets) {
+    const key = `${target.school}|${target.ref}`;
+    if (claimed.has(key)) { problems.push(`${where}: ${key} already decided by an earlier row`); continue; }
+    claimed.add(key);
+    out.push({ school: target.school, ref: target.ref, primary, families, tags, fn });
   }
 }
 
+const catalogueSize = [...recordsBySignature.values()].reduce((sum, group) => sum + group.length, 0);
+const uncovered = catalogueSize - claimed.size;
+
+if (problems.length > 0) {
+  console.error(`Refusing to write ${MODULE}. ${problems.length} problem(s):\n`);
+  for (const problem of problems.slice(0, 40)) console.error(`  ${problem}`);
+  if (problems.length > 40) console.error(`  ... and ${problems.length - 40} more`);
+  console.error(`\n${uncovered} of ${catalogueSize} catalogue records would have been left unclassified.`);
+  console.error(`Fill the Final columns in ${WORKSHEET} and re-run.`);
+  process.exit(1);
+}
+if (uncovered !== 0) {
+  console.error(`Refusing to write ${MODULE}: ${uncovered} catalogue records are not covered by any worksheet row.`);
+  console.error(`Re-run scripts/build-prompt-review.mts to add rows for them.`);
+  process.exit(1);
+}
+
 out.sort((a, b) => a.school.localeCompare(b.school) || a.ref.localeCompare(b.ref));
-const q = (v: string) => JSON.stringify(v);
+const q = (value: string) => JSON.stringify(value);
 const body = out.map((r) =>
   `  [${q(r.school)}, ${q(r.ref)}, ${q(r.primary)}, [${r.families.map(q).join(", ")}], [${r.tags.map(q).join(", ")}], ${q(r.fn)}],`
 ).join("\n");
 
-const existing = readFileSync("src/lib/retrieval/category-review.ts", "utf8");
+const existing = readFileSync(MODULE, "utf8");
 const header = existing.slice(0, existing.indexOf("export const CATEGORY_REVIEW"));
-writeFileSync("src/lib/retrieval/category-review.ts",
-  `${header}export const CATEGORY_REVIEW: CategoryReviewRow[] = [\n${body}\n];\n${existing.slice(existing.indexOf("];\n", existing.indexOf("export const CATEGORY_REVIEW")) + 3)}`);
+const tail = existing.slice(existing.indexOf("];\n", existing.indexOf("export const CATEGORY_REVIEW")) + 3);
+writeFileSync(MODULE, `${header}export const CATEGORY_REVIEW: CategoryReviewRow[] = [\n${body}\n];\n${tail}`);
 
-console.log(`Wrote ${out.length} rows from ${csv.length} review rows.`);
-console.log(`\nChanges applied (${changes.length}):`);
-for (const change of changes) console.log(`  ${change}`);
+console.log(`Wrote ${out.length} rows from ${rows.length} worksheet rows.`);
 const counts = new Map<string, number>();
 for (const r of out) counts.set(r.primary, (counts.get(r.primary) ?? 0) + 1);
 console.log("\nCatalogue records per primary:");
 for (const [slug, n] of [...counts].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(3)}  ${slug}`);
+const secondaryHistogram = new Map<number, number>();
+for (const r of out) {
+  const n = r.families.length + r.tags.length;
+  secondaryHistogram.set(n, (secondaryHistogram.get(n) ?? 0) + 1);
+}
+console.log("\nSecondaries per record:");
+for (const [n, count] of [...secondaryHistogram].sort((a, b) => a[0] - b[0])) console.log(`  ${n}: ${count}`);

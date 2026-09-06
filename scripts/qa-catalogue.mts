@@ -15,6 +15,8 @@ import { normalizeWhitespace, validateRecord } from "../src/lib/retrieval/normal
 import { PROMPT_VECTORS } from "../src/lib/retrieval/prompt-vectors.ts";
 import { listCoveredSchoolNames, lookupSchoolSource } from "../src/lib/retrieval/registry.ts";
 import { TOP_UNIVERSITIES } from "../src/lib/top-universities.ts";
+import { parseCsv } from "./parse-csv.mts";
+import { signatureOf } from "./review-vocabulary.mts";
 
 const fail: string[] = [];
 const note: string[] = [];
@@ -123,9 +125,31 @@ for (const { school, prompt } of catalogue) {
   if (!vectorKeys.has(`${school}|${prompt.externalRef}`)) F(`${school}/${prompt.externalRef}: no committed vector`);
 }
 
-// 9. The owner's worksheet covers exactly the unreviewed prompts.
-const worksheet = readFileSync("docs/evaluation/new-prompt-review.csv", "utf8").split("\n").slice(1).filter(Boolean).length;
-if (worksheet !== catalogue.length - reviewed) F(`worksheet has ${worksheet} rows for ${catalogue.length - reviewed} unreviewed prompts`);
+// 9. The review worksheet covers every unique prompt in the catalogue, and
+// every catalogue record is reachable from exactly one worksheet row.
+//
+// It used to assert the worksheet covered exactly the *unreviewed* prompts,
+// which was right while there were two worksheets and wrong now that there is
+// one: prompt-review.csv is the source of truth for all of them, reviewed or
+// not, at one row per unique prompt text.
+const worksheetRows = parseCsv(readFileSync("docs/evaluation/prompt-review.csv", "utf8"));
+const worksheetSignatures = new Set(worksheetRows.map((row) => signatureOf(row["Prompt title"], row["Full written prompt"])));
+const catalogueSignatures = new Map<string, number>();
+for (const { prompt } of catalogue) {
+  const signature = signatureOf(prompt.title, prompt.promptText);
+  catalogueSignatures.set(signature, (catalogueSignatures.get(signature) ?? 0) + 1);
+}
+if (worksheetRows.length !== catalogueSignatures.size) {
+  F(`worksheet has ${worksheetRows.length} rows for ${catalogueSignatures.size} unique prompts`);
+}
+for (const signature of catalogueSignatures.keys()) {
+  if (!worksheetSignatures.has(signature)) F(`no worksheet row for prompt signature ${signature.slice(0, 60)}...`);
+}
+for (const signature of worksheetSignatures) {
+  if (!catalogueSignatures.has(signature)) F(`worksheet row matches no catalogue prompt: ${signature.slice(0, 60)}...`);
+}
+const undecided = worksheetRows.filter((row) => !row["Final primary"] || !row["Final function"]).length;
+note.push(`worksheet: ${worksheetRows.length} unique prompts, ${undecided} awaiting classification`);
 
 note.push(`schools: ${schools.length}, prompts: ${catalogue.length}`);
 note.push(`reviewed: ${reviewed}, awaiting review: ${catalogue.length - reviewed}`);

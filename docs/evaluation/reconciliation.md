@@ -1,6 +1,14 @@
 # Reconciliation: manual review against the running system
 
-Source of truth: [source-review.csv](source-review.csv), a byte copy of the
+> **Historical.** This audit compared the committed classification against
+> `source-review.csv`, the owner's original review spreadsheet. That file and
+> `new-prompt-review.csv` were unified into
+> [prompt-review.csv](prompt-review.csv) once the catalogue grew to 553
+> prompts; both originals are in git history at `7104142`. The findings below
+> are kept because they record how the two were reconciled, not because the
+> file paths still resolve.
+
+Source of truth at the time: `source-review.csv`, a byte copy of the
 owner's `Essay_Prompt_Category_Review_Claude.csv`.
 
 The owner's decisions applied on top of it - promoting eight prompts to

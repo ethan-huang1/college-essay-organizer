@@ -207,7 +207,7 @@ describe("prompt-retrieval coverage (top-100 college list)", () => {
 
     it("classifies the rest by rule, and keeps that population pinned", () => {
       // The 2026-27 rebuild tripled the catalogue; these are the prompts the
-      // owner has not reviewed yet (docs/evaluation/new-prompt-review.csv).
+      // owner has not reviewed yet (docs/evaluation/prompt-review.csv).
       // They import at the classifier's own confidence, which is what the
       // needs-review surface is for - but the number must move deliberately.
       const fromRules = classified.filter((row) => !row.reviewed);

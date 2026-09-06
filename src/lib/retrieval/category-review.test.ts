@@ -15,7 +15,7 @@ import { listCoveredSchoolNames, lookupSchoolSource } from "./registry";
  * The review data is the classification source of truth for the prompts it
  * covers, which is no longer the whole catalogue: the 2026-27 rebuild took the
  * catalogue from 255 prompts to 553, and the 303 it added have not been
- * reviewed yet (docs/evaluation/new-prompt-review.csv is the worksheet for
+ * reviewed yet (docs/evaluation/prompt-review.csv is the worksheet for
  * them). So the assertions here are about the review being *sound* rather than
  * total - every row points at a live prompt, no prompt has two rows, and the
  * distribution the reuse weights were chosen against has not moved - plus a
