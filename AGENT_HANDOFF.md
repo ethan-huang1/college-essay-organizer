@@ -288,6 +288,55 @@ What the pass changed, at record grain:
 `Other` is now mostly what it should be: portfolio instructions, graded-paper
 submission requirements, audition scenarios and UChicago's riddles.
 
+### Supporting material: requirements that are not essay prompts
+
+28 of the 553 catalogue rows are application requirements rather than essay
+prompts: graded papers (Princeton, Amherst), writing samples (Williams, UIUC,
+UMass, CU Boulder, UCSD, UCI), portfolio captions and per-item metadata
+(Cornell, UCSD, UCSB, UMass, Miami, Michigan, Williams, Yale), uploads of
+existing work, and three administrative rows.
+
+`RawPromptRecord.supportingMaterial` holds a short phrase naming the kind and
+`prompts.supporting_material` persists it (migration `0005`). Null means essay
+prompt: 525 catalogue rows and everything a student types in.
+
+**The test is whether the student composes original application prose that could
+be reused elsewhere.** It keeps in things that look like exclusions - "list five
+books" is a real answer, FSU's screenwriting scenarios are original creative
+work - and excludes things that call themselves essays: UCI's "submit a short
+essay that analyses a dramatic text" explicitly accepts one already written for
+school.
+
+They stay in the catalogue, because a graded paper is real work with a real
+deadline. What changes is that they are not *essays*: no reuse matching, no
+recommendations, not in `stats.prompts` or any completion total or progress
+ring, not in the category explorer, no committed vector, not in the
+classification worksheet. `stats.supportingMaterial` counts them separately and
+each school's view lists them under a "Supporting material" heading below its
+essay prompts.
+
+FSU needed no change: the three screenwriting scenarios were already
+`conditional` on `programKey=motion-picture-arts` and grouped
+`fsu-film-screenplay` as choose-one.
+
+### The catch-all rule, in three vocabularies
+
+The single most repeated lesson of this work, and the thing to remember before
+touching `matching.ts`: **the catch-all value of a classification is not
+evidence of a match.** It came up three times, in three different fields, and
+each time the fix was the same shape:
+
+| Field | Catch-all | Was | Is |
+|---|---|---|---|
+| Primary category | `other` | neutral rung (a free half-weight to 42% of pairs) | floor rung |
+| Primary category | `shorts` | top rung when shared (27 of 32 pairs in the top band) | floor rung |
+| Prompt function | `describe` | full credit when shared | the weak within-group rung |
+
+`roommate` and `reading-list` are deliberately *not* treated this way: each
+names one recurring question, so two of them really are interchangeable. Short
+Answer names no question at all - taxonomy.ts already said so, and the scorer
+had not caught up.
+
 ### Reuse scoring: two factors and three ceilings
 
 `contentFitScore = category(35) + semantic(45) + function(20)`, nothing
@@ -708,26 +757,15 @@ none of this fixture data was committed):
 
 ### Owner action
 
-1. **Apply the catalogue and the classification to the live database** with
-   `scripts/reimport-catalogue.mts`. **Nothing has been applied yet** - the
-   2026–27 rebuild, the full classification and the rescoring are all committed
-   on `main` and none of them has touched Neon. The reimport rewrites the
-   category links and recomputes every match, so it changes what every existing
-   workspace sees.
-2. **Read the recommendations and judge them.** This is the one check none of
-   the above replaces, and it is still outstanding: every number in
-   `docs/evaluation/` uses catalogue prompts as stand-ins for essays. An
-   end-to-end run with a real 149-word essay is in the verification section and
-   reads correctly, but that is one essay.
-3. **Decide what to do about procedural rows.** The end-to-end run surfaced
-   Princeton's "submit a graded written paper" instruction as a 60-point reuse
-   suggestion. It is not a prompt at all: it is filed `Other`, so the category
-   ladder gives it the floor, but its long paragraph of instructions reads as
-   semantically similar to a long essay. `catalogue-transform.mts` already drops
-   nine "not a prompt" rows by name; the graded-paper requirements, portfolio
-   instructions and AI-disclosure fields are the same kind of thing and there
-   are perhaps twenty of them. Dropping them is a data judgement for the owner,
-   not a scoring change.
+1. **Read the recommendations and judge them.** Still the one check none of the
+   automated work replaces. Spot-checking the live database after the first
+   reimport found three real score inflations in about ten minutes, all of them
+   invisible to 913 passing tests - see below. Two hundred more minutes of
+   reading would probably find more.
+2. **Consider whether more rows are supporting material.** 28 were marked from a
+   careful pass, but the criterion is a judgement and the corpus is 553 rows.
+   `scripts/audit-review-consistency.mts` is the tool; its `Other` census is
+   where a missed one would show up.
 
 > **Both recent objectives are complete**: the reuse-scoring redesign
 > ([docs/reuse-scoring.md](docs/reuse-scoring.md)) and the UI/UX redesign (see
@@ -928,18 +966,50 @@ similarity dominate the formula.
 - Last agent: Claude
 ## Last Verified Commit
 
-`103f030` — "docs: benchmark two stronger embedding models, and keep the one we
-have". The full gate passed on it: lint clean, strict typecheck clean, **909
+`a06c319` — "fix: three score inflations found by spot-checking the live
+database". Full gate passed on it: lint clean, strict typecheck clean, **913
 Vitest tests in 43 files** plus the 8 sealed-holdout cases via
-`REUSE_HOLDOUT=1`, production build successful, `scripts/qa-catalogue.mts`
-passing with zero findings.
+`REUSE_HOLDOUT=1`, production build successful, `qa-catalogue.mts` zero
+findings, and the configuration sweep re-confirming 35/45/20 at 21/21 positives
+and 12/12 negatives.
 
-**Nothing is deployed** (`git push origin main` deploys) and **the live database
-has not been touched**. Everything through `5c0aed9` is what production runs.
+**Neon has been migrated and reimported.** Migration `0005` applied, then
+`scripts/reimport-catalogue.mts` run twice (the second run reported 287
+unchanged, confirming idempotency) with all 4 workspaces recomputed. A full
+pre-write backup of all 15 tables was taken first.
 
-The 2026–27 catalogue rebuild landed as a fast-forward of `dataset-import-qa`
-into `main` at `72ed32f`, after the uncommitted Essay Editor and AI-coach work
-was committed on its own at `15c0442` so the rebuild could land on a clean tree
-rather than being merged into a dirty one. The persistence-test conflict the old
-handoff warned about did not materialise: the two change sets touch different
-regions of the file and git resolved it.
+Live state after: 287 prompts (11 supporting material), 23 essays, 31 versions,
+21 assignments, 2,362 matches. Eight integrity checks pass, asserted rather than
+eyeballed:
+
+- student work preserved exactly (23 / 31 / 21, unchanged from the backup);
+- every assignment still points at a live essay and prompt;
+- supporting material has no matches and no category links;
+- empty essays have no matches;
+- match count equals non-empty essays x scorable prompts in every workspace;
+- no same-Short-Answer pair in the top band;
+- every match scoring 70+ but banded lower names the ceiling that did it.
+
+`new-response` now tops out at 67 rather than 100, because the empty-document
+matches that produced scores of 100 are gone.
+
+### What spot-checking caught that the tests did not
+
+Worth reading before trusting a green suite on the next change. All three were
+the catch-all rule above, and all three were live recommendations a student
+would have seen:
+
+- A 67-word hall-note essay recommended at 88 for "what is your favorite snack"
+  and 84 for "dream job", because both sides were Short Answer.
+- "Just for fun" against "what is your favorite snack" at 70, on saturated
+  semantic similarity plus full credit for both being `describe`.
+- Two empty placeholder documents producing 137 match rows, six of them
+  recommendations, one at 64.
+
+Fixing the first two then broke a true positive - Brown's and Princeton's
+identical "what brings you joy" prompts fell to 55 - and the cause was
+classification, not formula: Princeton's carried no `Values` secondary while
+Brown's and Cornell's identical prompts both did. **The audit tool could not see
+it**, because it compared primary and function across near-duplicates and
+ignored secondaries, which is the field the category ladder reads. The tool was
+fixed first, and then it found the pair immediately.
