@@ -174,25 +174,102 @@ structural, so snapshot rows satisfy them with no casting.
 
 ## Coverage (prompt retrieval)
 
-All 100 records live under `src/lib/retrieval/sources/` and are registered
-in `registry.ts`. The enforced breakdown is:
+Rebuilt from the 2026–27 research master on 2026-09-01 (branch
+`dataset-import-qa`). All 100 records live under `src/lib/retrieval/sources/`
+and are registered in `registry.ts`, but they are now **generated** rather
+than hand-written:
 
-- **46 `officially-verified`** for 2026–27. This includes all seven picker
-  UC campuses sharing the university's canonical eight PIQs.
-- **12 `no-supplement-confirmed`**, each with an official source and a
-  school-specific explanation.
-- **6 `previous-cycle`** official 2025–26 sets: Carnegie Mellon, Harvard,
-  Harvey Mudd, Pomona, Illinois Urbana-Champaign, and UMass Amherst.
-- **36 `needs-review`**, each with zero imported prompts plus the official
-  sources checked and the specific unresolved issue (usually portal-only
-  wording, an omitted cycle label, or incomplete conditional-program
-  coverage).
-- **0 `unresearched`**.
+```
+docs/catalogue/master-supplemental-2026-27.json   the research master (provenance)
+docs/catalogue/previous-catalogue.json            the pre-rebuild catalogue, frozen
+scripts/catalogue-transform.mts                   every human judgement
+scripts/build-catalogue.mts                       the mechanical transform -> sources/*.ts
+scripts/sync-category-review.mts                  prunes dead review rows, writes the worksheet
+scripts/qa-catalogue.mts                          deterministic QA gate (exit 1 on any finding)
+```
 
-Previous-cycle prompts remain usable for planning and classification, but
-the UI labels them **“2025–26—2026–27 not confirmed”** and excludes them
-from current-cycle completion statistics. `needs-review` and confirmed
-no-supplement outcomes remain distinguishable from an absent record.
+**553 prompts across 100 schools** (was 255). The breakdown:
+
+- **83 `officially-verified`** — the school publishes the prompts itself.
+- **12 `common-app-verified`** — corroborated across independent current-cycle
+  sources rather than read off the school's own page (the master's
+  `CORROBORATED`).
+- **5 `no-supplement-confirmed`** — Colby, Middlebury, Tulane (which dropped
+  "Why Tulane?" this cycle), Georgia, Wesleyan.
+- **0 `needs-review`**, **0 `previous-cycle`**, **0 unresearched**.
+
+Requirement mix: 125 `required`, 194 `optional`, 234 `conditional`, of which
+**231 carry a `programKey`** and **only 3 are unresolved** (Pittsburgh, UMass
+Amherst, Wisconsin–Madison — each gated on something the app cannot model,
+e.g. "required unless you apply through the UW application").
+
+**Choose-N sets are groups, not conditionals.** 28 schools declare a
+`promptGroups` entry (135 prompts), so the app counts the essays a school
+actually asks for: UC's eight PIQs are 4, Dartmouth's six longer responses
+are 1, Caltech's Scientific Drive is 2 of 3. A set that only applies to one
+programme keeps `requirement: "conditional"` **and** a `groupKey`, so the
+programme gate is evaluated before the group — the pre-existing Washington
+and Lee Johnson Scholarship encoding, preserved exactly (0 required until
+Johnson is selected, then 1 of 5).
+
+**Nine rows in the master are deliberately not prompts** and are dropped by
+name in `catalogue-transform.mts`: four Purdue Honors rows the master itself
+marks `not_applicable` and contradicted, two "no public prompt text exists"
+records (UConn BA Art, Villanova PSP), two Georgia Tech requirement
+statements, and one Northeastern portal field label.
+
+**Limits the schema cannot hold stay null.** Pages, paragraphs, sentences,
+"13 words per stem", "25 characters per word": 41 prompts carry the exact
+constraint in `prompts.notes` instead of a converted word count, because a
+page count turned into a word count is a number the student would write to.
+Ohio State's malformed `"350-500"` became min 350 / max 500.
+
+Previous-cycle prompts no longer come from the catalogue; they are produced
+by pruning (below). The UI still labels them "2025–26 — 2026–27 not
+confirmed" and excludes them from current-cycle completion statistics.
+
+### Pruning: what happens to a prompt the catalogue drops
+
+`pruneStalePrompts` (in `college-import.ts`) runs on every import, scoped to
+rows with an `externalRef` so a student's own prompts are never touched:
+
+- **Nothing invested** (not started, no assignment, no essay claiming it as
+  origin) → **deleted**, so it disappears.
+- **Anything invested** → **re-filed under the previous cycle** and marked
+  `previous-cycle`. It counts toward nothing, carries the existing "do not
+  treat as a current requirement" warning, and the essay, its versions and
+  the assignment all survive. Deleting it would cascade the assignment away
+  and null the essay's `originPromptId` — the student's own record of what
+  they wrote it for.
+
+`ImportCollegeResult.counts` gained `retired` and `removed`;
+`scripts/reimport-catalogue.mts` reports both per school.
+
+### Classification: 250 reviewed, 303 awaiting review
+
+The owner's hand review is keyed by `(school, externalRef)`, so the rebuild
+carries refs and titles across for any prompt whose text is unchanged, is a
+recognisable rewording (opening-clause or token-containment match), or is
+named in `REF_CARRYOVER`. **250 of 255 review rows survived**; the 5 that
+retired point at prompts the master no longer contains (two Oberlin BA+BFA,
+two UT Austin, one Yale).
+
+The 303 new prompts import through the existing second tier — the keyword
+classifier, at its own confidence, which is what the needs-review surface
+reads — with **one category withheld**: `classifyUnreviewedPrompt` never
+returns `personal-statement`. That category means "genuinely open topic", the
+rules only see the words "personal statement", and left alone they filed 81
+portfolio and statement-of-purpose prompts as open-topic. Since `matching.ts`
+scores same-category prompts as strong reuse candidates, that would have made
+any two of them read as interchangeable. Reviewed prompts are unaffected and a
+reviewer can still assign it.
+
+`docs/evaluation/new-prompt-review.csv` is the worksheet for those 303, in the
+same column vocabulary as `source-review.csv`, with the classifier's proposal
+pre-filled. `qa-catalogue.mts` asserts it covers exactly the unreviewed set.
+
+`src/lib/retrieval/prompt-vectors.ts` was regenerated: 553 committed
+embeddings, one per prompt.
 
 ## Completed Work
 
@@ -356,6 +433,69 @@ with precise follow-up notes, not blockers.
 
 ## Tests/Verification Performed
 
+### 2026–27 catalogue rebuild (2026-09-01, branch `dataset-import-qa`)
+
+`./run_tests.sh` equivalents all green on the rebuilt catalogue:
+**lint clean, typecheck clean, 716 tests / 25 files passing, `next build`
+successful.** Baseline before the rebuild was 693 tests; the difference is
+three new tests (prune outcomes, student-authored prompts left alone, the
+corroborated tier) plus splits within the retrieval suites.
+
+`scripts/qa-catalogue.mts` is the deterministic gate and passes with zero
+findings. It re-checks, on what actually landed in the source records rather
+than on the master: 100 unique schools matching `TOP_UNIVERSITIES` exactly;
+no `needs-review` record and no note still reading as unresolved research;
+`validateRecord` clean for all 100; unique refs and no duplicate text+scope
+within a school; **every one of the 553 prompt texts identical to the master
+after whitespace collapse** (which is what proves nothing was truncated or
+reworded in transform); positive integer limits only; every conditional
+prompt carrying a note; at most 5 unresolved conditionals; no choose-N member
+individually required; every review row pointing at a live prompt; one
+committed embedding per prompt; and the review worksheet covering exactly the
+unreviewed set.
+
+Rehearsed end to end against a throwaway PGlite database (never
+`DATABASE_URL`), importing the hardest eleven schools:
+
+| school | prompts | required | optional | awaiting programs |
+|---|---|---|---|---|
+| Cornell | 26 | 0/0 | 0 | 26 (14 programmes, no university-wide supplement) |
+| Michigan | 25 | 0/2 | 1 | 22 |
+| UC Berkeley | 9 | 0/4 | 0 | 1 (M.E.T.) |
+| UC Los Angeles | 8 | 0/4 | 0 | 0 |
+| Georgetown | 10 | 0/3 | 0 | 7 (one per undergraduate school) |
+| Washington and Lee | 10 | 0/0 | 5 | 5 (Johnson) |
+| Dartmouth | 9 | 0/3 | 0 | 0 |
+| Villanova | 5 | 0/1 | 0 | 0 |
+| Tulane | 0 | 0/0 | 0 | 0 (no-supplement) |
+| Colgate | 3 | 0/0 | 3 | 0 |
+| Yale | 10 | 0/5 | 3 | 0 |
+
+Berkeley and UCLA import 17 rows but the aggregate reports **one** group,
+"Personal Insight Questions (choose four): 4 of 8 across UC Berkeley, UC Los
+Angeles" — 4 essays of work, not 16. Selecting Johnson at W&L moves it from
+0 required to 1 of 5, matching the pre-rebuild behaviour exactly.
+
+Two misfiles were caught by that rehearsal and fixed, both worth knowing
+about because the same shape will recur next cycle:
+
+1. **Program-gated choose-N sets must stay `conditional`.** Marking members
+   `optional` (correct for an applicant-choice set) made `conditionalState`
+   short-circuit to "active", so W&L's Johnson set required an essay of every
+   applicant. Members of a set with a `programKey` keep `requirement:
+   "conditional"`.
+2. **A scope that matches every applicant is not a gate.** Yale's three short
+   takes carried `undergraduate_school: "Yale College"`, which every Yale
+   applicant belongs to, and their real condition is the application platform.
+   They sat as "depends on your programs" behind a gate nobody could ever
+   fail. Now `required`, with the QuestBridge carve-out in the note.
+
+**The live database has not been touched.** To apply:
+`node --env-file-if-exists=.env.local --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/reimport-catalogue.mts`
+(`--dry-run` first; it reports `+created ~updated -removed retired N` per
+school and recomputes matches per workspace).
+
+
 Orchestrator redesign checkpoints `c82deac` and `b65467e`:
 
 - Shell syntax checks for both orchestration scripts: pass.
@@ -446,6 +586,23 @@ none of this fixture data was committed):
   `minmax(min(Xpx, 100%), 1fr)`.
 
 ## Next Steps
+
+### Owner action on the 2026–27 rebuild (branch `dataset-import-qa`)
+
+1. **Review `docs/evaluation/new-prompt-review.csv`** — 303 prompts, the
+   classifier's proposal pre-filled, `Your primary override` blank. 74 of them
+   have no keyword signal at all and import as Other at confidence 0; those are
+   the ones worth reading first. Merge the reviewed rows into
+   `docs/evaluation/source-review.csv` and re-run
+   `scripts/regenerate-category-review.mts`, then
+   `scripts/precompute-prompt-vectors.mts` is unaffected (vectors key off title
+   and text, not category).
+2. **Apply to the live database** with `scripts/reimport-catalogue.mts` (see
+   the verification section for the command). Nothing has been applied yet.
+3. **Merge order matters.** This branch rewrites `src/lib/db/persistence.test.ts`,
+   which the other session also has uncommitted in the shared working tree.
+   Reconcile those two before merging.
+
 
 > **Both recent objectives are complete**: the reuse-scoring redesign
 > ([docs/reuse-scoring.md](docs/reuse-scoring.md)) and the UI/UX redesign (see

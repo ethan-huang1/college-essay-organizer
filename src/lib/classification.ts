@@ -394,3 +394,35 @@ export function classifyText(text: string): ClassificationResult {
 
   return { primarySlug, secondarySlugs, tags, confidence, scores };
 }
+
+/**
+ * The classification stored for a catalogue prompt nobody has reviewed yet,
+ * with one category withheld: Personal Statement.
+ *
+ * Personal Statement means "genuinely open topic", which is a judgement about
+ * what a prompt does *not* constrain - and the rules cannot make it. They fire
+ * on the words "personal statement", which portfolio and statement-of-purpose
+ * prompts use constantly, so left alone they file 80-odd tightly-scoped prompts
+ * as open-topic. That is not a cosmetic mislabel: matching.ts scores two prompts
+ * in the same category as a strong reuse candidate, so a catch-all Personal
+ * Statement makes any two of them read as interchangeable when they are not
+ * (see docs/reuse-scoring.md, and the two prompts the reviewed catalogue does
+ * put there).
+ *
+ * Withheld only from the fallback. A reviewer can still assign it - that is the
+ * point of the review - and every other category is left exactly as the rules
+ * decided.
+ */
+export function classifyUnreviewedPrompt(text: string): ClassificationResult {
+  const result = classifyText(text);
+  if (result.primarySlug !== "personal-statement") return result;
+  const [promoted, ...rest] = result.secondarySlugs;
+  return {
+    ...result,
+    primarySlug: promoted ?? null,
+    secondarySlugs: rest,
+    // A promoted runner-up was, by definition, not the clearest signal, and a
+    // prompt left with nothing is a prompt the rules could not read.
+    confidence: promoted ? Math.min(result.confidence, 50) : 0,
+  };
+}

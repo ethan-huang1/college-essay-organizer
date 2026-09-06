@@ -1,0 +1,2949 @@
+[
+ {
+  "schoolName": "Amherst College",
+  "applicationPlatform": "questbridge",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "option-a-curiosity",
+    "title": "Option A: Curiosity",
+    "promptText": "\"Hope and curiosity — these are qualities that are the foundation of what Amherst College means, of everything that we do here. Curiosity is at the core of a liberal arts education — a spirit of inquiry that shapes not only what our students do in the classroom, but also how they learn from and about each other.\" — Michael A. Elliott, 20th President of Amherst College, address at Amherst College’s 203rd Commencement. What does curiosity mean to you? How do you experience curiosity in your own life?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "option-a-unique-experiences",
+    "title": "Option A: Unique experiences",
+    "promptText": "\"We seek an Amherst made stronger because it includes those whose experiences can enhance our understanding of our nation and our world. We do so in the faith that our humanity is an identity forged from diversity, and that our different perspectives enrich our inquiry, deepen our knowledge, strengthen our community, and prepare students to engage with an ever-changing world.\" — from the Trustee Statement on Diversity and Community. In what ways could your unique experiences enhance our understanding of our nation and our world?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "option-a-differing-viewpoint",
+    "title": "Option A: Disagreement and connection",
+    "promptText": "\"We are working together to build a community that makes room for both true disagreement and true connection, one that practices the kind of recognition and robust negotiation that the everyday life of democracy requires, and one that explicitly prepares our students to work for the greater good in their professional and personal endeavors.\" — Presidential Priorities: Serving the Greater Good. Tell us about a time that you engaged with a viewpoint different from your own. How did you enter that engagement, and what did you learn about yourself from it?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Arizona State University",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Boston College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "choice-tradition",
+    "title": "A meaningful tradition",
+    "promptText": "Strong communities are sustained by traditions. Boston College's annual calendar is marked with both long-standing and newer traditions that help shape our community. Tell us about a meaningful tradition in your family or community. Why is it important to you, and how does it bring people together or strengthen the bonds of those who participate?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-conversation-partner",
+    "title": "A meaningful conversation partner",
+    "promptText": "The late BC theology professor, Father Michael Himes, argued that a university is not a place to which you go, but instead, a \"rigorous and sustained conversation about the great questions of human existence, among the widest possible circle of the best possible conversation partners.\" Who has been your most meaningful conversation partner, and what profound questions have you considered together?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-single-story",
+    "title": "The danger of a single story",
+    "promptText": "In her July 2009 Ted Talk, \"The Danger of a Single Story,\" Chimamanda Ngozi Adichie warned viewers against assigning people a \"single story\" through assumptions about their nationality, appearance, or background. Discuss a time when someone defined you by a single story. What challenges did this present and how did you overcome them?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-fourth-be",
+    "title": "A fourth 'Be'",
+    "promptText": "Boston College’s Jesuit mission highlights \"the three Be’s\": be attentive, be reflective, be loving – core to Jesuit education. If you could add a fourth \"Be,\" what would it be and why? How would this new value support your personal development and enrich the BC community?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "hce-common-good",
+    "title": "Human-Centered Engineering and the Common Good",
+    "promptText": "One goal of a Jesuit education is to prepare students to serve the Common Good. Human-Centered Engineering at Boston College integrates technical knowledge, creativity, and a humanistic perspective to address societal challenges and opportunities. What societal problems are important to you and how will you use your HCE education to solve them?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Boston University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Bowdoin College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "offer-of-the-college",
+    "title": "The Offer of the College",
+    "promptText": "Generations of students have found connection and meaning in Bowdoin’s “The Offer of the College,” written in 1906 by Bowdoin President William DeWitt Hyde. Which line from The Offer resonates most with you?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "navigating-through-differences",
+    "title": "Navigating through differences",
+    "promptText": "Bowdoin believes that its broadly diverse and inclusive campus community prepares graduates to be contributing and useful citizens of the world. Every graduate of this institution should be confident in their preparation to be able to navigate through differences and in all sorts of situations. A Bowdoin education does not guarantee these skills, but it does impart a set of tools necessary to bravely enter unfamiliar conditions with the confidence to deal effectively with ambiguity. If you wish, you may share anything about the unique experiences and perspectives that you would bring with you to the Bowdoin campus and community or an experience you have had that required you to navigate across or through difference.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Brandeis University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Brown University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "core-open-curriculum",
+    "title": "Your approach to the Open Curriculum",
+    "promptText": "\"There is something distinctive about Brown students. It is a blend of intellectual curiosity, creativity, and humility. A commitment to collaboration. An openness to new ideas and perspectives. A desire to make the world better. And it is resilience: the ability to recover and thrive after experiencing difficulties.\" From President Christina Paxson's 2025 Convocation Address. How will you use these characteristics or others to shape your approach to the Open Curriculum?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "core-growing-up",
+    "title": "Growing up and contributing to Brown",
+    "promptText": "Students entering Brown often find that making their home on College Hill naturally invites reflection on where they came from. Share how an aspect of your growing up has inspired or challenged you, and what unique contributions this might allow you to make to the Brown community.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "core-teach-a-class",
+    "title": "Teach a class",
+    "promptText": "If you could teach a class on any one thing, whether academic or otherwise, what would it be?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "core-joy",
+    "title": "What brings you joy",
+    "promptText": "Brown students care deeply about their work and the world around them. Students find contentment, satisfaction, and meaning in daily interactions and major discoveries. Whether big or small, mundane or spectacular, tell us about something that brings you joy.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "plme-why-medicine",
+    "title": "PLME: Why medicine?",
+    "promptText": "Why medicine?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "plme-why-plme",
+    "title": "PLME: Why PLME?",
+    "promptText": "Why PLME?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "plme-great-doctor",
+    "title": "PLME: What will make you a great doctor?",
+    "promptText": "Tell us something about yourself, beyond your interest in medicine, that you think will make you a great doctor.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "brown-risd-dual-degree",
+    "title": "Brown | RISD Dual Degree",
+    "promptText": "The Brown | RISD Dual Degree Program draws on the complementary strengths of Brown University and Rhode Island School of Design (RISD) to provide students with the opportunity to explore and engage with diverse spheres of academic and creative inquiry. Considering your understanding of the academic programs at Brown and RISD, describe how and why the specific blend of RISD's experimental, immersive art and design program and Brown's wide-ranging courses and curricula could constitute an optimal undergraduate education for you. Reflect on how you might integrate or synthesize content, approaches, and methods from these two distinct learning experiences. Additionally, how might you contribute to the Dual Degree community and its commitment to interdisciplinary work?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Stanford University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-essay-learning",
+    "title": "Genuinely excited about learning",
+    "promptText": "The Stanford community is deeply curious and driven to learn in and out of the classroom. Reflect on an idea or experience that makes you genuinely excited about learning.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-essay-roommate",
+    "title": "Note to your future roommate",
+    "promptText": "Virtually all of Stanford's undergraduates live on campus. Write a note to your future roommate that reveals something about you or that will help your roommate—and us—get to know you better.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-essay-contribution",
+    "title": "Distinctive contribution",
+    "promptText": "Please describe what aspects of your life experiences, interests, and character would help you make a distinctive contribution as an undergraduate to Stanford University.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-challenge",
+    "title": "Significant challenge society faces",
+    "promptText": "What is the most significant challenge that society faces today?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-summers",
+    "title": "Last two summers",
+    "promptText": "How did you spend your last two summers?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-historical-moment",
+    "title": "Historical moment you wish you'd witnessed",
+    "promptText": "What historical moment or event do you wish you could have witnessed?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-activity",
+    "title": "An extracurricular, job, or responsibility",
+    "promptText": "Briefly elaborate on one of your extracurricular activities, a job you hold, or responsibilities you have for your family.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-five-things",
+    "title": "Five things that matter to you",
+    "promptText": "List five things that are important to you.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Massachusetts Institute of Technology",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "essay-field-of-study",
+    "title": "Field of study that appeals to you",
+    "promptText": "What field of study appeals to you the most right now? (Note: Applicants select from a drop-down list.) Reflect on what has led to this interest.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "essay-own-trail",
+    "title": "Your own trail",
+    "promptText": "While some reach their goals following well-trodden paths, others blaze their own trails achieving the unexpected. In what ways have you done something different than what was expected in your educational journey?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "essay-mit-impact",
+    "title": "Problems you want to tackle at MIT",
+    "promptText": "How have your personal and academic experiences influenced the types of problems you would want to tackle with an MIT education and the impact you aim to make on your community?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "essay-unexpected-challenge",
+    "title": "An unexpected challenge",
+    "promptText": "How did you manage a situation or challenge that you didn't expect? What did you learn from it?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-fun",
+    "title": "Just for fun",
+    "promptText": "What do you do just for fun?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-admire",
+    "title": "Someone you admire",
+    "promptText": "Who is someone you admire, whether you know them personally or look up to them from afar? Tell us why.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-topic",
+    "title": "A topic you could talk about for hours",
+    "promptText": "What's a topic, academic or non-academic, that you could talk about for hours?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-generalist",
+    "title": "Generalist or specialist",
+    "promptText": "MIT values both \"generalists\" with varied interests and \"specialists\" who focus deeply on one or a few passions. Which do you think best describes you, and why?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Harvard University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-answer-life-experiences",
+    "title": "Life experiences and contribution to Harvard",
+    "promptText": "Harvard has long recognized the importance of enrolling a student body with a diversity of perspectives and experiences. How will the life experiences that shaped who you are today enable you to contribute to Harvard?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-disagreement",
+    "title": "A strong disagreement",
+    "promptText": "Describe a time when you strongly disagreed with someone about an idea or issue. How did you communicate or engage with this person? What did you learn from this experience?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-activities-shaped-you",
+    "title": "Activities, employment, travel, or family responsibilities",
+    "promptText": "Briefly describe any of your extracurricular activities, employment experience, travel, or family responsibilities that have shaped who you are.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-future-use",
+    "title": "Using your Harvard education",
+    "promptText": "How do you hope to use your Harvard education in the future?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-roommates",
+    "title": "Top 3 things your roommates might like to know",
+    "promptText": "Top 3 things your roommates might like to know about you.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Georgetown University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-essay-activity",
+    "title": "Most significant activity",
+    "promptText": "Briefly discuss the significance to you of the school or summer activity in which you have been most involved.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-essay-differing-viewpoint",
+    "title": "A differing viewpoint",
+    "promptText": "In all our lives, we interact with people who hold different viewpoints than our own. Describe such an event you experienced. What did you learn from the experience?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "essay-personal-creative",
+    "title": "Personal or creative essay",
+    "promptText": "Please submit a brief personal or creative essay which you feel best describes you and reflects on your personal background and individual experiences, skills, and talents.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-college-arts-sciences",
+    "title": "School-specific: College of Arts & Sciences",
+    "promptText": "Describe your interest in integrated education and research across the natural sciences, humanities, social sciences, and fine arts. Applicants interested in the sciences, math, or languages should reference their specific intended major. (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "arts-sciences",
+    "programLabel": "College of Arts & Sciences",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-mccourt",
+    "title": "School-specific: McCourt School of Public Policy",
+    "promptText": "Describe your motivations for studying public policy and your commitment to public service; note the opportunity to study on the Capitol Campus. (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "mccourt",
+    "programLabel": "McCourt School of Public Policy",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-earth-commons",
+    "title": "School-specific: Earth Commons Institute",
+    "promptText": "Describe your primary motivations for studying environment and sustainability and how you hope to effect positive change. (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "earth-commons",
+    "programLabel": "Earth Commons Institute",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-nursing",
+    "title": "School-specific: Berkley School of Nursing",
+    "promptText": "Describe the factors influencing your interest in nursing, focusing on ethical, empathetic leadership formation. (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "nursing",
+    "programLabel": "Berkley School of Nursing",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-health",
+    "title": "School-specific: School of Health",
+    "promptText": "Describe the factors influencing your interest in healthcare and specify your intended major (Global Health, Health Care Management & Policy, or Human Science). (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "health",
+    "programLabel": "School of Health",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-sfs",
+    "title": "School-specific: Walsh School of Foreign Service",
+    "promptText": "Describe your motivations for studying international affairs and your commitment to global service. (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "sfs",
+    "programLabel": "Walsh School of Foreign Service",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-essay-mcdonough",
+    "title": "School-specific: McDonough School of Business",
+    "promptText": "Describe your motivations for studying business, emphasizing global, ethical, and analytical perspectives. (Summarized from Georgetown's official page - verify exact current wording before use.)",
+    "requirement": "conditional",
+    "programKey": "mcdonough",
+    "programLabel": "McDonough School of Business",
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Princeton University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "academic-interest-ab",
+    "title": "Academic interest (A.B. degree or undecided)",
+    "promptText": "As a research institution that also prides itself on its liberal arts curriculum, Princeton allows students to explore areas across the humanities and the arts, the natural sciences, and the social sciences. What academic areas most pique your curiosity, and how do the programs offered at Princeton suit your particular interests?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "academic-interest-bse",
+    "title": "Academic interest (B.S.E. degree)",
+    "promptText": "Please describe why you are interested in studying engineering at Princeton. Include any of your experiences in or exposure to engineering, and how you think the programs offered at the University suit your particular interests.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "your-voice-1",
+    "title": "Your Voice: lived experience",
+    "promptText": "Princeton values community and encourages students, faculty, staff and leadership to engage in respectful conversations that can expand their perspectives and challenge their ideas and beliefs. As a prospective member of this community, reflect on how your lived experiences will impact the conversations you will have in the classroom, the dining hall or other campus spaces. What lessons have you learned in life thus far? What will your classmates learn from you? In short, how has your lived experience shaped you?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "your-voice-2",
+    "title": "Your Voice: service and civic engagement",
+    "promptText": "Princeton has a longstanding commitment to understanding our responsibility to society through service and civic engagement. How does your own story intersect with these ideals?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "more-about-you-skill",
+    "title": "More About You: a new skill",
+    "promptText": "What is a new skill you would like to learn in college?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "more-about-you-joy",
+    "title": "More About You: what brings you joy",
+    "promptText": "What brings you joy?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "more-about-you-song",
+    "title": "More About You: soundtrack of your life",
+    "promptText": "What song represents the soundtrack of your life at this moment?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Yale University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-answer-academic-interests",
+    "title": "Academic interests",
+    "promptText": "Students at Yale have time to explore their academic interests before committing to one or more major fields of study. Many students either modify their original academic direction or change their minds entirely. As of this moment, what academic areas seem to fit your interests or goals most comfortably? Please indicate up to three from the list provided.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-topic-excites",
+    "title": "A topic or idea that excites you",
+    "promptText": "Tell us about a topic or idea that excites you and is related to one or more academic areas you selected above.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-take-teach-write-create",
+    "title": "Short Take: teach, write, or create",
+    "promptText": "If you could teach any college course, write a book, or create an original piece of art of any kind, what would it be?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-take-grow-develop",
+    "title": "Short Take: grow or develop",
+    "promptText": "What is one aspect of yourself that you hope to grow or develop during college?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-take-not-elsewhere",
+    "title": "Short Take: not included elsewhere",
+    "promptText": "What is something about you that is not included anywhere else in your application?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "essay-opposing-view",
+    "title": "Choose One: an opposing view",
+    "promptText": "Reflect on a time you discussed an issue important to you with someone holding an opposing view. Why did you find the experience meaningful?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "yale-choose-one"
+   },
+   {
+    "externalRef": "essay-community",
+    "title": "Choose One: a meaningful community",
+    "promptText": "Reflect on your membership in a community to which you feel connected. Why is this community meaningful to you? You may define community however you like.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "yale-choose-one"
+   },
+   {
+    "externalRef": "essay-personal-experience",
+    "title": "Choose One: personal experience",
+    "promptText": "Reflect on an element of your personal experience that you feel will enrich your college. How has it shaped you?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "yale-choose-one"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, Berkeley",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, Los Angeles",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, Davis",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, Irvine",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, San Diego",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, Santa Barbara",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "University of California, Santa Cruz",
+  "applicationPlatform": "school-specific",
+  "sharedApplicationKey": "university-of-california",
+  "prompts": [
+   {
+    "externalRef": "piq-1-leadership",
+    "title": "PIQ 1: Leadership experience",
+    "promptText": "Describe an example of your leadership experience in which you have positively influenced others, helped resolve disputes or contributed to group efforts over time.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-2-creativity",
+    "title": "PIQ 2: Creative side",
+    "promptText": "Every person has a creative side, and it can be expressed in many ways: problem solving, original and innovative thinking, and artistically, to name a few. Describe how you express your creative side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-3-talent",
+    "title": "PIQ 3: Greatest talent or skill",
+    "promptText": "What would you say is your greatest talent or skill? How have you developed and demonstrated that talent over time?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-4-educational-opportunity",
+    "title": "PIQ 4: Educational opportunity or barrier",
+    "promptText": "Describe how you have taken advantage of a significant educational opportunity or worked to overcome an educational barrier you have faced.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-5-challenge",
+    "title": "PIQ 5: Most significant challenge",
+    "promptText": "Describe the most significant challenge you have faced and the steps you have taken to overcome this challenge. How has this challenge affected your academic achievement?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-6-academic-interest",
+    "title": "PIQ 6: An academic subject that inspires you",
+    "promptText": "Think about an academic subject that inspires you. Describe how you have furthered this interest inside and/or outside of the classroom.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-7-community",
+    "title": "PIQ 7: Made your community a better place",
+    "promptText": "What have you done to make your school or your community a better place?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   },
+   {
+    "externalRef": "piq-8-strong-candidate",
+    "title": "PIQ 8: What makes you a strong candidate",
+    "promptText": "Beyond what has already been shared in your application, what do you believe makes you a strong candidate for admissions to the University of California?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "uc-piq"
+   }
+  ]
+ },
+ {
+  "schoolName": "Bucknell University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "California Institute of Technology",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "academic-interest",
+    "title": "Required STEM Academic Interest",
+    "promptText": "Why did you choose your proposed area of interest? If you selected 'other', what topics are you interested in pursuing?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "scholarly-character-collaboration",
+    "title": "Scholarly Character: Collaboration",
+    "promptText": "Tell us about a time your learning in STEM was shaped by another person or group — either because you needed help, offered help, changed your thinking through collaboration, or contributed to someone else's understanding. What did that experience teach you about learning and working with others?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "caltech-scholarly-character"
+   },
+   {
+    "externalRef": "scholarly-character-process",
+    "title": "Scholarly Character: Process",
+    "promptText": "Tell us about a time your approach to a STEM problem, concept, or project mattered as much as the outcome. How did you work through uncertainty or persist creatively in tackling the problem? What would you still defend about your process, regardless of the outcome?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "caltech-scholarly-character"
+   },
+   {
+    "externalRef": "scientific-drive-learning",
+    "title": "Scientific Drive: Learning",
+    "promptText": "Regardless of your STEM interest listed above, take this opportunity to nerd out and talk to us about whatever STEM rabbit hole you have found yourself falling into. Be as specific or broad as you would like.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "caltech-scientific-drive"
+   },
+   {
+    "externalRef": "scientific-drive-pursuing",
+    "title": "Scientific Drive: Pursuing",
+    "promptText": "Tell us about a STEM question, problem, idea, or project that has held your attention over time. What drew you to it, how have you pursued it, and what do you still want to understand?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "caltech-scientific-drive"
+   },
+   {
+    "externalRef": "scientific-drive-making",
+    "title": "Scientific Drive: Making",
+    "promptText": "Tell us about something you created, tested, repaired, modeled, coded, built, or redesigned. What problem were you trying to solve and what did the process reveal to you?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "caltech-scientific-drive"
+   },
+   {
+    "externalRef": "fun-contribution",
+    "title": "Fun Question",
+    "promptText": "Caltech students bring more than academic ability to the communities they join. What is something you would be excited to do, share, teach, make, start, or contribute as part of the Caltech community?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-academic-context",
+    "title": "Optional Academic Context",
+    "promptText": "Caltech cares about context. Is there anything about your academic preparation, coursework, school context, or learning experiences that would help us better understand your readiness for Caltech?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Carleton College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Carnegie Mellon University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-answer-major-inspiration",
+    "title": "Passion behind your intended area of study",
+    "promptText": "Most students choose their intended major or area of study based on a passion or inspiration that’s developed over time — what passion or inspiration led you to choose this area of study?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-successful-college-experience",
+    "title": "A successful college experience",
+    "promptText": "Many students pursue college for a specific degree, career opportunity or personal goal. Whichever it may be, learning will be critical to achieve your ultimate goal. As you think ahead to the process of learning during your college years, how will you define a successful college experience?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-emphasize",
+    "title": "What you want to emphasize",
+    "promptText": "Consider your application as a whole. What do you personally want to emphasize about your application for the admission committee’s consideration? Highlight something that’s important to you or something you haven’t had a chance to share. Tell us, don’t show us (no websites please).",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Case Western Reserve University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Chicago",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Claremont McKenna College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "supplement-why-cmc",
+    "title": "Why Claremont McKenna",
+    "promptText": "CMC’s mission is to prepare students for thoughtful and productive lives and responsible leadership in business, government, and the professions. With this mission in mind, please explain why you want to attend Claremont McKenna College.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "supplement-open-academy-dialogue",
+    "title": "Open Academy and constructive dialogue",
+    "promptText": "A critical part of fulfilling our mission is living out the commitments of CMC’s Open Academy: Freedom of Expression, Viewpoint Diversity, and Constructive Dialogue. We want to learn more about your commitment to listening and learning from others with different viewpoints, perspectives, and life experiences from your own. Describe a time when engaging with someone about a specific topic resulted in you changing your attitude, belief, or behavior, or you changed the belief or behavior of someone else. What was the change that occurred for you, and what facilitated that change? What did you learn from that experience, and how has it informed how you engage with others?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Colby College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Colgate University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Colorado Boulder",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-answer-academic-interest",
+    "title": "Academic interests at CU Boulder",
+    "promptText": "What do you hope to study, and why, at CU Boulder? Or if you don't know quite yet, think about your studies so far, extracurricular/after-school activities, jobs, volunteering, future goals or anything else that has shaped your interests.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Colorado College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "optional-deep-focus",
+    "title": "The luxury of focus",
+    "promptText": "One of the benefits of Colorado College’s Block Plan is the opportunity to immerse yourself fully in a single subject for 3.5 weeks. We see this as the luxury of focus—the joy and value of directing your full attention to one thing. Tell us about a time when you experienced this kind of deep focus in an academic or extracurricular setting. What were you doing, and how did it turn out?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Columbia University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Cornell University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Dartmouth College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "fit",
+    "title": "Dartmouth fit",
+    "promptText": "As you seek admission to Dartmouth's Class of 2031, what aspects of the college's academic program, community, and/or campus environment attract your interest? How is Dartmouth a good fit for you?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "introduce-environment",
+    "title": "Your environment",
+    "promptText": "There is a Quaker saying: Let your life speak. Describe the environment in which you were raised and the impact it has had on the person you are today.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-introduce"
+   },
+   {
+    "externalRef": "introduce-yourself",
+    "title": "Introduce yourself",
+    "promptText": "\"Be yourself,\" Oscar Wilde advised. \"Everyone else is taken.\" Introduce yourself.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-introduce"
+   },
+   {
+    "externalRef": "personal-excitement",
+    "title": "What excites you?",
+    "promptText": "What excites you?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-personal"
+   },
+   {
+    "externalRef": "personal-impact",
+    "title": "A life of purpose",
+    "promptText": "Labor leader and civil rights activist Dolores Huerta recommended a life of purpose. \"We must use our lives to make the world a better place to live, not just to acquire things,\" she said. \"That is what we are put on the earth for.\" In what ways do you hope to make—or are you already making—an impact? Why? How?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-personal"
+   },
+   {
+    "externalRef": "personal-reading",
+    "title": "Insight from reading",
+    "promptText": "In an Instagram post, best-selling British author Matt Haig cheered the impact of reading. \"A good novel is the best invention humans have ever created for imagining other lives,\" he wrote. How have you experienced such insight from reading? What did you read and how did it alter the way you understand yourself and others?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-personal"
+   },
+   {
+    "externalRef": "personal-dialogue",
+    "title": "Finding common ground",
+    "promptText": "The social and family interactions of wild chimpanzees have been the focus of Dame Jane Goodall's research for decades. Her understanding of animal behavior prompted the English primatologist to see a lesson for human communities as well: \"Change happens by listening and then starting a dialogue with the people who are doing something you don't believe is right.\" Channel Dame Goodall: Tell us about a moment when you engaged in a difficult conversation or encountered someone with an opinion or perspective that was different from your own. How did you find common ground?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-personal"
+   },
+   {
+    "externalRef": "personal-nerdy-side",
+    "title": "Celebrate your nerdy side",
+    "promptText": "Celebrate your nerdy side.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-personal"
+   },
+   {
+    "externalRef": "personal-difference",
+    "title": "Embracing difference",
+    "promptText": "\"It's not easy being green…\" was the frequent refrain of Kermit the Frog. How has difference been a part of your life, and how have you embraced it as part of your identity, outlook, or sense of purpose?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": "dartmouth-personal"
+   }
+  ]
+ },
+ {
+  "schoolName": "Davidson College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "why-davidson",
+    "title": "Why Davidson",
+    "promptText": "There are just under 4,000 four-year colleges and universities in the United States. Being as specific as possible, what interests you most about Davidson College?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "intellectual-curiosity",
+    "title": "A curiosity that excites you",
+    "promptText": "Davidson encourages students to explore curiosities in and out of the classroom. What is a topic, activity or idea that excites you? Tell us why. Examples may include hobbies, books, interactions, music, podcasts, movies, etc.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Duke University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "required-why-duke",
+    "title": "Why Duke",
+    "promptText": "What is your impression of Duke as a university and community, and why do you believe it is a good match for your goals, values, and interests? If there is something specific that attracts you to our academic offerings in Trinity College of Arts and Sciences or the Pratt School of Engineering, or to our co-curricular opportunities, feel free to include that, too.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "required-community",
+    "title": "A community that shaped you",
+    "promptText": "We all belong to communities defined by place, faith, family, culture, interests or shared experience. Tell us about a community that has shaped who you are, any way it has set you apart, and what you’ve learned from being part of it that you hope to bring to Duke.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-viewpoints",
+    "title": "Viewpoints and experiences",
+    "promptText": "We believe a wide range of viewpoints and experiences is essential to maintaining Duke’s vibrant living and learning community. Please share anything in this context that might help us better understand you and your potential contributions to Duke.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-disagreement",
+    "title": "Difference of opinion",
+    "promptText": "Meaningful dialogue often involves respectful disagreement. Provide an example of a difference of opinion you’ve had with someone you care about. What did you learn from it?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-excitement",
+    "title": "Something you are excited about",
+    "promptText": "What’s the last thing that you’ve been really excited about?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Emory University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Florida",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Florida State University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "George Washington University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Georgia Institute of Technology",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Georgia",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Grinnell College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Hamilton College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Harvey Mudd College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "impact-problems-and-community",
+    "title": "Experiences, community, and problems to solve",
+    "promptText": "The problems that Harvey Mudd College students hope to tackle are shaped by their experiences, values, and communities. Through our intentionally interdisciplinary curriculum and our mission to develop “a clear understanding of the impact of their work,” Mudders develop the skills needed to address these complex challenges and contribute meaningfully to society. Share how an experience you’ve had or community you belong to has shaped the kinds of problems you want to solve and the impact you want to make.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "asking-for-help",
+    "title": "Asking for help",
+    "promptText": "No one succeeds alone, and at Harvey Mudd College, no one expects you to. In and out of the classroom, HMC students are encouraged to embrace challenges, collaborate with one another, and ask for support when they need it. Describe a time when asking for help made a difference in your work or wellbeing. What led you to reach out, and what did you take away from the experience?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Haverford College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "intellectual-curiosity-at-haverford",
+    "title": "Intellectual curiosity at Haverford",
+    "promptText": "Tell us about a topic or issue that sparks your curiosity and gets you intellectually excited. How do you hope to engage with this topic or issue at Haverford?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "community-values-and-honor-code",
+    "title": "Community values and the Honor Code",
+    "promptText": "We have highlighted for you some of the values that shape the Haverford community. What are some of the values you seek in your next community? How do Haverford’s values, as demonstrated through our Honor Code, resonate with you? As you think about how to answer this question, you might draw from how you have been influenced by other communities you have been a part of, experiences you may have had within your communities, or opportunities you have had to shape or even change your communities.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Illinois Urbana-Champaign",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "first-choice-major-experience",
+    "title": "First-choice major: related experience",
+    "promptText": "Explain, in detail, an experience you’ve had in the past 3 to 4 years related to your first-choice major. This can be an experience from an extracurricular activity, in a class you’ve taken, or through something else.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "first-choice-major-goals",
+    "title": "First-choice major: goals after Illinois",
+    "promptText": "Describe your personal and/or career goals after graduating from Illinois and how your selected first-choice major will help you achieve them.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "undeclared-future-goals",
+    "title": "Undeclared: future goals",
+    "promptText": "What are your future career or academic goals? You may include courses you took in high school and how these impacted your goals.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "undeclared-academic-interests",
+    "title": "Undeclared: academic interests",
+    "promptText": "What are your academic interests? Please include 2-3 majors you’re considering at Illinois and why.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "second-choice-major-interest",
+    "title": "Second-choice major interest",
+    "promptText": "Please explain your interest in your second-choice major or your overall academic or career goals.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Indiana University Bloomington",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Johns Hopkins University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "engaging-across-differences",
+    "title": "Engaging across differences and building bridges",
+    "promptText": "At Johns Hopkins, community is built through dialogue, collaboration, and a willingness to engage across differences. Whether on campus or in the broader world, community depends on bridge builders who can listen to differing perspectives, challenge their own assumptions, or work together toward shared goals. Drawing on your own experiences, what have you learned about engaging across differences and how has it shaped the way you think about building bridges, enhancing community, and working with others?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Lehigh University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Maryland, College Park",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Michigan State University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Middlebury College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Notre Dame",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "required-non-negotiables",
+    "title": "College-search non-negotiables",
+    "promptText": "Everyone has different priorities when considering their higher education options and building their college or university list. Tell us about your “non-negotiable” factor(s) when searching for your future college home.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-faith",
+    "title": "Faith and decisions",
+    "promptText": "How does faith influence the decisions you make?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-personal-experiences",
+    "title": "Distinctive personal experiences",
+    "promptText": "What is distinctive about your personal experiences and development (eg, family support, culture, disability, personal background, community)? Why are these experiences important to you and how will you enrich the Notre Dame community?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-service",
+    "title": "Service to others",
+    "promptText": "Notre Dame’s undergraduate experience is characterized by a collective sense of care for every person. How do you foster service to others in your community?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "choice-fight-for",
+    "title": "What would you fight for?",
+    "promptText": "What would you fight for?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "North Carolina State University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "required-major-interest",
+    "title": "Why your selected academic programs",
+    "promptText": "Explain why you selected the academic program(s) above and why you are interested in studying these at NC State.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "honors-curiosity-to-action",
+    "title": "University Honors: curiosity in action",
+    "promptText": "Think about a time when your curiosity led you to not just learn, but to act. How did you learn more, and what tangible steps did you take as a result of what you learned? What insights about yourself, others, or the world did you take away from this process of learning and doing?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Northeastern University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Northwestern University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "required-personal-context",
+    "title": "Personal context and Northwestern",
+    "promptText": "We want to be sure we’re considering your application in the context of your personal experiences: What aspects of your background (your identity, your school setting, your community, your household, etc.) have most shaped how you see yourself engaging in Northwestern’s community, be it academically, extracurricularly, culturally, politically, socially, or otherwise?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-the-rock",
+    "title": "Painting The Rock",
+    "promptText": "Painting “The Rock” is a tradition at Northwestern that invites all forms of expression—students promote campus events or extracurricular groups, support social or activist causes, show their Wildcat spirit (what we call “Purple Pride”), celebrate their culture, and more. What would you paint on The Rock, and why?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-interdisciplinary-project",
+    "title": "An interdisciplinary project",
+    "promptText": "Northwestern fosters a distinctively interdisciplinary culture. We believe discovery and innovation thrive at the intersection of diverse ideas, perspectives, and academic interests. Within this setting, if you could dream up an undergraduate class, research project, or creative effort (a start-up, a design prototype, a performance, etc.), what would it be? Who might be some ideal classmates or collaborators?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-community-belonging",
+    "title": "Community and belonging",
+    "promptText": "Community and belonging matter at Northwestern. Tell us about one or more communities, networks, or student groups you see yourself connecting with on campus.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-location",
+    "title": "Northwestern's location",
+    "promptText": "Northwestern’s location is special: on the shore of Lake Michigan, steps from downtown Evanston, just a few miles from Chicago. What aspects of our location are most compelling to you, and why?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-diverse-perspectives",
+    "title": "Diverse perspectives",
+    "promptText": "Northwestern is a place where people with diverse backgrounds from all over the world can study, live, and talk with one another. This range of experiences and viewpoints immeasurably enriches learning. How might your individual background contribute to this diversity of perspectives in Northwestern’s classrooms and around our campus?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "New York University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "bridge-builders",
+    "title": "Bridge builders",
+    "promptText": "We are looking for students who want to be bridge builders—students who can connect people, groups, and ideas to span divides, foster understanding, and promote collaboration within a dynamic, interconnected, and vibrant global academic community. We are eager for you to tell us how your experiences have helped you understand what qualities and efforts are needed to bridge divides so that people can better learn and work together. Please consider one or more of these approaches: a time you encountered a different perspective and what you learned; an experience working with people who held different perspectives and the role you played; or someone you observed who helps people think or work together and the qualities you admire.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Oberlin College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "composition-development",
+    "title": "Composition: development and influences",
+    "promptText": "Tell us about your development as a composer so far. Include in your response a discussion of composers, specific works of music, and musical styles and genres that have inspired and influenced you.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "composition-aspirations",
+    "title": "Composition: aspirations",
+    "promptText": "Tell us about your aspirations for your creative, academic and professional trajectories. Address such questions as: Why are you pursuing a degree in composition and what do you hope to achieve at Oberlin and beyond?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "timara-goals",
+    "title": "TIMARA: artistic and academic goals",
+    "promptText": "What are your artistic and academic goals for the next four years?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "babfa-influences",
+    "title": "BA+BFA: artistic influences",
+    "promptText": "What artists, movements, cultural experiences, and/or personal experiences inspire your work?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "babfa-vision",
+    "title": "BA+BFA: integrated-arts vision",
+    "promptText": "How do you envision the BA+BFA in Integrated Arts supporting the expansion and growth in your work? What is your vision for the work you hope to create in the coming years? What does “integrated arts” mean to you?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Ohio State University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Pennsylvania State University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Pitzer College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "core-values",
+    "title": "Engaging with a Pitzer core value",
+    "promptText": "At Pitzer, five core values distinguish our approach to education: social responsibility, intercultural understanding, interdisciplinary learning, student engagement, and environmental sustainability. As agents of change, our students utilize these values to create solutions to our world’s challenges. Reflecting on your involvement throughout high school or within the community, how have you engaged with one of Pitzer’s core values?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "college-fit",
+    "title": "Your college experience and Pitzer fit",
+    "promptText": "At Pitzer, five core values distinguish our approach to education: social responsibility, intercultural understanding, interdisciplinary learning, student engagement, and environmental sustainability. As agents of change, our students utilize these values to create solutions to our world’s challenges. Describe what you are looking for from your college experience and why Pitzer would be a good fit for you.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Pittsburgh",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Pomona College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "academic-interest",
+    "title": "Academic interest",
+    "promptText": "What draws you to the subject(s) you selected as potential major(s)? If undecided, share more about one of your academic passions or interests.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-response-community-values",
+    "title": "Community values and perspectives",
+    "promptText": "Reflecting on a community that you are a part of, what values or perspectives from that community would you bring to Pomona?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-response-outside-classroom",
+    "title": "An experience outside the classroom",
+    "promptText": "Describe an experience you had outside the classroom that changed the way you think and/or how you engage with your peers. What was that experience and what did you learn from it?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-response-how-others-see-you",
+    "title": "How others would describe you",
+    "promptText": "Choose any person or group of people in your life and share how they would describe you.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Purdue University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Reed College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "paideia-class",
+    "title": "A Paideia class",
+    "promptText": "For one week at the end of January, Reed students upend the traditional classroom hierarchy and teach classes about any topic they love, academic or otherwise. This week is known as Paideia, after the Greek term signifying “education”—the complete education of mind, body, and spirit. What would you teach that would contribute to the Reed community?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Rice University",
+  "applicationPlatform": "questbridge",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "academic-areas",
+    "title": "Academic areas at Rice",
+    "promptText": "Please explain what draws you to the academic areas you selected above and how you hope to explore them at Rice University.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "rice-experience",
+    "title": "The Rice experience",
+    "promptText": "Based upon your exploration of Rice University, what elements of the Rice experience appeal to you?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "community-residential-college",
+    "title": "Residential College perspectives",
+    "promptText": "The Residential College System is at the heart of Rice student life and is heavily influenced by the particular cultural traditions and unique life experiences each student brings. What life experiences and/or unique perspectives are you looking forward to sharing with fellow Owls in the residential college system?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "community-change-agents",
+    "title": "Joining a community of change agents",
+    "promptText": "Rice is strengthened by its diverse community of learning and discovery that produces leaders and change agents across the spectrum of human endeavor. What perspectives shaped by your background, experiences, upbringing, and/or cultural identity inspire you to join our community of change agents at Rice?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Richmond",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "relentlessly-welcoming",
+    "title": "Make a space more welcoming",
+    "promptText": "Richmond is a community that strives to be relentlessly welcoming. Tell us about a time you made a space better for other people by helping them feel welcome, heard, included, or supported.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "ideas-into-actions",
+    "title": "Turn ideas into actions",
+    "promptText": "Richmond students turn ideas into actions. Tell us about a time you learned by doing, making, building, testing, helping, or leading and what that experience taught you about yourself, the world, or the kind of impact you want to have.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "unique-spider",
+    "title": "Your unique mark on a Spider community",
+    "promptText": "Richmond’s mascot is the Spider. Just as you are unique, this singular mascot represents over 52,680 unique species of spiders. Tell us about the communities, experiences, or ambitions that have shaped you into the unique person you are and how you will make your mark as part of a Spider community.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Rochester",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "curiosity-creativity",
+    "title": "Combine curiosity, creativity, and Rochester opportunities",
+    "promptText": "The University of Rochester is a place where curiosity and creativity meet. How will you combine our academic flexibility and co-curricular opportunities to create an experience that reflects your interests and ambitions?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Rutgers University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Scripps College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Smith College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Southern California",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Swarthmore College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Texas A&M University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "personal-story",
+    "title": "Your story",
+    "promptText": "Tell us your story. What unique opportunities or challenges have you experienced throughout your high school career that have shaped who you are today?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "college-readiness",
+    "title": "A life event that prepared you for college",
+    "promptText": "Describe a life event which you feel has prepared you to be successful in college.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "life-goals",
+    "title": "Life goals and objectives",
+    "promptText": "In a few words, what are some of your life goals and objectives?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "major-choice",
+    "title": "Why your chosen major",
+    "promptText": "In a few words, why have you chosen your academic major(s)?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "why-tamu",
+    "title": "Why Texas A&M",
+    "promptText": "We know you have a lot of options. In a few words, why did you choose to apply to Texas A&M?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "education-plans",
+    "title": "Plans beyond a bachelor's degree",
+    "promptText": "Briefly describe any educational plans you have beyond earning your bachelor’s degree.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "additional-context",
+    "title": "Additional context",
+    "promptText": "Are there experiences or opportunities that have shaped or influenced your abilities or academic record, which you have not already written about?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Texas at Austin",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-answer-first-choice-major",
+    "title": "First-choice major",
+    "promptText": "Why are you interested in the major you indicated as your first-choice major?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-proudest-activity",
+    "title": "Proudest activity",
+    "promptText": "Think of all the activities — both in and outside of school — that you have been involved with during high school. Which one are you most proud of and why? (Guidance for students: This can include an extracurricular activity, a club/organization, volunteer activity, work or a family responsibility.)",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-academic-circumstances",
+    "title": "Academic circumstances",
+    "promptText": "Please share background on events or special circumstances that you feel may have impacted your high school academic performance.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-architecture",
+    "title": "School of Architecture",
+    "promptText": "Inherent in the design disciplines is the capacity to impact the world around us. What does the opportunity to develop such capacity mean to you and you approach to your college education?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "short-answer-nursing",
+    "title": "School of Nursing",
+    "promptText": "Discuss the factors that have influenced your motivation and deep desire to pursue a career in nursing. Please include any activities and/or life experiences that are related.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Trinity College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "background-at-trinity",
+    "title": "Background and the Trinity community",
+    "promptText": "The identities you claim, the challenges you face, and the successes you enjoy shape the background for your college experience to come. What is an aspect of your background that you are excited to share and/or explore as a member of the Trinity community and why?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Tufts University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "college-search-engagement",
+    "title": "Learning about and engaging with Tufts",
+    "promptText": "Please describe how you have learned about and engaged with Tufts during your college search process.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "arts-sciences-assignment",
+    "title": "A favorite school assignment",
+    "promptText": "Tell us about one of your favorite school assignments in the past two years. What was the assignment and why did you enjoy it?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "engineering-project",
+    "title": "An engineering or science project",
+    "promptText": "Tell us about an engineering or science-related project that you have helped build, design, create, or iterate in the past two years. What was the project and what was your role?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "bfa-portfolio-piece",
+    "title": "A specific portfolio piece",
+    "promptText": "Tell us more about a specific piece in your portfolio. What were the ideas you intended to explore, and how did those ideas inform the process of making the piece?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "combined-degree-portfolio",
+    "title": "Portfolio and academic inspiration",
+    "promptText": "Tell us more about a specific piece in your portfolio. How did an academic course, project, or interest inspire the ideas that you explored in this piece? Or, how did making this piece influence your academic interests?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Tulane University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Connecticut",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Massachusetts Amherst",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "custom-why-major",
+    "title": "Why this major?",
+    "promptText": "Please tell us: Why did you choose this major(s)?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "custom-why-umass",
+    "title": "Why UMass Amherst?",
+    "promptText": "Please tell us: Why do you want to attend UMass Amherst?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "custom-community",
+    "title": "Community and contribution",
+    "promptText": "At UMass Amherst, no two students are alike. Our communities and groups often define us and shape our individual worlds. Community can refer to various aspects, including shared geography, religion, race/ethnicity, income, ideology, and more. Please choose one of your communities or groups and describe its significance. Explain how, as a product of this community or group, you would enrich our campus.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Miami",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Michigan",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "leaders-and-citizens",
+    "title": "Leaders and citizens",
+    "promptText": "At the University of Michigan, we are focused on developing leaders and citizens who will challenge the present and enrich the future. In your essay, share with us how you are prepared to contribute to these goals. This could include the people, places, experiences, or aspirations that have shaped your journey and future plans.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "specific-school-fit",
+    "title": "Specific undergraduate school or college",
+    "promptText": "Describe the unique qualities that attract you to the specific undergraduate college or school (including preferred admission and dual degree programs) to which you are applying at the University of Michigan. How would that curriculum support your interests?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "University of Minnesota Twin Cities",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of North Carolina at Chapel Hill",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Pennsylvania",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "all-thank-you-note",
+    "title": "Thank-you note",
+    "promptText": "Write a short thank-you note to someone you have not yet thanked and would like to acknowledge. (We encourage you to share this note with that person, if possible, and reflect on the experience!)",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "all-community",
+    "title": "Explore community at Penn",
+    "promptText": "How will you explore community at Penn? Consider how Penn will help shape your perspective, and how your experiences and perspective will help shape Penn.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-nursing",
+    "title": "School-specific: Nursing",
+    "promptText": "Penn Nursing intends to meet the health needs of society in a global and multicultural world by preparing its students to impact healthcare by advancing science. Why are you applying to Nursing, where do you see yourself professionally in the future, and how will you contribute to our mission of promoting equity in healthcare?",
+    "requirement": "conditional",
+    "programKey": "nursing",
+    "programLabel": "Penn Nursing",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-arts-sciences",
+    "title": "School-specific: College of Arts and Sciences",
+    "promptText": "The College of Arts and Sciences is designed to foster discovery and connection. Describe something you are curious about—something you'd like to learn more about or find a new approach to—and how you might pursue that curiosity in the College.",
+    "requirement": "conditional",
+    "programKey": "arts-sciences",
+    "programLabel": "College of Arts and Sciences",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-wharton",
+    "title": "School-specific: Wharton",
+    "promptText": "Wharton prepares its students to make an impact by applying business methods and economic theory to real-world problems, including economic, political, and social issues. Discuss a current issue of importance to you and how you hope a Wharton education would help you explore it.",
+    "requirement": "conditional",
+    "programKey": "wharton",
+    "programLabel": "The Wharton School",
+    "groupKey": null
+   },
+   {
+    "externalRef": "school-engineering",
+    "title": "School-specific: Engineering",
+    "promptText": "Penn Engineering prepares its students to become leaders in technology by combining a strong foundation in the natural sciences and mathematics with depth of study in focused disciplinary majors. Describe how you plan to pursue your engineering interests at Penn, particularly within the intended major you selected.",
+    "requirement": "conditional",
+    "programKey": "engineering",
+    "programLabel": "School of Engineering and Applied Science",
+    "groupKey": null
+   },
+   {
+    "externalRef": "huntsman-language-experience",
+    "title": "Huntsman: Target-language experience",
+    "promptText": "Describe your experience with the target language you selected. You may wish to share the length of time you’ve studied or used this language, how you’ve learned it, the skills you’ve acquired, and/or the skills you still wish to develop. Please also explain why you are interested in studying this language and the region(s) of the world where it is spoken.",
+    "requirement": "conditional",
+    "programKey": "huntsman",
+    "programLabel": "Huntsman Program in International Studies and Business",
+    "groupKey": null
+   },
+   {
+    "externalRef": "huntsman-global-issue",
+    "title": "Huntsman: International studies and business",
+    "promptText": "The Huntsman Program supports the development of globally-minded scholars who become engaged citizens, creative innovators, and ethical leaders in the public, private, and non-profit sectors in the United States and around the world. What draws you to a dual degree in international studies and business, and how would you use what you learn to address a global issue where these two domains intersect?",
+    "requirement": "conditional",
+    "programKey": "huntsman",
+    "programLabel": "Huntsman Program in International Studies and Business",
+    "groupKey": null
+   },
+   {
+    "externalRef": "lsm-integration",
+    "title": "LSM: Life sciences and management",
+    "promptText": "The Vagelos Life Sciences & Management (LSM) program brings together two powerful modes of understanding—scientific inquiry and strategic thinking—to prepare students to engage thoughtfully and creatively with some of the most complex challenges of our time. What questions, problems, or opportunities would you hope to explore through LSM, and how might the integration of life sciences and management shape your approach to them? Focus on the ideas, values, or questions that draw you to this intersection, rather than how LSM might advance your career, and make sure this essay is distinct from your single-degree application.",
+    "requirement": "conditional",
+    "programKey": "lsm",
+    "programLabel": "Vagelos Program in Life Sciences and Management",
+    "groupKey": null
+   },
+   {
+    "externalRef": "mt-engineering-business",
+    "title": "M&T: Engineering and business perspectives",
+    "promptText": "Explain how you will use the M&T program to pursue problems or opportunities that require both engineering and business perspectives.",
+    "requirement": "conditional",
+    "programKey": "m-and-t",
+    "programLabel": "Jerome Fisher Program in Management and Technology",
+    "groupKey": null
+   },
+   {
+    "externalRef": "mt-created-built",
+    "title": "M&T: Something you built",
+    "promptText": "Describe something you created, designed, improved, or built. What motivated you, and what did you learn from the process?",
+    "requirement": "conditional",
+    "programKey": "m-and-t",
+    "programLabel": "Jerome Fisher Program in Management and Technology",
+    "groupKey": null
+   },
+   {
+    "externalRef": "nhcm-interest",
+    "title": "NHCM: Nursing and Healthcare Management",
+    "promptText": "Describe your interest in nursing and health care management, and how Penn's coordinated dual-degree program in nursing and business would help you meet your goals. Please ensure that this essay is distinct from your single-degree application, if applicable.",
+    "requirement": "conditional",
+    "programKey": "nhcm",
+    "programLabel": "Nursing and Healthcare Management",
+    "groupKey": null
+   },
+   {
+    "externalRef": "viper-major-combination",
+    "title": "VIPER: Major combination",
+    "promptText": "VIPER students pursue dual degrees in science or math and engineering. Which major combination(s) interest you most right now and why? Your response to this prompt is not binding; students often shift majors as they learn more through the program.",
+    "requirement": "conditional",
+    "programKey": "viper",
+    "programLabel": "Vagelos Integrated Program in Energy Research",
+    "groupKey": null
+   },
+   {
+    "externalRef": "viper-energy-interest",
+    "title": "VIPER: Energy science and technology",
+    "promptText": "Describe your interest in the VIPER program, including how any past experiences (academic, research, extracurricular, etc.) have shaped your interest in energy science and technology, and how you envision participation in VIPER fitting into your future goals.",
+    "requirement": "conditional",
+    "programKey": "viper",
+    "programLabel": "Vagelos Integrated Program in Energy Research",
+    "groupKey": null
+   },
+   {
+    "externalRef": "vic-alignment",
+    "title": "VIC: Visual and Interactive Computing",
+    "promptText": "Discuss how your interests align with the Visual and Interactive Computing (VIC) program at the University of Pennsylvania.",
+    "requirement": "conditional",
+    "programKey": "vic",
+    "programLabel": "BSE in Visual and Interactive Computing",
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Vanderbilt University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "short-answer-dare-to-grow",
+    "title": "Dare to grow",
+    "promptText": "Vanderbilt University’s motto, Crescere aude, is Latin for “dare to grow.” In your response, reflect on how one or more aspects of your identity, culture, or background has played a role in your personal growth, and how it will contribute to our campus community as you dare to grow at Vanderbilt.",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Vassar College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Villanova University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "supplement-equity-justice",
+    "title": "Advancing equity and justice",
+    "promptText": "As Pope Leo XIV (Villanova Class of 1977) has said, “no one can single-handedly bear the weight of the challenges the world is facing, just as no one is so weak that they cannot play their part.” What have you done to play your part in advancing equity and justice in your community?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "supplement-life-lesson",
+    "title": "A lesson in life",
+    "promptText": "What is a lesson in life that you have learned that you would want to share with others at Villanova?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "supplement-new-home",
+    "title": "Villanova as your new home",
+    "promptText": "\"Villanova\" means \"new home.\" Why do you want to call Villanova your new home?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "supplement-ai-common-good",
+    "title": "Technology and the common good",
+    "promptText": "Villanova embraces Artificial Intelligence (AI) with a commitment to thoughtful, ethical use rooted in our Augustinian mission and values. How do you see technology helping you to lead, serve, and contribute to the common good?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "supplement-borrowed-strength",
+    "title": "Someone borrowing your strength",
+    "promptText": "At Villanova, we often say \"each of us strengthens all of us.\" Please detail a time when someone has borrowed some of your strength in their time of need.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Virginia Polytechnic Institute and State University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Virginia",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Wake Forest University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "required-why-wake",
+    "title": "Why Wake?",
+    "promptText": "Why Wake?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-written-books",
+    "title": "Five intriguing books",
+    "promptText": "List five books you’ve read that have intrigued you.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-written-curiosity",
+    "title": "Intellectual curiosity",
+    "promptText": "Tell us what piques your intellectual curiosity or has helped you understand the world’s complexity. This can include a work you’ve read, a project you’ve completed for a class, and even co-curricular activities in which you have been involved.",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-written-maya-angelou",
+    "title": "A Maya Angelou quote",
+    "promptText": "Dr. Maya Angelou, renowned author, poet, civil-rights activist, and former Wake Forest University Reynolds Professor of American Studies, inspired others to celebrate their identities and to honor each person’s dignity. Choose one of Dr. Angelou’s powerful quotes. How does this quote relate to your lived experience or reflect how you plan to contribute to the Wake Forest community?",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-written-top-ten",
+    "title": "Top Ten List",
+    "promptText": "Give us your Top Ten List. (The choice of theme is yours.)",
+    "requirement": "conditional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Washington and Lee University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "optional-why-wlu",
+    "title": "Why W&L?",
+    "promptText": "There are over 8,200 accredited colleges and universities in the U.S. alone. You have chosen to apply to Washington and Lee University. Please describe how you have familiarized yourself with W&L and what aspects of its community are most exciting to you.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-short-answer-life-outside-school",
+    "title": "Life outside school",
+    "promptText": "Please describe an aspect of your life outside of school that is important to you, such as an extracurricular activity, a job, or a family responsibility. How has your involvement shaped your personal qualities and growth, and how has it impacted those around you?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-short-answer-diversity",
+    "title": "A diverse aspect you would bring",
+    "promptText": "W&L’s mission statement focuses on preparing graduates for lifelong learning in a global and diverse society. Engaging with faculty, staff, and classmates with diverse identities, experiences, and perspectives is an essential component of our education. Recognizing that diversity takes many forms, what diverse aspect would you bring to W&L?",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-short-answer-curiosity",
+    "title": "Your curious mind",
+    "promptText": "Reveal to us how your curious mind works by sharing something you spend considerable time thinking or learning about.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "optional-short-answer-name",
+    "title": "The story of your name",
+    "promptText": "On a residential college campus with a Speaking Tradition that encourages connections between individuals, using each other’s names matters. Please share the story of any name you go by and what significance it holds for you.",
+    "requirement": "optional",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   },
+   {
+    "externalRef": "johnson-art",
+    "title": "Johnson Scholarship: a work of art",
+    "promptText": "\"To promote literature in this rising empire and to encourage the arts, have ever been amongst the warmest wishes of my heart” (George Washington, 1798, first president of the United States and first major benefactor of Washington and Lee University). Describe a work of art that has influenced you, and discuss the impact it has had on you.",
+    "requirement": "conditional",
+    "programKey": "johnson-scholarship",
+    "programLabel": "Johnson Scholarship",
+    "groupKey": "wlu-johnson"
+   },
+   {
+    "externalRef": "johnson-unexpected-path",
+    "title": "Johnson Scholarship: an unexpected path",
+    "promptText": "In mathematics, the shortest distance between two points on a flat surface is a straight line. While geometry is predictable, sometimes daily life is not. Reflect on a time when your path was not as simple or direct as anticipated. How did you manage, and what did you learn?",
+    "requirement": "conditional",
+    "programKey": "johnson-scholarship",
+    "programLabel": "Johnson Scholarship",
+    "groupKey": "wlu-johnson"
+   },
+   {
+    "externalRef": "johnson-authentic-representation",
+    "title": "Johnson Scholarship: authentic representation",
+    "promptText": "We live in a world in which much of our self-representation is curated online via short-lived social media ‘stories’ and disappearing photos. What photo or other representation of yourself is authentically you? What does it say about your growth into the person you are today and the person you want to become? Please use only the words in your essay to address this question. Do not include photographs or other materials in your answer.",
+    "requirement": "conditional",
+    "programKey": "johnson-scholarship",
+    "programLabel": "Johnson Scholarship",
+    "groupKey": "wlu-johnson"
+   },
+   {
+    "externalRef": "johnson-spring-term",
+    "title": "Johnson Scholarship: design a Spring Term course",
+    "promptText": "W&L’s Spring Term is a four-week, intensive experience during which students take only one course, allowing for undivided attention to the subject matter. Spring Term courses are known for innovative pedagogy, interdisciplinary scholarship, travel, and fieldwork in diverse settings. If you could design a Spring Term course, what would you propose, and why would you choose to pursue that topic?",
+    "requirement": "conditional",
+    "programKey": "johnson-scholarship",
+    "programLabel": "Johnson Scholarship",
+    "groupKey": "wlu-johnson"
+   },
+   {
+    "externalRef": "johnson-education-social-framework",
+    "title": "Johnson Scholarship: education and social frameworks",
+    "promptText": "In his October 1963, A Talk to Teachers, James Baldwin said “…the whole process of education occurs within a social framework and is designed to perpetuate the aims of society.” Yet, as he aptly notes, “the paradox of education is precisely this – that as one begins to become conscious, one begins to examine the society in which he is being educated.\"  Baldwin suggests that the purpose of education is to teach us to think for ourselves, to question – and change – the “framework” that we have come to understand and accept. What norms of your home or community have you become conscious of during your time in high school, and how would you like to use that knowledge to make it a better place?",
+    "requirement": "conditional",
+    "programKey": "johnson-scholarship",
+    "programLabel": "Johnson Scholarship",
+    "groupKey": "wlu-johnson"
+   }
+  ]
+ },
+ {
+  "schoolName": "Washington University in St. Louis",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Washington",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Wellesley College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": [
+   {
+    "externalRef": "required-bridges-perspectives",
+    "title": "Building bridges across perspectives",
+    "promptText": "Wellesley students actively seek ways to build bridges and to change the world for the better. Tell us about an experience working with and alongside people of different backgrounds and/or perspectives from your own. Why was this important to you, and what lessons from this will you bring with you to Wellesley?",
+    "requirement": "required",
+    "programKey": null,
+    "programLabel": null,
+    "groupKey": null
+   }
+  ]
+ },
+ {
+  "schoolName": "Wesleyan University",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "William & Mary",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "Williams College",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ },
+ {
+  "schoolName": "University of Wisconsin-Madison",
+  "applicationPlatform": "common-app",
+  "sharedApplicationKey": null,
+  "prompts": []
+ }
+]

@@ -29,6 +29,11 @@ export type RawPromptRecord = {
   // program-specific variants were only summarized, not quoted exactly).
   // Omit to inherit the record's status.
   verificationStatus?: VerificationStatus;
+  // Requirements the schema has no column for: "two pages", "13 words per
+  // stem", "one of three named songs". Stored as the prompt's note rather than
+  // guessed at in words - a page count converted to a word count is a number
+  // the student would then write to, and it would be invented.
+  note?: string;
   // Ties this prompt into an "answer any N of these" set declared in the
   // school record's promptGroups. Without it every prompt in the set counts as
   // separate work, which is why seven UC campuses read as 56 essays.

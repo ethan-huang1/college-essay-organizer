@@ -53,18 +53,25 @@ describe("inferring a prompt's function from its text", () => {
   it("holds its measured precision against the reviewed catalogue", () => {
     let committed = 0;
     let agreed = 0;
+    let reviewed = 0;
     for (const school of listCoveredSchoolNames()) {
       for (const prompt of lookupSchoolSource(school)?.prompts ?? []) {
+        // Precision can only be measured where a person recorded an answer, so
+        // the unreviewed part of the 2026-27 catalogue is out of scope here -
+        // there is nothing to be right or wrong against.
+        const review = categoryReview(school, prompt.externalRef);
+        if (!review) continue;
+        reviewed += 1;
         const guess = inferPromptFunction(prompt.title, prompt.promptText);
         if (guess === null) continue;
         committed += 1;
-        if (guess === categoryReview(school, prompt.externalRef)![5]) agreed += 1;
+        if (guess === review[5]) agreed += 1;
       }
     }
     const precision = agreed / committed;
     // A floor, not a target: this exists to catch a regression that quietly
     // makes the inferrer worse, not to be tuned upward.
     expect(precision).toBeGreaterThan(0.7);
-    expect(committed / 255).toBeGreaterThan(0.3);
+    expect(committed / reviewed).toBeGreaterThan(0.3);
   });
 });
