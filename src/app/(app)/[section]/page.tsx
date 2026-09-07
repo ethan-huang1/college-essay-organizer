@@ -23,6 +23,7 @@ import {
   type WorkspaceEssay,
 } from "../../essay-ui";
 import { sentenceCase, sentenceList, statusLabel } from "../../text";
+import { groupRowsByWordCount } from "../../prompt-grouping";
 import {
   essaySchoolGroups,
   ROW_STATES,
@@ -544,29 +545,6 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
 }
 
 /* --------------------------------------------------------------- categories */
-
-/**
- * Prompts within a category, grouped by word-count target so prompts of a
- * similar length sit together instead of one undifferentiated list. Shortest
- * first; prompts sharing a word count keep whatever order canonicalRows gave
- * them. Prompts with no word limit fall into a group of their own, last.
- */
-function groupRowsByWordCount<T extends { prompt: { maxWordCount: number | null } }>(rows: readonly T[]) {
-  const NO_LIMIT = Number.POSITIVE_INFINITY;
-  const buckets = new Map<number, T[]>();
-  for (const row of rows) {
-    const key = row.prompt.maxWordCount ?? NO_LIMIT;
-    const bucket = buckets.get(key);
-    if (bucket) bucket.push(row);
-    else buckets.set(key, [row]);
-  }
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([wordCount, groupRows]) => ({
-      label: wordCount === NO_LIMIT ? "Other / no word limit" : `${wordCount} words`,
-      rows: groupRows,
-    }));
-}
 
 /** The rows list shared by every category section - grouped by word count. */
 function CategoryPromptRows({
