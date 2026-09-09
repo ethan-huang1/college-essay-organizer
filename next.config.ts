@@ -40,6 +40,19 @@ const nextConfig: NextConfig = {
    *
    * `scripts/prune-onnx-binaries.mjs`, wired to `prebuild`, deletes them instead.
    */
+  /**
+   * `/plans` is a local developer surface: it reads markdown from
+   * ~/.claude/plans, a directory that does not exist on a deployed server. It
+   * still cost a production Vercel Function, and Hobby allows only 12 per
+   * deployment - which is exactly what broke deploys once the essay editor
+   * added three routes and took the count to 13. Naming its page
+   * `page.dev.tsx`, and accepting that extension only in development, means
+   * the route does not exist in a production build at all - no function -
+   * while `next dev` still serves it.
+   */
+  pageExtensions: process.env.NODE_ENV === "development"
+    ? ["dev.tsx", "tsx", "ts", "jsx", "js"]
+    : ["tsx", "ts", "jsx", "js"],
   turbopack: {
     root: process.cwd(),
   },

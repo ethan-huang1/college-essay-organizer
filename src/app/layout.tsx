@@ -29,6 +29,17 @@ export const metadata: Metadata = {
     template: "%s · College Essay Organizer",
   },
   description: "A private workspace for organizing, matching, and revising college essays.",
+  // Stated explicitly because the icon lives in public/ rather than app/. The
+  // file-based convention (app/favicon.ico) compiles into a route handler,
+  // which counts against Vercel's 12-function-per-deployment limit on Hobby;
+  // a static asset does not, and nothing else about the icon changes.
+  //
+  // The sizes are enumerated rather than left to the convention, which
+  // advertised only "16x16": this .ico actually carries four images, so
+  // under-declaring it could have a browser wanting a 32px icon discount it.
+  icons: {
+    icon: { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16 32x32 48x48 256x256" },
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

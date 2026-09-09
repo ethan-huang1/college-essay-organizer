@@ -60,9 +60,14 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           </nav>
 
           <div className="topnav-utility">
-            <NavLink className="utility-link" href="/plans">
-              Plans
-            </NavLink>
+            {/* The route exists only in development (see pageExtensions in
+                next.config.ts), so the link must not be offered in production
+                where it would 404. */}
+            {process.env.NODE_ENV === "development" ? (
+              <NavLink className="utility-link" href="/plans">
+                Plans
+              </NavLink>
+            ) : null}
 
             {/* The native popover attribute brings Escape, light-dismiss and
                 top-layer stacking with no JavaScript. */}
