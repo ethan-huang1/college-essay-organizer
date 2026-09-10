@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getAppDatabase } from "@/lib/db/server";
 import { deleteSchool, setSchoolPrograms, updateSchool } from "@/lib/schools";
-import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+import { getActiveWorkspaceSnapshot, requireWritableWorkspace } from "@/lib/workspace-session";
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -14,6 +14,7 @@ function field(formData: FormData, name: string) {
 
 export async function updateSchoolAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   await updateSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"), {
     name: field(formData, "name"),
     notes: field(formData, "notes"),
@@ -28,6 +29,7 @@ export async function updateSchoolAction(formData: FormData) {
 // unresolved forever.
 export async function setSchoolProgramsAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const programKeys = formData.getAll("programKey").filter((value): value is string => typeof value === "string");
   await setSchoolPrograms(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"), programKeys);
   revalidatePath("/");
@@ -41,6 +43,7 @@ export async function setSchoolProgramsAction(formData: FormData) {
 // been filtered to the school that no longer exists.
 export async function deleteSchoolAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   await deleteSchool(getAppDatabase().db, snapshot.workspace.id, field(formData, "schoolId"));
   revalidatePath("/");
   revalidatePath("/schools");

@@ -11,7 +11,7 @@
 // fields actually read - so snapshot rows satisfy them without casting and
 // tests can build small literals.
 
-import { summarizePrompts, workState, type ProgressPrompt, type PromptProgress } from "./progress";
+import { isCountableEssayPrompt, summarizePrompts, workState, type ProgressPrompt, type PromptProgress } from "./progress";
 
 export type WorkloadPrompt = ProgressPrompt & {
   id: string;
@@ -189,6 +189,13 @@ export function summarizeWorkload(
   const countable: WorkloadPrompt[] = [];
 
   for (const prompt of scoped) {
+    // Not everything a school requires is an essay the student writes. A
+    // graded paper or a portfolio is a real requirement but not writing, and
+    // counting it here is what made Princeton show a phantom required essay
+    // and let an Amherst upload satisfy a choose-one essay group. The matcher
+    // already skipped these; now the counters do too.
+    if (!isCountableEssayPrompt(prompt)) continue;
+
     // A prompt in a choose-N set is resolved by its group rather than by a
     // program: "choose exactly one of these two" is a condition on the
     // applicant's own choice. Without this such a prompt would be dropped as

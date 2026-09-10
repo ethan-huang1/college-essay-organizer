@@ -13,8 +13,8 @@ import {
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/auth";
 import { getAppDatabase } from "@/lib/db/server";
-import { authenticateUser, createUser, EmailAlreadyRegisteredError } from "@/lib/users";
-import { ACTIVE_WORKSPACE_COOKIE } from "@/lib/workspace-session";
+import { authenticateUser, createUser, deleteUser, EmailAlreadyRegisteredError } from "@/lib/users";
+import { ACTIVE_WORKSPACE_COOKIE, requireSignedInUser } from "@/lib/workspace-session";
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -83,4 +83,25 @@ export async function signOutAction() {
   cookieStore.delete(SESSION_COOKIE);
   cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
   redirect("/sign-in");
+}
+
+/**
+ * Deletes the signed-in account and every piece of data it owns.
+ *
+ * The user is re-derived from the signed session cookie, never from the form:
+ * the only account this can delete is the caller's own, and no id crosses the
+ * wire to be tampered with.
+ *
+ * Deliberately not gated by requireWritableWorkspace. Which workspace someone
+ * happens to be viewing has no bearing on their right to delete their account,
+ * and the shared example workspace belongs to nobody, so it is outside the
+ * cascade either way.
+ */
+export async function deleteAccountAction() {
+  const user = await requireSignedInUser();
+  await deleteUser(getAppDatabase().db, user.id);
+  const cookieStore = await cookies();
+  cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
+  redirect("/sign-in?error=account-deleted");
 }

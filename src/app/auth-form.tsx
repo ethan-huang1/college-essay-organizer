@@ -19,7 +19,11 @@ export function AuthCard({
     ? "This deployment is missing its AUTH_SECRET, so nobody can sign in yet."
     : searchParams.error === "expired"
       ? "Your session expired. Please sign in again."
-      : searchParams.error;
+      : searchParams.error === "account-deleted"
+        // Not a failure, but this is the one notice slot the page has, and
+        // saying nothing after deleting an account reads as though it failed.
+        ? "Your account and all of its essays have been deleted."
+        : searchParams.error;
 
   return (
     <main className="sign-in-frame">

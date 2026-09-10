@@ -3,7 +3,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { resetDemoWorkspace } from "@/lib/db/demo-workspace";
 import { getAppDatabase } from "@/lib/db/server";
 import { DEMO_WORKSPACE_ID } from "@/lib/db/seed";
 import { ensurePersonalWorkspace } from "@/lib/users";
@@ -29,9 +28,21 @@ export async function openPersonalWorkspace() {
   redirect("/schools");
 }
 
+/**
+ * Switches to the shared example workspace. Selection only - it never seeds,
+ * resets or recreates.
+ *
+ * It used to call resetDemoWorkspace() on the way in, which meant the button
+ * labelled "Example workspace" - the one the Overview onboarding copy tells
+ * every new user to press - deleted the workspace row and reimported 19
+ * colleges. With more than one account that is a shared-state bomb: whoever
+ * clicked last wiped what everyone else was reading, and for the ~6s of the
+ * rebuild their pages had no workspace to render. Seeding is an out-of-band
+ * operation now (resetDemoWorkspace in src/lib/db/demo-workspace.ts, run from
+ * a script), and the example is read-only - see requireWritableWorkspace.
+ */
 export async function loadDemoWorkspace() {
   await requireSignedInUser();
-  await resetDemoWorkspace(getAppDatabase().db);
   await selectWorkspace(DEMO_WORKSPACE_ID);
   redirect("/schools");
 }

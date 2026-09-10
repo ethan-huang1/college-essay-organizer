@@ -306,3 +306,51 @@ describe("naming is consistent across the interface", () => {
     }
   });
 });
+
+describe("the example workspace is read-only", () => {
+  // One shared workspace row serves every account, so a write there is a write
+  // to everyone's copy. The guard lives in workspace-session.ts; this asserts
+  // every action that mutates workspace data actually calls it, because the
+  // failure mode is silent - a new action simply forgets, and one student's
+  // edit starts appearing in another's example.
+  const MUTATING_ACTION_FILES = [
+    "src/app/essay-actions.ts",
+    "src/app/prompt-actions.ts",
+    "src/app/school-actions.ts",
+    "src/app/assignment-actions.ts",
+    "src/app/college-actions.ts",
+  ];
+
+  it("guards every action that mutates workspace data", () => {
+    for (const path of MUTATING_ACTION_FILES) {
+      const source = readFileSync(path, "utf8");
+      const snapshots = source.split("await getActiveWorkspaceSnapshot()").length - 1;
+      const guards = source.split("requireWritableWorkspace(snapshot)").length - 1;
+      expect(snapshots, `${path} should resolve a workspace`).toBeGreaterThan(0);
+      expect(guards, `${path} has ${snapshots} action(s) but only ${guards} write guard(s)`).toBe(snapshots);
+    }
+  });
+
+  it("does not guard reads or account deletion", () => {
+    // Coaches only analyse text, so refusing them in the example would be
+    // pointless friction. Account deletion is the user's own right and must
+    // not depend on which workspace they happen to be viewing.
+    // Match the call, not the identifier: both files mention the guard in a
+    // comment explaining why they deliberately do not use it.
+    for (const path of ["src/app/review-coach-actions.ts", "src/app/auth-actions.ts"]) {
+      expect(readFileSync(path, "utf8"), `${path} should not refuse writes`)
+        .not.toContain("requireWritableWorkspace(snapshot)");
+    }
+  });
+
+  it("never resets the example on the way in", () => {
+    // The button labelled "Example workspace" used to call resetDemoWorkspace,
+    // wiping whatever every other signed-in user was reading.
+    // The module cannot reset what it cannot import - and the import is the
+    // one thing a comment cannot accidentally satisfy.
+    const actions = readFileSync("src/app/workspace-actions.ts", "utf8");
+    expect(actions).not.toContain('from "@/lib/db/demo-workspace"');
+    // And no UI offers a reset at all.
+    expect(readFileSync("src/app/(app)/layout.tsx", "utf8")).not.toContain("Reset example");
+  });
+});

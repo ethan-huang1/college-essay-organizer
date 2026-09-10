@@ -78,10 +78,9 @@ export async function getWorkspaceSnapshot(db: AppDatabase, workspaceId: string)
       supportingMaterial: workspacePrompts.filter((prompt) => !isEssayPrompt(prompt)).length,
       essays: workspaceEssays.length,
       assignments: assignments.length,
-      // 70 is the top band's floor in matching.ts (see docs/reuse-scoring.md).
-      // It was 80 while the top band was "ready to reuse"; that band no longer
-      // exists, because essentially every reused essay needs some tailoring.
-      strongMatches: matches.filter((match) => match.score >= 70).length,
+      // No strongMatches count here. It hardcoded the top band's 70 floor, a
+      // second copy of bandFromScore that also ignored the ceilings - a match
+      // capped to new-response still counted as strong. Nothing read it.
     },
     schools: workspaceSchools.map((school) => {
       const schoolPrompts = workspacePrompts

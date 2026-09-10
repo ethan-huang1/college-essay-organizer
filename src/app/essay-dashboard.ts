@@ -14,7 +14,7 @@
  * disagreeing with each other.
  */
 
-import { workState } from "@/lib/progress";
+import { isCountableEssayPrompt, workState } from "@/lib/progress";
 import {
   canonicalPromptGroups,
   workspaceWorkload,
@@ -104,7 +104,9 @@ export function essaySchoolGroups<
   return [...snapshot.schools]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((school) => {
-      const schoolPrompts = snapshot.prompts.filter((prompt) => prompt.schoolId === school.id);
+      const schoolPrompts = snapshot.prompts.filter(
+        (prompt) => prompt.schoolId === school.id && isCountableEssayPrompt(prompt),
+      );
       const rows = canonicalPromptGroups(schoolPrompts, snapshot.schools).map((group) => {
         const essay = documentFor(snapshot.essays, group.instanceIds, group.prompt.assignedEssay?.id ?? null);
         return {

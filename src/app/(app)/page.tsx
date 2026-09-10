@@ -89,9 +89,15 @@ export default async function Overview() {
         <div>
           <h1>Overview</h1>
           <p className="lede">
-            {overall.requiredRemaining > 0
-              ? `Of your ${overall.requiredTotal} required ${overall.requiredTotal === 1 ? "essay" : "essays"}, ${overall.requiredRemaining} remain. See which ones need a quick edit, a bigger rewrite, or a fresh start.`
-              : `All ${overall.requiredTotal} required ${overall.requiredTotal === 1 ? "essay" : "essays"} are done. Anything below is optional or from a previous cycle.`}
+            {overall.requiredTotal === 0
+              // A school whose 2026-27 prompts are not published yet leaves a
+              // real workspace with nothing required. Without this branch the
+              // first thing that student read was "All 0 required essays are
+              // done", which sounds like an error and is not even true.
+              ? "None of your colleges list a required essay for this cycle yet. Anything below is optional, awaiting your programs, or from a previous cycle."
+              : overall.requiredRemaining > 0
+                ? `Of your ${overall.requiredTotal} required ${overall.requiredTotal === 1 ? "essay" : "essays"}, ${overall.requiredRemaining} remain. See which ones need a quick edit, a bigger rewrite, or a fresh start.`
+                : `All ${overall.requiredTotal} required ${overall.requiredTotal === 1 ? "essay" : "essays"} are done. Anything below is optional or from a previous cycle.`}
           </p>
         </div>
         <p className="overview-total">

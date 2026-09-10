@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Fragment, type ReactNode } from "react";
 
-import { reuseOpportunities, type ReuseMatch } from "@/lib/progress";
+import { isCountableEssayPrompt, reuseOpportunities, type ReuseMatch } from "@/lib/progress";
 import { ACTION_LABELS, type RecommendedAction } from "@/lib/matching";
 import { canonicalPromptGroups, summarizeWorkloadFor, workspaceWorkload, type WorkloadSummary } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
@@ -432,7 +432,7 @@ function PromptsView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; filte
 
   return (
     <>
-      <AddPanel snapshot={snapshot} />
+      {snapshot.workspace.kind === "demo" ? null : <AddPanel snapshot={snapshot} />}
       {snapshot.prompts.length > 0 ? <PromptFilterBar snapshot={snapshot} filters={filters} /> : null}
       <UnresolvedProgramsPanel programs={workspaceWorkload(snapshot).unresolvedPrograms} />
 
@@ -591,7 +591,12 @@ function CategoriesView({ snapshot, filters }: { snapshot: WorkspaceSnapshot; fi
       family,
       prompts: snapshot.prompts.filter((prompt) => prompt.primaryFamily?.id === family.id),
     }));
-  const unclassified = focused ? [] : snapshot.prompts.filter((prompt) => !prompt.primaryFamily);
+  // Supporting material is never classified (the import writes it no family
+  // links), so without this every graded paper and portfolio landed in
+  // "Unclassified" as though it were an essay awaiting a category.
+  const unclassified = focused
+    ? []
+    : snapshot.prompts.filter((prompt) => !prompt.primaryFamily && isCountableEssayPrompt(prompt));
   const unclassifiedRows = canonicalRows(snapshot, unclassified);
 
   // Other sorts last wherever categories are listed: it is a real seventh
@@ -1101,7 +1106,10 @@ function ReuseView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const withEditsTotal = groups.reduce((total, group) => total + group.withEdits.length, 0);
   const answerable = new Set(groups.flatMap((group) => [...group.open, ...group.withEdits].map((row) => row.match.promptId)));
   const needsNew = canonicalPromptGroups(
-    snapshot.prompts.filter((prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !answerable.has(prompt.id)),
+    snapshot.prompts.filter(
+      (prompt) => prompt.isCurrentCycle && !prompt.assignedEssay && !answerable.has(prompt.id)
+        && isCountableEssayPrompt(prompt),
+    ),
     snapshot.schools,
   ).length;
 

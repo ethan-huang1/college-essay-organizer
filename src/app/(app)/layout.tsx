@@ -6,7 +6,7 @@ import { workspaceWorkload } from "@/lib/workload";
 import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
 import { NavLink } from "../nav-link";
 import { PendingButton } from "../pending-button";
-import { signOutAction } from "../auth-actions";
+import { deleteAccountAction, signOutAction } from "../auth-actions";
 import { loadDemoWorkspace, openPersonalWorkspace } from "../workspace-actions";
 
 // None of these routes can be prerendered: every one reads the active
@@ -87,7 +87,11 @@ export default async function AppLayout({ children }: Readonly<{ children: React
 
               <div className="account-workspace">
                 <strong>{snapshot.workspace.name}</strong>
-                <span>{isDemo ? "Real prompts · sample essays" : "Your colleges · private to you"}</span>
+                <span>
+                  {isDemo
+                    ? "Real prompts · sample essays · read-only"
+                    : "Your colleges · private to you"}
+                </span>
               </div>
 
               <div className="account-actions">
@@ -97,8 +101,8 @@ export default async function AppLayout({ children }: Readonly<{ children: React
                   </PendingButton>
                 </form>
                 <form action={loadDemoWorkspace}>
-                  <PendingButton pendingLabel={isDemo ? "Rebuilding…" : "Loading…"}>
-                    {isDemo ? "Reset example" : "Example workspace"}
+                  <PendingButton pendingLabel="Loading…" ariaCurrent={isDemo ? "true" : undefined}>
+                    Example workspace
                   </PendingButton>
                 </form>
               </div>
@@ -113,6 +117,22 @@ export default async function AppLayout({ children }: Readonly<{ children: React
                     Sign out
                   </button>
                 </form>
+
+                {/* Two steps, like deleting a document: opening the disclosure
+                    states what goes, and only then is the button there to
+                    press. Native <details> so it needs no JavaScript. */}
+                <details className="account-danger">
+                  <summary>Delete account</summary>
+                  <p className="detail-note">
+                    This permanently deletes your account, every essay and version you have written, your colleges and
+                    your progress. It cannot be undone, and it does not affect the example workspace.
+                  </p>
+                  <form action={deleteAccountAction}>
+                    <button className="text-link danger" type="submit">
+                      Yes, delete my account and all my essays
+                    </button>
+                  </form>
+                </details>
               </div>
             </div>
           </div>

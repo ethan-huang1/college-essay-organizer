@@ -5,13 +5,14 @@ import { revalidatePath } from "next/cache";
 import { importCollege } from "@/lib/college-import";
 import { getAppDatabase } from "@/lib/db/server";
 import { recomputeWorkspaceMatches } from "@/lib/reuse";
-import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+import { getActiveWorkspaceSnapshot, requireWritableWorkspace } from "@/lib/workspace-session";
 
 export async function addCollegeAction(formData: FormData) {
   const name = formData.get("collegeName");
   if (typeof name !== "string" || !name.trim()) throw new Error("Choose or enter a college name.");
 
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   await importCollege(db, snapshot.workspace.id, name);
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);

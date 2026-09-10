@@ -2,10 +2,11 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openTestDatabase } from "./db/client";
-import { workspaces } from "./db/schema";
+import { users, workspaces } from "./db/schema";
 import {
   authenticateUser,
   createUser,
+  deleteUser,
   EmailAlreadyRegisteredError,
   ensurePersonalWorkspace,
   findUserById,
@@ -116,5 +117,44 @@ describe("accounts", () => {
     expect(await connection.db.select().from(workspaces).where(eq(workspaces.userId, user.id))).toHaveLength(0);
     const orphanedSchools = await connection.client.query("select count(*)::int as n from schools");
     expect(orphanedSchools.rows[0]).toEqual({ n: 0 });
+  });
+
+  it("deletes only the account it is given, leaving other accounts intact", async () => {
+    // The whole point of the delete-my-account button: it must take everything
+    // of mine and nothing of anyone else's.
+    const mine = await createUser(connection.db, { email: "mine@example.com", password: "a-long-test-password" });
+    const theirs = await createUser(connection.db, { email: "theirs@example.com", password: "a-long-test-password" });
+    await createSchool(connection.db, personalWorkspaceId(mine.id), { name: "Brown University" });
+    await createSchool(connection.db, personalWorkspaceId(theirs.id), { name: "Yale University" });
+
+    expect(await deleteUser(connection.db, mine.id)).toBe(true);
+
+    expect(await findUserById(connection.db, mine.id)).toBeNull();
+    expect(await getWorkspaceSnapshot(connection.db, personalWorkspaceId(mine.id))).toBeNull();
+
+    // Theirs is untouched, workspace and school and all.
+    expect(await findUserById(connection.db, theirs.id)).not.toBeNull();
+    const survivor = await getWorkspaceSnapshot(connection.db, personalWorkspaceId(theirs.id));
+    expect(survivor?.schools.map((school) => school.name)).toEqual(["Yale University"]);
+  });
+
+  it("reports a second delete as a no-op rather than pretending it worked", async () => {
+    const user = await createUser(connection.db, { email: "twice@example.com", password: "a-long-test-password" });
+    expect(await deleteUser(connection.db, user.id)).toBe(true);
+    expect(await deleteUser(connection.db, user.id)).toBe(false);
+  });
+
+  it("does not touch the shared example workspace, which belongs to nobody", async () => {
+    // The example row has a null userId, so it is outside the cascade. If that
+    // ever changed, one student deleting their account would delete the
+    // example for everyone.
+    const user = await createUser(connection.db, { email: "solo@example.com", password: "a-long-test-password" });
+    await connection.db.insert(workspaces).values({ id: "workspace-demo", kind: "demo", name: "Example workspace" });
+
+    await deleteUser(connection.db, user.id);
+
+    const demo = await connection.db.select().from(workspaces).where(eq(workspaces.id, "workspace-demo"));
+    expect(demo).toHaveLength(1);
+    expect(await connection.db.select().from(users)).toHaveLength(0);
   });
 });

@@ -53,8 +53,37 @@ export async function getActiveWorkspaceSnapshot() {
     snapshot = await getWorkspaceSnapshot(db, workspaceId);
   }
 
+  // The example workspace is seeded out of band and is never recreated by a
+  // request - entering it must not rebuild it, because that rebuild is a
+  // 19-college reimport that deletes whatever anyone else is looking at. If it
+  // is genuinely absent, fall back to the user's own workspace instead of
+  // throwing: an unseeded example is a deployment gap, not a reason to 500
+  // every route for someone who only wanted to look around.
+  if (!snapshot && workspaceId === DEMO_WORKSPACE_ID) {
+    snapshot = await getWorkspaceSnapshot(db, ownWorkspaceId);
+  }
+
   if (!snapshot) throw new Error(`Workspace ${workspaceId} was not initialized.`);
   return { ...snapshot, user };
+}
+
+/**
+ * Refuses a write when the active workspace is the shared example.
+ *
+ * One example workspace row is shared by every account, so a write there is a
+ * write to everyone's copy: one student editing "The Metronome" changes what
+ * the next one reads. It is a showcase, not a sandbox, and the only safe answer
+ * for a multi-user deployment is that it is read-only.
+ *
+ * Called by every action that mutates workspace data. Deliberately NOT called
+ * by account deletion: which workspace someone happens to be viewing has no
+ * bearing on their right to delete their own account, and the example row
+ * belongs to nobody (userId is null) so it is outside that cascade anyway.
+ */
+export function requireWritableWorkspace(snapshot: { workspace: { kind: string } }) {
+  if (snapshot.workspace.kind === "demo") {
+    throw new Error("The example workspace is read-only. Switch to your own workspace to make changes.");
+  }
 }
 
 export function isDemoWorkspaceId(workspaceId: string) {

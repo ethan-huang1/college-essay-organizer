@@ -89,6 +89,24 @@ export async function authenticateUser(db: AppDatabase, input: { email: string; 
   return { id: user.id, email: user.email };
 }
 
+/**
+ * Removes an account and everything it owns.
+ *
+ * The database cascade does the work: workspaces.userId is `on delete
+ * cascade`, and every workspace-scoped table cascades from workspaces, so one
+ * delete takes the personal workspace with its schools, prompts, essays,
+ * versions, assignments and matches. The shared example workspace has a null
+ * userId and is deliberately outside that cascade, so deleting an account
+ * never touches it.
+ *
+ * Returns whether a row was actually removed, so the caller can tell "deleted"
+ * from "already gone" rather than assuming.
+ */
+export async function deleteUser(db: AppDatabase, userId: string) {
+  const removed = await db.delete(users).where(eq(users.id, userId)).returning({ id: users.id });
+  return removed.length === 1;
+}
+
 export async function findUserById(db: AppDatabase, userId: string) {
   const [user] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, userId));
   return user ?? null;

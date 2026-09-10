@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { reuseCandidate, reuseOpportunities, summarizePrompts, workState, type ProgressPrompt, type ReuseMatch } from "./progress";
+import { isCountableEssayPrompt, reuseCandidate, reuseOpportunities, summarizePrompts, workState, type ProgressPrompt, type ReuseMatch } from "./progress";
 
 function prompt(overrides: Partial<ProgressPrompt> = {}): ProgressPrompt {
   return { status: "not-started", isCurrentCycle: true, assignedEssay: null, suggestedMatches: [], ...overrides };
@@ -246,5 +246,32 @@ describe("reuseOpportunities", () => {
       expect(g.withEdits).toEqual([]);
       expect(g.possible.map((r) => r.promptId)).toEqual(["p1"]);
     });
+  });
+});
+
+describe("isCountableEssayPrompt", () => {
+  it("counts an ordinary prompt", () => {
+    expect(isCountableEssayPrompt(prompt())).toBe(true);
+  });
+
+  it("counts a prompt that simply does not carry the field", () => {
+    // The field is optional so callers holding only essay prompts need not
+    // thread it; absent must mean "essay", not "unknown".
+    expect(isCountableEssayPrompt({})).toBe(true);
+    expect(isCountableEssayPrompt({ supportingMaterial: null })).toBe(true);
+  });
+
+  it("does not count supporting material", () => {
+    expect(isCountableEssayPrompt({ supportingMaterial: "a graded school paper" })).toBe(false);
+  });
+
+  it("keeps supporting material out of the prompt summary", () => {
+    const summary = summarizePrompts([
+      prompt(),
+      prompt({ status: "complete" }),
+      prompt({ supportingMaterial: "a portfolio piece", status: "complete" }),
+    ]);
+    expect(summary.total).toBe(2);
+    expect(summary.complete).toBe(1);
   });
 });

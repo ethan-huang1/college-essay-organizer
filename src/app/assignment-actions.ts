@@ -8,7 +8,7 @@ import { getAppDatabase } from "@/lib/db/server";
 import { createEssay } from "@/lib/essays";
 import { reuseEssayForPrompt } from "@/lib/reuse-essay";
 import { recomputeWorkspaceMatches } from "@/lib/reuse";
-import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+import { getActiveWorkspaceSnapshot, requireWritableWorkspace } from "@/lib/workspace-session";
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -26,6 +26,7 @@ function revalidateAssignmentPaths() {
 
 export async function unassignEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   await unassignPrompt(db, snapshot.workspace.id, field(formData, "promptId"));
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
@@ -38,6 +39,7 @@ export async function unassignEssayAction(formData: FormData) {
 // family, word target, and school in the essay library.
 export async function draftEssayForPromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const promptId = field(formData, "promptId");
   const prompt = snapshot.prompts.find((candidate) => candidate.id === promptId);
   if (!prompt) throw new Error("Prompt not found in the active workspace.");
@@ -83,6 +85,7 @@ export async function draftEssayForPromptAction(formData: FormData) {
  */
 export async function reuseEssayForPromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const promptId = field(formData, "promptId");
   const essayId = field(formData, "essayId");

@@ -235,3 +235,64 @@ describe("workload edges", () => {
     expect(summary.optionalExtra).toBe(1);
   });
 });
+
+describe("supporting material is requirement, but not essay work", () => {
+  const school: WorkloadSchool[] = [{ id: "school-1", name: "Princeton", selectedPrograms: null }];
+  const summarize = (prompts: WorkloadPrompt[]) => summarizeWorkload(prompts, { schools: school, scope: "aggregate" });
+
+  it("does not count a required graded paper as a required essay", () => {
+    // Princeton asks for a graded paper. It is required, and it is not writing
+    // the student does here - counting it told them to write an essay that
+    // does not exist.
+    const summary = summarize([
+      prompt({ id: "essay", requirement: "required" }),
+      prompt({ id: "paper", requirement: "required", supportingMaterial: "an existing graded school paper" }),
+    ]);
+    expect(summary.requiredTotal).toBe(1);
+    expect(summary.requiredSingles.map((entry) => entry.id)).toEqual(["essay"]);
+  });
+
+  it("does not count an optional portfolio as an optional essay", () => {
+    const summary = summarize([
+      prompt({ id: "portfolio", requirement: "optional", supportingMaterial: "a portfolio piece" }),
+    ]);
+    expect(summary.optionalExtra).toBe(0);
+    expect(summary.requiredTotal).toBe(0);
+  });
+
+  it("keeps supporting material out of a choose-N group, so an upload cannot complete it", () => {
+    // The Amherst case. Both the supplement option and the graded paper carried
+    // the same groupKey, so marking the *upload* complete satisfied "choose
+    // one" and the school read as done with no supplement written.
+    const group = { groupKey: "amherst-supplement", groupLabel: "Writing supplement", groupRequiredCount: 1 };
+    const summary = summarize([
+      prompt({ id: "option-a", requirement: "optional", ...group }),
+      prompt({ id: "graded-paper", requirement: "optional", supportingMaterial: "a graded paper", status: "complete", ...group }),
+    ]);
+    const amherst = summary.groups.find((candidate) => candidate.key.endsWith("amherst-supplement"));
+    expect(amherst).toBeDefined();
+    expect(amherst!.size).toBe(1);
+    // The essay option is still unanswered, so the group is not complete.
+    expect(amherst!.completed).toBe(0);
+    expect(summary.requiredComplete).toBe(0);
+    expect(summary.requiredRemaining).toBe(1);
+  });
+
+  it("still counts a real essay in that group as completing it", () => {
+    const group = { groupKey: "amherst-supplement", groupLabel: "Writing supplement", groupRequiredCount: 1 };
+    const summary = summarize([
+      prompt({ id: "option-a", requirement: "optional", status: "complete", ...group }),
+      prompt({ id: "graded-paper", requirement: "optional", supportingMaterial: "a graded paper", ...group }),
+    ]);
+    expect(summary.requiredComplete).toBe(1);
+    expect(summary.requiredRemaining).toBe(0);
+  });
+
+  it("leaves ordinary choose-N groups untouched", () => {
+    // Regression guard: the UC Personal Insight Questions mark every member
+    // "optional" and are genuinely required. Nothing about excluding
+    // supporting material may reclassify them.
+    const summary = summarizeWorkload(piqs("berkeley"), { schools: ucSchools, scope: "aggregate" });
+    expect(summary.requiredTotal).toBe(4);
+  });
+});

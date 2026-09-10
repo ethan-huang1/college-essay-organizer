@@ -16,7 +16,7 @@ import {
 } from "@/lib/essays";
 import { setPromptStatus } from "@/lib/prompts";
 import { recomputeWorkspaceMatches } from "@/lib/reuse";
-import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+import { getActiveWorkspaceSnapshot, requireWritableWorkspace } from "@/lib/workspace-session";
 import { revalidateEssayPaths } from "./revalidate-essay-paths";
 
 function field(formData: FormData, name: string) {
@@ -61,6 +61,7 @@ function essayMetadataInput(formData: FormData): EssayMetadataInput {
 
 export async function createEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const essayId = await createEssay(db, snapshot.workspace.id, {
     ...essayMetadataInput(formData),
@@ -75,6 +76,7 @@ export async function createEssayAction(formData: FormData) {
 
 export async function updateEssayMetadataAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const essayId = field(formData, "essayId");
   await updateEssayMetadata(db, snapshot.workspace.id, essayId, essayMetadataInput(formData));
@@ -84,6 +86,7 @@ export async function updateEssayMetadataAction(formData: FormData) {
 
 export async function saveEssayVersionAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const essayId = field(formData, "essayId");
   await saveEssayVersion(db, snapshot.workspace.id, essayId, {
@@ -99,6 +102,7 @@ export async function saveEssayVersionAction(formData: FormData) {
 
 export async function restoreEssayVersionAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const essayId = field(formData, "essayId");
   await restoreEssayVersion(db, snapshot.workspace.id, essayId, field(formData, "versionId"));
@@ -108,6 +112,7 @@ export async function restoreEssayVersionAction(formData: FormData) {
 
 export async function deleteEssayAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   await deleteEssay(db, snapshot.workspace.id, field(formData, "essayId"));
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
@@ -141,6 +146,7 @@ export async function autosaveEssayDraftAction(
   expectedLastEditedAt: number | null,
 ): Promise<DraftSaveResult> {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   return saveEssayDraft(db, snapshot.workspace.id, essayId, { content, expectedLastEditedAt });
 }
@@ -157,6 +163,7 @@ export async function autosaveEssayDraftAction(
  */
 export async function updateEssayTitleAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const essayId = field(formData, "essayId");
   let ok = false;
@@ -189,6 +196,7 @@ export async function updateEssayTitleAction(formData: FormData) {
  */
 export async function setEssayCompletionAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   const essayId = field(formData, "essayId");
   const complete = field(formData, "complete") === "1";

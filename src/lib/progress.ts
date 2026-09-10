@@ -27,9 +27,30 @@ const WITH_EDITS_ACTIONS = new Set(["reusable-edits", "reusable-significant-edit
 export type ProgressPrompt = {
   status: string;
   isCurrentCycle: boolean;
+  /** Non-null for a requirement that is not a student-written essay - a graded
+   * paper, a portfolio, a recording. Optional so callers that only ever hold
+   * essay prompts need not carry it. */
+  supportingMaterial?: string | null;
   assignedEssay: { id: string; title: string } | null;
   suggestedMatches: readonly { essayId: string; essayTitle: string; score: number; recommendedAction: string }[];
 };
+
+/**
+ * Whether a prompt is work the student actually writes.
+ *
+ * Some catalogue rows are requirements but not essays: Princeton asks for a
+ * graded paper, Tufts for a portfolio piece. The matcher has always skipped
+ * them (reuse.ts), but every counter used to include them, so a graded-paper
+ * upload was rendered as a required essay - and at Amherst, marking one
+ * complete satisfied a choose-one group, so the school read "1 of 1 required
+ * essay done" with no supplement written.
+ *
+ * This is the single definition of that question. Every surface that counts,
+ * groups or lists essay work calls it, so they cannot drift apart again.
+ */
+export function isCountableEssayPrompt(prompt: { supportingMaterial?: string | null }) {
+  return (prompt.supportingMaterial ?? null) === null;
+}
 
 export type WorkState = "complete" | "in-progress" | "not-started";
 
@@ -59,7 +80,7 @@ export type PromptProgress = {
 // stays visible and usable for planning but must never make this cycle's
 // workload look bigger or more finished than it is (see workspaces.ts).
 export function summarizePrompts(prompts: readonly ProgressPrompt[]): PromptProgress {
-  const current = prompts.filter((prompt) => prompt.isCurrentCycle);
+  const current = prompts.filter((prompt) => prompt.isCurrentCycle && isCountableEssayPrompt(prompt));
   const complete = current.filter((prompt) => workState(prompt) === "complete").length;
   return {
     total: current.length,

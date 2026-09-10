@@ -264,6 +264,31 @@
   margin-top: var(--s3);
   padding-top: var(--s3);
   border-top: 1px solid var(--line);
+  display: grid;
+  gap: var(--s3);
+  justify-items: start;
+}
+
+/* Irreversible, so it is quiet until opened rather than sitting next to
+   "Sign out" looking equally routine. */
+.account-danger > summary {
+  cursor: pointer;
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+
+.account-danger[open] > summary {
+  margin-bottom: var(--s2);
+  color: var(--risk-ink);
+}
+
+.account-danger .detail-note {
+  margin-bottom: var(--s2);
+}
+
+.account-danger .danger {
+  color: var(--risk-ink);
+  font-weight: 600;
 }
 
 /* Below 900px the tabs wrap under the wordmark rather than overflowing. Mobile

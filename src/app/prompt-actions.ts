@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getAppDatabase } from "@/lib/db/server";
 import { createPrompt, deletePrompt, type PromptInput, setPromptStatus, updatePrompt } from "@/lib/prompts";
 import { recomputeWorkspaceMatches } from "@/lib/reuse";
-import { getActiveWorkspaceSnapshot } from "@/lib/workspace-session";
+import { getActiveWorkspaceSnapshot, requireWritableWorkspace } from "@/lib/workspace-session";
 
 function revalidatePromptPaths() {
   revalidatePath("/");
@@ -55,6 +55,7 @@ function promptInput(formData: FormData): PromptInput {
 
 export async function createPromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   await createPrompt(db, snapshot.workspace.id, promptInput(formData));
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
@@ -63,6 +64,7 @@ export async function createPromptAction(formData: FormData) {
 
 export async function updatePromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   await updatePrompt(db, snapshot.workspace.id, field(formData, "promptId"), promptInput(formData));
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
@@ -71,6 +73,7 @@ export async function updatePromptAction(formData: FormData) {
 
 export async function deletePromptAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const db = getAppDatabase().db;
   await deletePrompt(db, snapshot.workspace.id, field(formData, "promptId"));
   await recomputeWorkspaceMatches(db, snapshot.workspace.id);
@@ -79,6 +82,7 @@ export async function deletePromptAction(formData: FormData) {
 
 export async function setPromptStatusAction(formData: FormData) {
   const snapshot = await getActiveWorkspaceSnapshot();
+  requireWritableWorkspace(snapshot);
   const status = field(formData, "status");
   const db = getAppDatabase().db;
   await setPromptStatus(

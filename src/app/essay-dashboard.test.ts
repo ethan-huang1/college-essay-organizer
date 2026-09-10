@@ -155,3 +155,21 @@ describe("the editor's adaptation panel", () => {
     expect(declaration).toMatch(/\.sort\(\(a, b\) => b\.score - a\.score\)/);
   });
 });
+
+describe("supporting material is not an essay row", () => {
+  it("keeps a graded paper out of My Essays", () => {
+    // "We ask all students to submit a graded written paper" was rendering as
+    // a row in the Not started column, as though it were something to write.
+    const groups = essaySchoolGroups({
+      schools: [SCHOOLS[0]],
+      prompts: [
+        prompt({ id: "p-essay", title: "Open Curriculum" }),
+        prompt({ id: "p-paper", title: "Submit a graded paper", supportingMaterial: "an existing graded school paper" }),
+      ],
+      essays: [],
+    });
+    const brown = groups.find((group) => group.school.id === "s-brown");
+    expect(brown?.rows.map((row) => row.prompt.id)).toEqual(["p-essay"]);
+    expect(brown?.progress.requiredTotal).toBe(1);
+  });
+});

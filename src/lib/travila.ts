@@ -13,9 +13,17 @@
 
 const BASE_URL = "https://api.travila.ai";
 const POLL_INTERVAL_MS = 1500;
-// TEMPORARY: raised from 45s to let a V6 reasoning-config run finish so we can
-// see whether reasoning.maxTokens is actually honored. Revert once confirmed.
-const POLL_TIMEOUT_MS = 75_000;
+// Bounds the poll loop only - createThread and sendMessage have already run by
+// the time pollForCompletion sets its deadline, and the loop tests the clock
+// *before* a fetch, so one more round trip can start just under it. Against the
+// editor route's `export const maxDuration = 60`, budgeting ~4s of pre-poll
+// work, ~2s for that trailing poll and ~2s of slack leaves ~52s to spend here.
+//
+// 48s takes that with margin. Observed successful coach runs were 10.6s, 20.9s,
+// 21s and 32.8s, so this still allows ~46% more than the slowest; the one run
+// that passed 75s failed anyway, and making a student wait that long to be told
+// so is worse than failing sooner.
+const POLL_TIMEOUT_MS = 48_000;
 
 export type TravilaErrorReason = "not-configured" | "invalid-input" | "timeout" | "malformed" | "http";
 
@@ -136,31 +144,6 @@ async function pollForCompletion(
       (entry): entry is TravilaMessage => entry?.role === "ROLE_ASSISTANT" && entry?.generatedBy === runId,
     );
     if (found) {
-      // TEMPORARY DEBUG LOGGING - requested for local diagnostics only. Never
-      // logs essay content, the API key, auth headers, or reasoning text.
-      // Remove this block once it's no longer needed.
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[travila:debug] run completed", {
-          runId,
-          threadId,
-          usage: {
-            promptTokens: found.usage?.promptTokens,
-            completionTokens: found.usage?.completionTokens,
-            reasoningTokens: found.usage?.completionTokensDetails?.reasoningTokens,
-            totalTokens: found.usage?.totalTokens,
-            costEstimate: found.usage?.costEstimate,
-          },
-          generationContext: {
-            model: found.generationContext?.model,
-            // Travila answers HTTP 200 for an unknown setActiveProfileId and
-            // silently falls back to a default agent. An undefined
-            // profileVersion (and a missing profileId echo) is the only signal
-            // that the profile this coach asked for does not exist.
-            profileVersion: found.generationContext?.profileVersion,
-            resolvedMcpServers: found.generationContext?.resolvedMcpServers,
-          },
-        });
-      }
       return { message: found };
     }
     await sleep(POLL_INTERVAL_MS);

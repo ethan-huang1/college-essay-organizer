@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { ACTION_LABELS, ADAPTATION_LABELS, adaptationEffort, type RecommendedAction } from "@/lib/matching";
-import { reuseOpportunities, type ReuseMatch } from "@/lib/progress";
+import { isCountableEssayPrompt, reuseOpportunities, type ReuseMatch } from "@/lib/progress";
 import type { WorkspaceSnapshot } from "@/lib/workspaces";
 import { reuseEssayForPromptAction } from "./assignment-actions";
 import { restoreEssayVersionAction } from "./essay-actions";
@@ -112,6 +112,9 @@ export function OriginPromptFields({
   const schoolName = new Map(snapshot.schools.map((school) => [school.id, school.name]));
   const bySchool = new Map<string, { id: string; title: string }[]>();
   for (const prompt of snapshot.prompts) {
+    // An essay cannot answer a portfolio upload, so offering one as an
+    // origin prompt would only mis-seed the reuse scoring.
+    if (!isCountableEssayPrompt(prompt)) continue;
     const name = schoolName.get(prompt.schoolId) ?? "Unknown college";
     bySchool.set(name, [...(bySchool.get(name) ?? []), { id: prompt.id, title: prompt.title }]);
   }
