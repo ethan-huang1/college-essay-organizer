@@ -733,6 +733,44 @@ Confirmed:
 - One redundancy fixed: the framing paragraph added above the reference list
   said the same thing as `ReferenceReviewNotice` directly below it. Deleted.
 
+### 11h. C6b production AI verification — FAILED, and 11g is why
+
+Run 2026-09-10 against production `32d5bb3` with `TRAVILA_API_KEY` configured,
+using a marked throwaway account. Four of seven coaches work; three do not.
+
+| Coach | Result |
+|---|---|
+| Shorten | ✅ real finding (caught the repeated section) |
+| Lengthen | ✅ correct precondition ("already at or over your target") |
+| Prompt Fit | ✅ 2 findings |
+| Review | ✅ 8 findings |
+| **Flow** | ❌ `"reason":"http"` `"detail":"send-message: 404"` |
+| **Vivid** | ❌ same |
+| **Proofread** | ❌ same |
+
+**The key is fine.** `create-thread` succeeds — that is the authenticated call.
+It is `send-message` that 404s, and only for the three profile ids added in
+§11d/11e: `college_essay_flow_coach`, `college_essay_vivid_coach`,
+`college_essay_proofread_coach`. The four coaches whose profiles genuinely
+exist all work.
+
+**This corrects the impression left by §11g.** Those three appeared to work in
+local testing because the Travila account behind the *local* key silently falls
+back to a default agent for an unknown `setActiveProfileId` (HTTP 200,
+`profileVersion: undefined`, `profileId` echo `null`). The production account
+does not fall back — it returns 404. So the earlier local success was the
+fallback agent answering, never a configured profile. §11g's action item is now
+a hard launch blocker rather than a tidiness issue.
+
+**Action: create the three agent profiles in the Travila console**, then re-run
+C6b. Nothing in this repo needs to change; do not repoint the coaches at an
+existing profile, which would give them the wrong instruction and model config.
+
+Degradation is safe meanwhile: the essay is untouched, the error is explicit,
+and "Try again" recovers. Stale-result handling was verified working in
+production (edit during results → "This essay has changed since these
+recommendations were generated" + Re-analyze).
+
 ### 11g. HUMAN-REQUIRED: the three new Travila profiles do not exist yet
 
 Measured, not guessed. A controlled probe sent the same one-line instruction to
