@@ -132,3 +132,85 @@ describe("runTravilaTurn", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Observability. These exist because the run log sits on the request path of
+ * every AI feature: if it can throw, or if it can ever carry essay text, that
+ * is a production incident rather than a missing log line.
+ */
+describe("[travila-run] logging", () => {
+  const SECRET_INSTRUCTION = "SECRET-ESSAY-TEXT the student's confidential draft";
+
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  async function runAndCapture(fetchMock: ReturnType<typeof vi.fn>) {
+    vi.stubGlobal("fetch", fetchMock);
+    const logged: unknown[][] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => { logged.push(args); });
+    const promise = runTravilaTurn("test-key", "user-1", "college_essay_shorten_coach", SECRET_INSTRUCTION);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    const runs = logged.filter((a) => a[0] === "[travila-run]");
+    return { result, runs, payload: runs.length ? JSON.parse(String(runs[0][1])) : null };
+  }
+
+  const okFetch = () => vi.fn()
+    .mockResolvedValueOnce(jsonResponse({ thread: { threadId: "thread-1" } }))
+    .mockResolvedValueOnce(jsonResponse({ runId: "run-1" }))
+    .mockResolvedValueOnce(jsonResponse({
+      messageHistory: [{
+        role: "ROLE_ASSISTANT", generatedBy: "run-1",
+        content: [{ type: "CONTENT_PART_TYPE_TEXT", content: "SECRET-REPLY the model's answer" }],
+        usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500, costEstimate: 0.0012,
+                 completionTokensDetails: { reasoningTokens: 64 } },
+        generationContext: { model: "google/gemini-3.7-flash", profileId: "college_essay_shorten_coach", profileVersion: 1 },
+      }],
+    }));
+
+  it("emits exactly one run log with the run's metadata", async () => {
+    const { result, runs, payload } = await runAndCapture(okFetch());
+    expect(result).toHaveProperty("text");
+    expect(runs).toHaveLength(1);
+    expect(payload).toMatchObject({
+      feature: "shorten",
+      profileId: "college_essay_shorten_coach",
+      profileVersion: 1,
+      model: "google/gemini-3.7-flash",
+      runId: "run-1",
+      status: "ok",
+      promptTokens: 1200,
+      completionTokens: 300,
+      reasoningTokens: 64,
+      totalTokens: 1500,
+      costEstimate: 0.0012,
+    });
+    expect(typeof payload.latencyMs).toBe("number");
+  });
+
+  it("never logs the instruction, the reply, the key, or the user id", async () => {
+    const { runs } = await runAndCapture(okFetch());
+    const line = JSON.stringify(runs);
+    for (const secret of ["SECRET-ESSAY-TEXT", "SECRET-REPLY", "test-key", "user-1", "confidential"]) {
+      expect(line, `run log leaked ${secret}`).not.toContain(secret);
+    }
+  });
+
+  it("logs a sanitized failure once, without changing what the caller receives", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}, false, 503));
+    const { result, runs, payload } = await runAndCapture(fetchMock);
+    // The existing failure contract is untouched.
+    expect(result).toEqual({ error: { status: "error", reason: "http", detail: "create-thread: 503" } });
+    expect(runs).toHaveLength(1);
+    expect(payload).toMatchObject({ status: "error", errorReason: "http", errorDetail: "create-thread: 503" });
+  });
+
+  it("cannot fail the run even if logging itself throws", async () => {
+    vi.stubGlobal("fetch", okFetch());
+    vi.spyOn(console, "log").mockImplementation(() => { throw new Error("logging backend exploded"); });
+    const promise = runTravilaTurn("test-key", "user-1", "college_essay_shorten_coach", SECRET_INSTRUCTION);
+    await vi.runAllTimersAsync();
+    // The student still gets their answer.
+    expect(await promise).toEqual({ text: "SECRET-REPLY the model's answer" });
+  });
+});

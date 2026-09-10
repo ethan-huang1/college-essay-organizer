@@ -40,6 +40,7 @@ type TravilaUsage = {
 };
 type TravilaGenerationContext = {
   model?: string;
+  profileId?: string;
   profileVersion?: string | number;
   resolvedMcpServers?: unknown;
 };
@@ -49,6 +50,11 @@ type TravilaMessage = {
   content: TravilaContentPart[];
   usage?: TravilaUsage;
   generationContext?: TravilaGenerationContext;
+  // Read only for the run log when Travila happens to send them. Declared
+  // optional because they are not part of the contract this file relies on -
+  // nothing here branches on them.
+  finishReason?: string;
+  endReason?: string;
 };
 
 function headers(apiKey: string, userId: string) {
@@ -163,6 +169,56 @@ function extractText(message: TravilaMessage): { text: string } | { error: Travi
   return { text: textParts.join("\n\n") };
 }
 
+/**
+ * One compact line per Travila run, for Vercel Logs. Observability only.
+ *
+ * Deliberately never touches the instruction, the assistant's text, the API
+ * key, the auth headers, or the caller's user id: a run log is for answering
+ * "which feature, which profile, how long, how many tokens, why did it fail",
+ * and a student's essay is none of those. `detail` is bounded because it is
+ * the only free-text field, and its producers are all short fixed strings from
+ * this file (an HTTP status, a missing-field name) or a fetch error message.
+ *
+ * Everything is wrapped so a logging fault cannot fail a student's request -
+ * this is the least important thing happening on this code path.
+ */
+function logTravilaRun(input: {
+  profileId: string;
+  startedAt: number;
+  runId?: string;
+  message?: TravilaMessage;
+  error?: TravilaError;
+}) {
+  try {
+    const usage = input.message?.usage;
+    const context = input.message?.generationContext;
+    const payload: Record<string, unknown> = {
+      // Derived from the profile id rather than threaded through every caller,
+      // so no coach signature changes just to be observable.
+      feature: input.profileId.replace(/^college_essay_/, "").replace(/_coach$/, "") || undefined,
+      profileId: context?.profileId ?? input.profileId,
+      profileVersion: context?.profileVersion,
+      model: context?.model,
+      runId: input.runId,
+      status: input.error ? "error" : "ok",
+      latencyMs: Date.now() - input.startedAt,
+      promptTokens: usage?.promptTokens,
+      completionTokens: usage?.completionTokens,
+      reasoningTokens: usage?.completionTokensDetails?.reasoningTokens,
+      totalTokens: usage?.totalTokens,
+      costEstimate: usage?.costEstimate,
+      finishReason: input.message?.finishReason,
+      endReason: input.message?.endReason,
+      errorReason: input.error?.reason,
+      errorDetail: typeof input.error?.detail === "string" ? input.error.detail.slice(0, 200) : undefined,
+    };
+    for (const key of Object.keys(payload)) if (payload[key] === undefined) delete payload[key];
+    console.log("[travila-run]", JSON.stringify(payload));
+  } catch {
+    // Never let observability break the run it is observing.
+  }
+}
+
 /** The create-thread -> send-message -> poll -> extract-text sequence, shared
  * by every coach in src/lib/coaches/*.ts. Each caller supplies its own profile
  * id and instruction text; this never inspects or shapes the returned text. */
@@ -172,14 +228,27 @@ export async function runTravilaTurn(
   profileId: string,
   instruction: string,
 ): Promise<{ text: string } | { error: TravilaError }> {
+  const startedAt = Date.now();
+
   const thread = await createThread(apiKey, userId);
-  if ("error" in thread) return thread;
+  if ("error" in thread) { logTravilaRun({ profileId, startedAt, error: thread.error }); return thread; }
 
   const sent = await sendMessage(apiKey, userId, thread.threadId, profileId, instruction);
-  if ("error" in sent) return sent;
+  if ("error" in sent) { logTravilaRun({ profileId, startedAt, error: sent.error }); return sent; }
 
   const completed = await pollForCompletion(apiKey, userId, thread.threadId, sent.runId);
-  if ("error" in completed) return completed;
+  if ("error" in completed) {
+    logTravilaRun({ profileId, startedAt, runId: sent.runId, error: completed.error });
+    return completed;
+  }
 
-  return extractText(completed.message);
+  const extracted = extractText(completed.message);
+  logTravilaRun({
+    profileId,
+    startedAt,
+    runId: sent.runId,
+    message: completed.message,
+    error: "error" in extracted ? extracted.error : undefined,
+  });
+  return extracted;
 }
