@@ -81,11 +81,12 @@ Catalogue prompt vectors are precomputed and committed, so the numbers in
 - Travila API for the AI coaches
 - Deployed on Vercel
 
-Almost everything is a Server Component. Every mutation is a server action
-behind a plain `<form>`, and there is exactly one client component in the whole
-app (the thing that highlights the current nav item). Progressive disclosure
-uses `<details>` and URL parameters, and the account menu uses the native
-`popover` attribute, so the app works with JavaScript turned off.
+Almost everything is a Server Component and every mutation is a server action
+behind a plain `<form>`. Client components are confined to the essay editor,
+where the coaches and autosave need them; outside it there are four in the
+whole app. Progressive disclosure uses `<details>` and URL parameters, and the
+account menu uses the native `popover` attribute, so everything except the
+editor works with JavaScript turned off.
 
 Data isolation is enforced in the data layer, not the UI. Every query is
 scoped by workspace id, and every mutation checks the record belongs to the
@@ -162,12 +163,6 @@ These are real and I would rather write them down than have you find them.
   make the tests pass here and fail for the next person, so I left them. The
   effect on scoring is small, but it means the test asserts something stronger
   than actually holds.
-- **Three of the seven AI coaches are broken in production.** Flow, Vivid and
-  Proofread return a 404 from the provider because their agent profiles were
-  never created on the Travila side. Shorten, Lengthen, Prompt Fit and Review
-  work. The failure is safe (your essay is untouched, you get an explicit error
-  and a retry button) but it is a failure. Fixing it is a console change on the
-  provider, not a code change here.
 - **No real essays have been evaluated.** Every number in `docs/evaluation/`
   comes from catalogue prompts standing in for essays, or from the nine demo
   essays. That bounds the answer without settling it.
@@ -200,7 +195,8 @@ These are real and I would rather write them down than have you find them.
   [docs/school-photos.md](docs/school-photos.md) cover where the college imagery
   comes from and its attribution.
 - [MVP_SPEC.md](MVP_SPEC.md) is the spec this was built against.
-- [HANDOFF.md](HANDOFF.md) and [AGENT_HANDOFF.md](AGENT_HANDOFF.md) are working
-  notes from building this with coding agents. They are detailed and not
-  written for a visitor, but they record most of the decisions and the things
-  that went wrong.
+- [HANDOFF.md](HANDOFF.md) is the long technical version of this README: the
+  architecture, the decisions worth not relitigating, the invariants that will
+  break if you change them blind, and the known gaps.
+- [AGENT_HANDOFF.md](AGENT_HANDOFF.md) and [OVERNIGHT_TASK.md](OVERNIGHT_TASK.md)
+  cover the setup I used to run coding agents against this repo overnight.
