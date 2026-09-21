@@ -12,6 +12,7 @@
     "db:generate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs migrate",
     "db:studio": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs studio",
+    "db:seed-example": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs --env-file-if-exists=.env.local scripts/seed-example-workspace.mts",
     "prebuild": "node scripts/prune-onnx-binaries.mjs",
     "logos:fetch": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/fetch-school-logos.mts",
     "logos:sheet": "node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/logo-contact-sheet.mts",
@@ -21,7 +22,7 @@
     "@electric-sql/pglite": "^0.5.7",
     "@huggingface/transformers": "^4.2.0",
     "drizzle-orm": "0.45.2",
-    "next": "16.3.2",
+    "next": "16.3.5",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -34,7 +35,7 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "0.31.10",
     "eslint": "^9",
-    "eslint-config-next": "16.3.2",
+    "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "4.1.11"

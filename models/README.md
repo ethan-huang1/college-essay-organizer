@@ -8,7 +8,7 @@ Committed rather than downloaded, for three reasons:
    `/tmp`, so a runtime download has nowhere to land. Without these files the
    semantic-similarity factor scores its neutral value and the app silently runs
    on three factors instead of four.
-2. **An embedding is only comparable to another from the same model.** The 255
+2. **An embedding is only comparable to another from the same model.** The 525
    committed prompt vectors in `src/lib/retrieval/prompt-vectors.ts` were produced
    by exactly these bytes. Pinning a model *name* does not pin its weights;
    pinning the file does.
@@ -20,3 +20,8 @@ Regenerate by deleting this directory, running any script that embeds (the
 library downloads to `.model-cache/`), then copying `.model-cache/Xenova` here.
 Re-run `scripts/precompute-prompt-vectors.mts` afterwards: different weights mean
 the committed vectors no longer describe the same space.
+
+Upstream: [Xenova/all-MiniLM-L6-v2](https://huggingface.co/Xenova/all-MiniLM-L6-v2),
+an ONNX port of
+[sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2).
+Apache-2.0. These files are redistributed unmodified.
